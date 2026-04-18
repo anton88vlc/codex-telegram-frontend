@@ -25,10 +25,12 @@ Telegram как быстрый remote frontend для локального `Code
 - шумные ops-команды можно уводить в direct chat с ботом, чтобы не пачкать рабочие topics
 - mention-aware ingress (`@bot текст`) как fallback, если group privacy мешает plain text
 - `sync-project dry-run` и CLI `--self-check` для ops
+- npm scripts для запуска, self-check, tests и onboarding preview
 - `/project-status` показывает желаемую thread column, active topics, parked sync topics и preview sync-плана
 - `/sync-project` больше не просто плодит темы: он rename/reopen/create/park для sync-managed topics под текущий working set
 - user-side history backfill из `rollout_path` в Telegram topic через `admin/telegram_user_admin.py backfill-thread`: по умолчанию только user prompts + `final_answer`, без commentary, ограниченный хвост истории
 - safe cleanup для topic-мусора через `admin/telegram_user_admin.py cleanup-topic`: сначала dry-run, удаление только с `--delete`
+- bootstrap умеет создавать/обновлять Telegram folder `codex` и складывать туда проектные группы
 - retry на временных Telegram fetch errors
 - checkpoint на inbound updates, чтобы после рестарта не дублировать один и тот же turn
 - live outbound mirror: user-turn surrogate, commentary updates и final answers из Codex Desktop долетают обратно в привязанный Telegram topic/chat
@@ -46,16 +48,16 @@ Telegram как быстрый remote frontend для локального `Code
 
 ## Структура
 
-- [bridge.mjs](/Users/antonnaumov/code/codex-telegram-frontend/bridge.mjs) — основной polling bridge
-- [lib/telegram.mjs](/Users/antonnaumov/code/codex-telegram-frontend/lib/telegram.mjs) — Telegram transport
-- [lib/codex-native.mjs](/Users/antonnaumov/code/codex-telegram-frontend/lib/codex-native.mjs) — запуск native helper
-- [scripts/send_via_app_control.js](/Users/antonnaumov/code/codex-telegram-frontend/scripts/send_via_app_control.js) — renderer-aware send через Codex app-control
-- [scripts/send_via_app_server.js](/Users/antonnaumov/code/codex-telegram-frontend/scripts/send_via_app_server.js) — fallback transport через local Codex app-server
-- [scripts/onboard.mjs](/Users/antonnaumov/code/codex-telegram-frontend/scripts/onboard.mjs) — onboarding scan/plan generator из локальной Codex DB
-- [admin/telegram_user_admin.py](/Users/antonnaumov/code/codex-telegram-frontend/admin/telegram_user_admin.py) — user-side bootstrap для Telegram groups/topics
-- [docs/ONBOARDING.md](/Users/antonnaumov/code/codex-telegram-frontend/docs/ONBOARDING.md) — recommended setup flow для нового пользователя
-- [docs/RUNBOOK.md](/Users/antonnaumov/code/codex-telegram-frontend/docs/RUNBOOK.md) — ops/runbook
-- [BACKLOG.md](/Users/antonnaumov/code/codex-telegram-frontend/BACKLOG.md) — ближайшие продуктовые и UX долги
+- [bridge.mjs](bridge.mjs) — основной polling bridge
+- [lib/telegram.mjs](lib/telegram.mjs) — Telegram transport
+- [lib/codex-native.mjs](lib/codex-native.mjs) — запуск native helper
+- [scripts/send_via_app_control.js](scripts/send_via_app_control.js) — renderer-aware send через Codex app-control
+- [scripts/send_via_app_server.js](scripts/send_via_app_server.js) — fallback transport через local Codex app-server
+- [scripts/onboard.mjs](scripts/onboard.mjs) — onboarding scan/plan generator из локальной Codex DB
+- [admin/telegram_user_admin.py](admin/telegram_user_admin.py) — user-side bootstrap для Telegram groups/topics
+- [docs/ONBOARDING.md](docs/ONBOARDING.md) — recommended setup flow для нового пользователя
+- [docs/RUNBOOK.md](docs/RUNBOOK.md) — ops/runbook
+- [BACKLOG.md](BACKLOG.md) — ближайшие продуктовые и UX долги
 
 ## Локальные runtime-файлы
 
@@ -70,6 +72,15 @@ Telegram как быстрый remote frontend для локального `Code
 
 ## Запуск
 
+Подготовка локальных конфигов:
+
+```bash
+cp config.example.json config.local.json
+cp admin/.env.example admin/.env
+python3 -m venv admin/.venv
+admin/.venv/bin/pip install -r admin/requirements.txt
+```
+
 Сначала `Codex.app` в debug-режиме:
 
 ```bash
@@ -79,16 +90,13 @@ Telegram как быстрый remote frontend для локального `Code
 Потом bridge:
 
 ```bash
-node /Users/antonnaumov/code/codex-telegram-frontend/bridge.mjs \
-  --config /Users/antonnaumov/code/codex-telegram-frontend/config.local.json
+npm start
 ```
 
 One-shot self-check:
 
 ```bash
-node /Users/antonnaumov/code/codex-telegram-frontend/bridge.mjs \
-  --config /Users/antonnaumov/code/codex-telegram-frontend/config.local.json \
-  --self-check
+npm run self-check
 ```
 
 ## launchd
@@ -96,7 +104,7 @@ node /Users/antonnaumov/code/codex-telegram-frontend/bridge.mjs \
 Установка/обновление launchd:
 
 ```bash
-/Users/antonnaumov/code/codex-telegram-frontend/ops/install-launchd.sh
+./ops/install-launchd.sh
 ```
 
 ## Telegram модель
@@ -115,7 +123,7 @@ node /Users/antonnaumov/code/codex-telegram-frontend/bridge.mjs \
 Посмотреть проекты и свежие threads из локального Codex DB:
 
 ```bash
-node /Users/antonnaumov/code/codex-telegram-frontend/scripts/onboard.mjs scan \
+npm run onboard:scan -- \
   --project-limit 12 \
   --threads-per-project 5
 ```
@@ -123,12 +131,12 @@ node /Users/antonnaumov/code/codex-telegram-frontend/scripts/onboard.mjs scan \
 Собрать preview bootstrap-plan по выбранным проектам:
 
 ```bash
-node /Users/antonnaumov/code/codex-telegram-frontend/scripts/onboard.mjs plan \
-  --project /Users/antonnaumov/code/codex-telegram-frontend \
+npm run onboard:plan -- \
+  --project /path/to/codex-project \
   --threads-per-project 3
 ```
 
-Запись в `admin/bootstrap-plan.json` только с `--write`. Полный flow: [docs/ONBOARDING.md](/Users/antonnaumov/code/codex-telegram-frontend/docs/ONBOARDING.md).
+Запись в `admin/bootstrap-plan.json` только с `--write`. Полный flow: [docs/ONBOARDING.md](docs/ONBOARDING.md).
 
 ## Ops notes
 
@@ -136,6 +144,6 @@ node /Users/antonnaumov/code/codex-telegram-frontend/scripts/onboard.mjs plan \
 - если `app-control` недоступен, bridge всё равно живёт через fallback `app-server`
 - outbound mirror читает `rollout_path` bound thread-а и по умолчанию опрашивает его часто, поэтому user/commentary/final messages из Codex Desktop появляются в Telegram без ручного backfill
 - clean history import не должен заливать весь бесконечный thread: `backfill-thread` по умолчанию берёт последние 40 clean messages и умеет `--max-history-messages`, `--max-user-prompts`, `--assistant-phase final_answer`
-- если в group topic обычный текст не долетает до бота, quickest fallback это `@cdxanton2026bot текст`; правильный фикс всё равно в privacy mode у бота
+- если в group topic обычный текст не долетает до бота, quickest fallback это `@your_bot_username текст`; правильный фикс всё равно в privacy mode у бота
 - длинные ops-ответы вроде `/project-status` и `/sync-project` bridge по возможности скидывает в direct chat с ботом, оставляя в topic только короткий след
 - parked sync topics остаются отдельным классом: они не считаются активным working set и не мешают `/attach-latest` или следующему sync preview

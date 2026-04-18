@@ -1,0 +1,20 @@
+{
+  "name": "codex-telegram-frontend",
+  "version": "0.1.0",
+  "description": "Telegram remote frontend for Codex Desktop projects and threads.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node bridge.mjs",
+    "once": "node bridge.mjs --once",
+    "self-check": "node bridge.mjs --self-check",
+    "test": "node --test",
+    "check": "npm run test && python3 -m py_compile admin/telegram_user_admin.py",
+    "onboard:scan": "node scripts/onboard.mjs scan",
+    "onboard:plan": "node scripts/onboard.mjs plan"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  }
+}
