@@ -31,6 +31,28 @@ function makeAssistantLine({ text, phase = "final_answer", timestamp = "2026-04-
   });
 }
 
+function makePlanLine({
+  plan,
+  timestamp = "2026-04-18T20:00:01.000Z",
+} = {}) {
+  return JSON.stringify({
+    timestamp,
+    type: "response_item",
+    payload: {
+      type: "function_call",
+      name: "update_plan",
+      arguments: JSON.stringify({
+        plan: plan ?? [
+          { step: "Inspect current state", status: "completed" },
+          { step: "Patch the mirror", status: "in_progress" },
+          { step: "Run smoke checks", status: "pending" },
+        ],
+      }),
+      call_id: "call-plan",
+    },
+  });
+}
+
 test("parseAssistantMirrorChunk keeps only assistant final answers", () => {
   const chunk = [
     makeAssistantLine({ text: "промежуточный статус", phase: "commentary" }),
@@ -60,6 +82,28 @@ test("parseThreadMirrorChunk can include commentary for live chat mirror", () =>
   assert.equal(parsed.messages[0].text, "Промежуточный апдейт");
   assert.equal(parsed.messages[1].phase, "final_answer");
   assert.equal(parsed.messages[1].text, "Финальный ответ");
+});
+
+test("parseThreadMirrorChunk can include update_plan as compact todo progress", () => {
+  const parsed = parseThreadMirrorChunk(`${makePlanLine()}\n`, {
+    phases: ["commentary", "final_answer"],
+  });
+
+  assert.equal(parsed.messages.length, 1);
+  assert.equal(parsed.messages[0].role, "plan");
+  assert.equal(parsed.messages[0].phase, "update_plan");
+  assert.match(parsed.messages[0].text, /^\*\*Todo\*\*\n1\/3 done/);
+  assert.match(parsed.messages[0].text, /1\. \[x\] Inspect current state/);
+  assert.match(parsed.messages[0].text, /2\. \[>\] Patch the mirror/);
+  assert.match(parsed.messages[0].text, /3\. \[ \] Run smoke checks/);
+});
+
+test("parseThreadMirrorChunk skips update_plan when commentary mirror is disabled", () => {
+  const parsed = parseThreadMirrorChunk(`${makePlanLine()}\n`, {
+    phases: ["final_answer"],
+  });
+
+  assert.deepEqual(parsed.messages, []);
 });
 
 test("cleanupMirrorUserText strips file/image wrapper noise", () => {

@@ -36,6 +36,28 @@ test("formatOutboundProgressMirrorText keeps recent commentary in one progress b
   assert.match(text, /\n\n\*\*Progress\*\*\nlast activity: 21:31$/);
 });
 
+test("formatOutboundProgressMirrorText shows todo plan above live updates", () => {
+  const turn = {
+    planText: "**Todo**\n1/2 done\n1. [x] Inspect state\n2. [>] Patch mirror",
+    progressItems: [
+      {
+        text: "Editing parser and progress bubble",
+        timestamp: "2026-04-18T21:32:00.000+02:00",
+      },
+    ],
+  };
+
+  const text = formatOutboundProgressMirrorText({
+    currentTurn: turn,
+    config: {},
+  });
+
+  assert.match(text, /^\*\*Todo\*\*/);
+  assert.match(text, /2\. \[>\] Patch mirror/);
+  assert.match(text, /\n\n> Editing parser and progress bubble/);
+  assert.match(text, /\n\n\*\*Progress\*\*\nlast activity: 21:32$/);
+});
+
 test("formatOutboundProgressMirrorText generic mode hides commentary details", () => {
   const text = formatOutboundProgressMirrorText({
     message: {

@@ -422,6 +422,10 @@ function isCommentaryAssistantMirrorMessage(message) {
   return message?.role === "assistant" && normalizeText(message?.phase) === "commentary";
 }
 
+function isPlanMirrorMessage(message) {
+  return message?.role === "plan" && normalizeText(message?.phase) === "update_plan";
+}
+
 function formatOutboundAssistantMirrorText(message) {
   const text = normalizeText(message?.text);
   if (!text || message?.role !== "assistant") {
@@ -438,14 +442,22 @@ function formatOutboundAssistantMirrorText(message) {
 }
 
 async function upsertOutboundProgressMessage({ config, binding, target, replyToMessageId, message }) {
-  const progressItems = appendOutboundProgressItem(binding.currentTurn, message);
-  binding.currentTurn = {
+  const baseTurn = {
     source: "codex",
     startedAt: message.timestamp || binding.currentTurn?.startedAt || new Date().toISOString(),
     promptPreview: binding.currentTurn?.promptPreview || "Codex progress",
     ...(binding.currentTurn || {}),
-    progressItems,
   };
+  binding.currentTurn = isPlanMirrorMessage(message)
+    ? {
+        ...baseTurn,
+        planText: normalizeText(message.text),
+        planUpdatedAt: message.timestamp || new Date().toISOString(),
+      }
+    : {
+        ...baseTurn,
+        progressItems: appendOutboundProgressItem(binding.currentTurn, message),
+      };
   const text = formatOutboundProgressMirrorText({
     message,
     currentTurn: binding.currentTurn,
@@ -1603,10 +1615,11 @@ async function syncOutboundMirrors({ config, state }) {
         };
         const isFinalAssistant = isFinalAssistantMirrorMessage(message);
         const isCommentaryAssistant = isCommentaryAssistantMirrorMessage(message);
+        const isPlan = isPlanMirrorMessage(message);
         let sent = [];
         if (message.role === "user") {
           sent = await sendRichTextChunks(config.botToken, target, formatOutboundUserMirrorText(message.text, config));
-        } else if (isCommentaryAssistant) {
+        } else if (isCommentaryAssistant || isPlan) {
           sent = await upsertOutboundProgressMessage({
             config,
             binding,
