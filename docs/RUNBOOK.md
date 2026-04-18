@@ -49,6 +49,12 @@ Self-check without starting the polling loop:
 npm run self-check
 ```
 
+Onboarding preflight without Telegram side effects:
+
+```bash
+npm run onboard:doctor
+```
+
 Install or refresh launchd:
 
 ```bash

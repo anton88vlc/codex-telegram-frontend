@@ -37,6 +37,14 @@ Before running the wizard on a fresh machine, make sure these exist. Skip this a
 
 The wizard has a checklist, but it cannot create BotFather tokens, Telegram API credentials or a Codex Desktop installation for the user. Those bits stay manual for now.
 
+Run the doctor when in doubt:
+
+```bash
+npm run onboard:doctor
+```
+
+It is read-only. If it says something is missing, believe it before blaming Telegram.
+
 ## What The User Must Do
 
 A little manual setup is unavoidable for now:

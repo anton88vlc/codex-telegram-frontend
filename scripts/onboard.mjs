@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import readline from "node:readline/promises";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 
 import {
   buildBootstrapPlan,
@@ -29,6 +30,9 @@ const DEFAULT_CONFIG_PATH = path.join(PROJECT_ROOT, "config.local.json");
 const DEFAULT_ADMIN_ENV_PATH = path.join(PROJECT_ROOT, "admin", ".env");
 const DEFAULT_ADMIN_SESSION_PATH = path.join(PROJECT_ROOT, "state", "anton_user.session");
 const DEFAULT_BRIDGE_STATE_PATH = path.join(PROJECT_ROOT, "state", "state.json");
+const DEFAULT_BOT_TOKEN_KEYCHAIN_SERVICE = "codex-telegram-bridge-bot-token";
+const DEFAULT_NATIVE_DEBUG_BASE_URL = "http://127.0.0.1:9222";
+const execFileAsync = promisify(execFile);
 
 function fail(message) {
   process.stderr.write(`${message}\n`);
@@ -205,12 +209,14 @@ function parseArgs(argv) {
 function renderHelp() {
   return [
     "Usage:",
+    "  node scripts/onboard.mjs doctor [--json]",
     "  node scripts/onboard.mjs scan [--project-limit 8] [--threads-per-project 3] [--json]",
     "  node scripts/onboard.mjs plan --project /path/to/repo [--project /path/to/other] [--threads-per-project 3] [--group-prefix 'Codex - '] [--folder-title codex] [--topic-display tabs|list] [--write]",
     "  node scripts/onboard.mjs plan --rehearsal --project /path/to/repo [--write]",
     "  node scripts/onboard.mjs wizard [--rehearsal] [--write] [--apply] [--cleanup-dry-run|--cleanup] [--backfill-dry-run|--backfill] [--smoke]",
     "",
     "Notes:",
+    "  doctor checks local prerequisites before the wizard gets creative.",
     "  scan is read-only and shows candidate Codex projects/threads.",
     "  plan is a preview by default; add --write to update admin/bootstrap-plan.json.",
     "  wizard is interactive by default and keeps Telegram side effects behind explicit confirmation or flags.",
@@ -224,6 +230,42 @@ async function pathExists(filePath) {
   try {
     await fs.access(filePath);
     return true;
+  } catch {
+    return false;
+  }
+}
+
+async function readJsonIfExists(filePath, fallback = {}) {
+  try {
+    return JSON.parse(await fs.readFile(filePath, "utf8"));
+  } catch {
+    return fallback;
+  }
+}
+
+async function keychainHasSecret(serviceName) {
+  if (process.platform !== "darwin" || !serviceName) {
+    return false;
+  }
+  try {
+    const { stdout } = await execFileAsync("/usr/bin/security", [
+      "find-generic-password",
+      "-s",
+      String(serviceName),
+      "-w",
+    ]);
+    return Boolean(String(stdout ?? "").trim());
+  } catch {
+    return false;
+  }
+}
+
+async function appControlReachable(baseUrl = DEFAULT_NATIVE_DEBUG_BASE_URL) {
+  try {
+    const response = await fetch(`${String(baseUrl).replace(/\/+$/, "")}/json/list`, {
+      signal: AbortSignal.timeout(1000),
+    });
+    return response.ok;
   } catch {
     return false;
   }
@@ -287,26 +329,54 @@ function parseSelection(input, max, fallback = []) {
   return selected.size ? [...selected].sort((a, b) => a - b) : fallback;
 }
 
-function renderChecklistItem(label, ok, detail = "") {
-  return `${ok ? "[ok]" : "[todo]"} ${label}${detail ? ` - ${detail}` : ""}`;
+function makeCheck(label, ok, detail = "", { required = true } = {}) {
+  return {
+    label,
+    ok: Boolean(ok),
+    detail,
+    required,
+  };
+}
+
+function renderChecklistItem(check) {
+  const status = check.ok ? "[ok]" : check.required ? "[missing]" : "[warn]";
+  return `${status} ${check.label}${check.detail ? ` - ${check.detail}` : ""}`;
+}
+
+async function buildOnboardingChecks(args) {
+  const config = await readJsonIfExists(args.configPath, {});
+  const botTokenEnv = config.botTokenEnv || "CODEX_TELEGRAM_BOT_TOKEN";
+  const keychainService = config.botTokenKeychainService || DEFAULT_BOT_TOKEN_KEYCHAIN_SERVICE;
+  const nativeDebugBaseUrl = config.nativeDebugBaseUrl || DEFAULT_NATIVE_DEBUG_BASE_URL;
+  const configHasBotToken = Boolean(process.env[botTokenEnv] || config.botToken);
+  const [configOk, envOk, helperOk, adminPythonOk, sessionOk, threadsDbOk, codexAppOk, botTokenOk, appControlOk] =
+    await Promise.all([
+      pathExists(args.configPath),
+      pathExists(args.adminEnvPath),
+      pathExists(args.adminHelperPath),
+      pathExists(args.adminPythonPath),
+      pathExists(args.adminSessionPath),
+      pathExists(args.threadsDbPath),
+      pathExists("/Applications/Codex.app/Contents/MacOS/Codex"),
+      configHasBotToken ? Promise.resolve(true) : keychainHasSecret(keychainService),
+      appControlReachable(nativeDebugBaseUrl),
+    ]);
+  return [
+    makeCheck("macOS host", process.platform === "darwin", process.platform),
+    makeCheck("Codex.app", codexAppOk, "/Applications/Codex.app/Contents/MacOS/Codex"),
+    makeCheck("config.local.json", configOk, args.configPath),
+    makeCheck("admin .env with Telegram API_ID/API_HASH", envOk, args.adminEnvPath),
+    makeCheck("Telethon helper", helperOk, args.adminHelperPath),
+    makeCheck("admin Python venv", adminPythonOk, args.adminPythonPath),
+    makeCheck("authorized Telegram user session", sessionOk, args.adminSessionPath),
+    makeCheck("local Codex threads DB", threadsDbOk, args.threadsDbPath),
+    makeCheck("Telegram bot token", botTokenOk, `${botTokenEnv}, config, or Keychain service ${keychainService}`),
+    makeCheck("app-control debug port", appControlOk, nativeDebugBaseUrl, { required: false }),
+  ];
 }
 
 async function buildOnboardingChecklist(args) {
-  const [configOk, envOk, helperOk, sessionOk, threadsDbOk] = await Promise.all([
-    pathExists(args.configPath),
-    pathExists(args.adminEnvPath),
-    pathExists(args.adminHelperPath),
-    pathExists(args.adminSessionPath),
-    pathExists(args.threadsDbPath),
-  ]);
-  return [
-    renderChecklistItem("config.local.json", configOk, args.configPath),
-    renderChecklistItem("admin .env with Telegram API_ID/API_HASH", envOk, args.adminEnvPath),
-    renderChecklistItem("Telethon helper", helperOk, args.adminHelperPath),
-    renderChecklistItem("authorized Telegram user session", sessionOk, args.adminSessionPath),
-    renderChecklistItem("local Codex threads DB", threadsDbOk, args.threadsDbPath),
-    "[manual] BotFather bot token must be available through env, config, or macOS Keychain.",
-  ];
+  return (await buildOnboardingChecks(args)).map(renderChecklistItem);
 }
 
 function printProjectChoices(projects) {
@@ -527,6 +597,25 @@ async function loadProjectsWithThreads(args) {
     });
   }
   return withThreads;
+}
+
+async function commandDoctor(args) {
+  const checks = await buildOnboardingChecks(args);
+  const ok = checks.filter((check) => check.required).every((check) => check.ok);
+  if (args.json) {
+    process.stdout.write(`${JSON.stringify({ ok, checks }, null, 2)}\n`);
+  } else {
+    process.stdout.write("Onboarding doctor:\n");
+    process.stdout.write(`${checks.map(renderChecklistItem).map((item) => `- ${item}`).join("\n")}\n`);
+    process.stdout.write(
+      ok
+        ? "\nLooks good. If Telegram still acts cursed, run self-check next.\n"
+        : "\nFix the missing required bits before running the wizard. Saves everyone a weird afternoon.\n",
+    );
+  }
+  if (!ok) {
+    process.exitCode = 1;
+  }
 }
 
 async function commandScan(args) {
@@ -750,6 +839,10 @@ async function main() {
   }
   if (args.command === "scan") {
     await commandScan(args);
+    return;
+  }
+  if (args.command === "doctor") {
+    await commandDoctor(args);
     return;
   }
   if (args.command === "plan") {

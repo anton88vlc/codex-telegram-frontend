@@ -114,6 +114,12 @@ python3 -m venv admin/.venv
 admin/.venv/bin/pip install -r admin/requirements.txt
 ```
 
+Run the doctor before the wizard gets creative:
+
+```bash
+npm run onboard:doctor
+```
+
 Launch `Codex.app` with a debug port:
 
 ```bash
@@ -158,6 +164,12 @@ Install or refresh the launchd agent:
 That is the right v1. Mirroring the whole sidebar blindly turns the product into a landfill with push notifications.
 
 ## Onboarding Wizard
+
+Preflight:
+
+```bash
+npm run onboard:doctor
+```
 
 Interactive guided flow:
 
