@@ -14,16 +14,16 @@ This is not "one more bot". The intended shape is a clean bridge:
 
 ## Runtime Boundary
 
-This project is a frontend, not a standalone Codex runtime.
+Frontend, not a standalone Codex brain. The Mac still does the real work.
 
 - For real work in v1, keep `Codex.app` open on the Mac.
 - Preferred transport is `app-control` at `http://127.0.0.1:9222`, started with `--remote-debugging-port=9222`.
 - If the debug port is unavailable, the bridge can use local `app-server` fallback, but that is a degraded path: useful for emergency sends, weaker for UI-aware mirroring, progress and diagnostics.
-- If `Codex.app` is closed or crashed, Telegram can still receive bot/admin commands, but real Codex turns cannot complete normally until the app is open again.
+- If `Codex.app` is closed or crashed, Telegram can still receive bot/admin commands, but real Codex turns will not finish normally. The bridge should say that clearly, not cosplay as a backend.
 
 ## Supported Environment
 
-Current v1 target: a local macOS machine running Codex Desktop.
+Current v1 target: a local macOS machine running Codex Desktop. Boring boundary, useful boundary.
 
 The onboarding wizard is not Anton-machine-only, but it is not cross-platform magic either. On another Mac it should work after local setup. On Linux or Windows it is not supported yet because the runtime assumes Codex Desktop for macOS, `launchd`, macOS Keychain as an optional token source and a local Codex DB.
 
@@ -35,6 +35,10 @@ Required local inputs:
 - Telegram `API_ID` and `API_HASH` for the user-side admin helper
 - one authorized Telegram user session for creating folders, groups and topics
 - Node.js and Python dependencies from this repo
+
+## Documentation Voice
+
+Docs should sound like a competent teammate at 2am: direct, practical, and a little opinionated. No corporate fog. No fake certainty. If something is rough, say it is rough. If a command can make a mess, say that before the user runs it.
 
 ## What Works
 

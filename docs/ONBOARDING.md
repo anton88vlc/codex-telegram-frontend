@@ -1,6 +1,6 @@
 # Onboarding
 
-The goal is to create a clean Telegram working set, not dump the entire Codex sidebar.
+The goal is a clean Telegram working set, not a landfill copy of the entire Codex sidebar.
 
 The intended model:
 
@@ -12,9 +12,9 @@ The intended model:
 
 ## Runtime Requirement
 
-The Telegram bridge does not replace Codex Desktop. It gives Telegram a clean remote surface for the local Codex app.
+The Telegram bridge does not replace Codex Desktop. It gives Telegram a clean remote surface for the local Codex app. Different job, same project.
 
-Current v1 is macOS-first. It can run on another properly prepared Mac; it is not expected to run on Linux or Windows yet.
+Current v1 is macOS-first. It can run on another properly prepared Mac. Linux and Windows are not supported yet; if someone gets it working there, excellent, but that is not the contract.
 
 For live work and onboarding smoke tests, `Codex.app` should be open. The best path is launching it with:
 
@@ -26,7 +26,7 @@ That exposes `app-control` on `http://127.0.0.1:9222`. If it is unavailable, the
 
 ## Preflight Checklist
 
-Before running the wizard on a fresh machine, make sure these exist:
+Before running the wizard on a fresh machine, make sure these exist. Skip this and the wizard will mostly just discover missing reality for you.
 
 - `Codex.app` is installed and has been opened at least once.
 - The local Codex DB exists, usually `~/.codex/state_5.sqlite`.
@@ -35,11 +35,11 @@ Before running the wizard on a fresh machine, make sure these exist:
 - `admin/.env` contains Telegram `API_ID` and `API_HASH`.
 - The user-side Telegram session has been authorized once with `login-qr` or `login-phone`.
 
-The wizard has a checklist, but it cannot create BotFather tokens, Telegram API credentials or a Codex Desktop installation for the user. Those remain manual setup.
+The wizard has a checklist, but it cannot create BotFather tokens, Telegram API credentials or a Codex Desktop installation for the user. Those bits stay manual for now.
 
 ## What The User Must Do
 
-A small manual setup step is unavoidable for now:
+A little manual setup is unavoidable for now:
 
 1. Create a Telegram bot through BotFather and put the token in env, config, or macOS Keychain.
 2. Get `API_ID` and `API_HASH` for the user-side Telegram helper.
@@ -58,7 +58,7 @@ admin/.venv/bin/pip install -r admin/requirements.txt
 admin/.venv/bin/python admin/telegram_user_admin.py login-qr
 ```
 
-BotFather does not provide a proper public API for fully automated bot creation. Do not pretend this can be scripted cleanly. Everything after that should be as automated as possible.
+BotFather does not provide a proper public API for fully automated bot creation. Do not pretend this can be scripted cleanly. Everything after that should be as automated as we can make it.
 
 ## Recommended Guided Flow
 
@@ -83,7 +83,7 @@ npm run onboard:wizard:rehearsal -- \
   --no-input
 ```
 
-Side-effect flags are intentionally explicit:
+Side-effect flags are intentionally explicit. Creating Telegram groups is fine; doing it by accident is not.
 
 - `--apply` creates/reuses Telegram groups/topics and writes bridge bindings.
 - `--backfill-dry-run` previews clean history import.
@@ -91,7 +91,7 @@ Side-effect flags are intentionally explicit:
 - `--smoke` sends a Telegram smoke prompt and waits for the expected answer.
 - `--smoke-timeout-seconds 240` controls how long the wizard waits for a mirrored smoke answer.
 
-The lower-level steps below are still useful for debugging or automation.
+The lower-level steps below are still useful when the wizard needs adult supervision.
 
 ## Step 1: Scan Codex Projects
 
@@ -112,7 +112,7 @@ npm run onboard:scan -- \
   --json
 ```
 
-The user should select the projects they actually want, not everything that ever existed.
+Pick projects the user actually wants on the phone. Mirroring everything that ever existed is how a useful frontend becomes notification soup.
 
 ## Step 2: Generate Bootstrap Plan
 
@@ -145,7 +145,7 @@ npm run onboard:rehearsal -- \
 ```
 
 Rehearsal defaults are intentionally small: 2 projects, 2 threads per project, last 20 clean history messages, group prefix `Codex Lab - `, folder `codex-lab`, output `admin/bootstrap-plan.rehearsal.json`.
-Use rehearsal before deleting or rebuilding the real `codex` surface.
+Use rehearsal before deleting or rebuilding the real `codex` surface. Future you will appreciate this small act of mercy.
 
 ## Step 3: Create Telegram Surface
 
@@ -185,9 +185,9 @@ admin/.venv/bin/python admin/telegram_user_admin.py backfill-thread \
   --dry-run
 ```
 
-Then run without `--dry-run`.
+Then run without `--dry-run` only after the preview looks sane.
 
-Defaults intentionally skip commentary, heartbeat/system-like entries, Codex app directives, memory citations and smoke noise. If a future user wants more, make it configurable, not default.
+Defaults intentionally skip commentary, heartbeat/system-like entries, Codex app directives, memory citations and smoke noise. If a future user wants more, make it configurable, not the default firehose.
 Backfill renders through the same Telegram HTML renderer as the live bridge by default (`--render-mode html`), so imported history should not show raw `**bold**`/markdown syntax.
 Use `--render-mode plain` only for debugging parser issues.
 

@@ -1,6 +1,6 @@
 # Runbook
 
-Commands below assume they are run from the repository root.
+Commands below assume they are run from the repository root. Run them from somewhere else and you are volunteering for silly problems.
 
 ## Runtime Files
 
@@ -18,11 +18,11 @@ Commands below assume they are run from the repository root.
 
 The bridge is only the Telegram frontend. `Codex.app` remains the engine and source of truth.
 
-Keep `Codex.app` open for real work. Prefer `app-control` on `http://127.0.0.1:9222`; the app-server fallback is allowed for resilience, but it is degraded and should not be sold as the primary path.
+Keep `Codex.app` open for real work. Prefer `app-control` on `http://127.0.0.1:9222`; the app-server fallback is useful resilience, not the happy path.
 
 ## Install Assumptions
 
-The current ops path assumes macOS:
+The current ops path assumes macOS. There is no secret cloud brain hiding behind this:
 
 - `Codex.app` is the local engine.
 - Codex project/thread data comes from the local `~/.codex/state_5.sqlite` DB unless config overrides it.
@@ -30,7 +30,7 @@ The current ops path assumes macOS:
 - macOS Keychain can hold the bot token, though env/config also work.
 - Telethon uses a local user session file to create Telegram folders, groups and topics.
 
-If any of those are missing, run `npm run self-check` first and fix the reported local prerequisite before debugging Telegram UX.
+If any of those are missing, run `npm run self-check` first and fix the local prerequisite before debugging Telegram UX. Otherwise you are just poking the wrong beast.
 
 Useful launchd overrides:
 
@@ -83,6 +83,8 @@ npm run once
 
 ## If Something Breaks
 
+Do this in order. Random poking makes the bridge look haunted when it is usually just missing one boring prerequisite.
+
 1. Make sure `Codex.app` is open.
 2. Prefer launching it with `--remote-debugging-port=9222`; otherwise the bridge can still try the local app-server fallback.
 3. Run `npm run self-check`.
@@ -94,6 +96,8 @@ If `self-check` says `app-control: fetch failed`, but `app-server: reachable`, t
 It means the bridge is using fallback transport and some UI-aware behavior may be weaker.
 
 ## UX Smoke
+
+This is what good looks like:
 
 1. Send normal text in a bound topic and confirm one progress bubble appears.
 2. Confirm the bubble edits in place for longer replies.
@@ -178,7 +182,7 @@ admin/.venv/bin/python admin/telegram_user_admin.py backfill-thread \
   --dry-run
 ```
 
-Run without `--dry-run` after checking the preview.
+Run without `--dry-run` after checking the preview. Skipping the preview is how Telegram topics become archaeology.
 
 Notes:
 
@@ -223,7 +227,7 @@ Notes:
 
 - cleanup protects topic root and pinned status bar automatically
 - add `--keep-message-id` for extra protected messages
-- defaults target service actions and explicit ops/smoke noise, not real working history
+- defaults target service actions and explicit ops/smoke noise, not real working history; deleting the useful conversation is not a cleanup strategy
 
 ## UX Notes
 
