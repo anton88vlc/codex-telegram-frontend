@@ -80,6 +80,7 @@ const DEFAULT_THREADS_DB_PATH = path.join(os.homedir(), ".codex", "state_5.sqlit
 const DEFAULT_NATIVE_DEBUG_BASE_URL = process.env.CODEX_REMOTE_DEBUG_URL || "http://127.0.0.1:9222";
 const DEFAULT_APP_SERVER_URL = process.env.CODEX_APP_SERVER_URL || "ws://127.0.0.1:27890";
 const DEFAULT_NATIVE_POLL_INTERVAL_MS = 1_000;
+const DEFAULT_NATIVE_WAIT_FOR_REPLY = false;
 const DEFAULT_OUTBOUND_POLL_INTERVAL_MS = 2_000;
 const DEFAULT_OUTBOUND_MIRROR_PHASES = ["commentary", "final_answer"];
 const DEFAULT_STATUS_BAR_TAIL_BYTES = 512 * 1024;
@@ -171,7 +172,10 @@ async function loadConfig(configPath) {
     pollTimeoutSeconds: Number.isFinite(fromFile?.pollTimeoutSeconds) ? fromFile.pollTimeoutSeconds : 30,
     sendTyping: fromFile?.sendTyping !== false,
     nativeTimeoutMs: Number.isFinite(fromFile?.nativeTimeoutMs) ? fromFile.nativeTimeoutMs : 120_000,
-    nativeWaitForReply: fromFile?.nativeWaitForReply !== false,
+    nativeWaitForReply:
+      typeof fromFile?.nativeWaitForReply === "boolean"
+        ? fromFile.nativeWaitForReply
+        : DEFAULT_NATIVE_WAIT_FOR_REPLY,
     nativePollIntervalMs: Number.isFinite(fromFile?.nativePollIntervalMs)
       ? fromFile.nativePollIntervalMs
       : DEFAULT_NATIVE_POLL_INTERVAL_MS,

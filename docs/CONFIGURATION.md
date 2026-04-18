@@ -27,7 +27,7 @@ Use this for things that should survive restarts and should not be changed from 
 | `statusBarPin` | `true` | Pins the status bar message when Telegram allows it. |
 | `statusBarTailBytes` | `524288` | How much rollout tail is sampled for status data. |
 | `nativeTimeoutMs` | `120000` | Timeout for one native Codex send. |
-| `nativeWaitForReply` | `true` | If `false`, the transport returns as soon as Codex accepts the turn; Telegram gets progress/final through the outbound rollout mirror. This is the safer experimental mode for app-control. |
+| `nativeWaitForReply` | `false` | Keep this off for the normal happy path. The transport returns as soon as Codex accepts the turn; Telegram gets progress/final through the outbound rollout mirror. Setting it to `true` uses the older renderer polling path and should be treated as a debugging fallback. |
 | `nativePollIntervalMs` | `1000` | Poll interval while waiting for native Codex reply. |
 | `nativeIngressTransport` | `app-control` | Telegram-originated send path: `app-control`, `app-server`, or `auto`. Use `app-server` if renderer app-control crashes the desktop app. |
 | `appControlCooldownMs` | `300000` | How long to avoid app-control after an app-control send error before trying it again. |

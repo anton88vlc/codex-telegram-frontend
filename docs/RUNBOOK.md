@@ -104,7 +104,7 @@ Successful fallback replies include a short transport note in Telegram, so the u
 If both paths fail, Telegram shows a short recovery hint: open `Codex.app`, preferably with `--remote-debugging-port=9222`, then retry.
 If phone-originated Telegram prompts crash the desktop renderer, set `nativeIngressTransport` to `app-server` in `config.local.json`.
 
-For a better Desktop-first experiment without the old heavy renderer polling, use:
+For the Desktop-first happy path without the old heavy renderer polling, use:
 
 ```json
 {
@@ -114,7 +114,7 @@ For a better Desktop-first experiment without the old heavy renderer polling, us
 }
 ```
 
-This keeps `app-control` to a small `threads.send_message` action and lets Telegram receive progress/final from the rollout mirror. If the renderer still crashes, turn `appControlShowThread` off first; if it still crashes, go back to `nativeIngressTransport: "app-server"`.
+This is now the expected app-control shape: a small `threads.send_message` action, then Telegram receives progress/final from the rollout mirror. If the renderer still crashes, turn `appControlShowThread` off first; if it still crashes, go back to `nativeIngressTransport: "app-server"`.
 That keeps Telegram ingress off the renderer while outbound mirroring can still read the Codex thread state.
 
 ## UX Smoke

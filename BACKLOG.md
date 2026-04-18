@@ -39,4 +39,4 @@
 3. Explicit offline/degraded UX for closed or crashed `Codex.app`: short Telegram status, retry clues and clear distinction between preferred `app-control` and fallback app-server.
 4. Configurable Telegram ingress transport with local `app-server`-first mode and app-control cooldown, so a flaky renderer debug endpoint does not keep crashing the desktop app during phone-originated prompts.
 5. Codex task plans are mirrored into Telegram progress bubbles as compact `Todo` blocks below live commentary updates.
-6. Experimental stable app-control mode: send-only `threads.send_message`, no renderer `threads.read` polling, with rollout mirror as the source for Telegram progress/final.
+6. App-control send-only mode is the default happy path: `threads.send_message` only, no renderer `threads.read` polling, with rollout mirror as the source for Telegram progress/final.

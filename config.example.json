@@ -15,7 +15,7 @@
   "statusBarPin": true,
   "statusBarTailBytes": 524288,
   "nativeTimeoutMs": 120000,
-  "nativeWaitForReply": true,
+  "nativeWaitForReply": false,
   "nativePollIntervalMs": 1000,
   "nativeIngressTransport": "app-control",
   "appControlCooldownMs": 300000,
