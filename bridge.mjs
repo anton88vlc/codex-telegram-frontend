@@ -14,7 +14,6 @@ import { appendTransportNotice, renderNativeSendError } from "./lib/native-ux.mj
 import {
   appendOutboundProgressItem,
   formatOutboundProgressMirrorText,
-  normalizeOutboundProgressCompleteMode,
   normalizeOutboundProgressMode,
 } from "./lib/outbound-progress.mjs";
 import { getInitialProgressText, startProgressBubble } from "./lib/progress-bubble.mjs";
@@ -56,7 +55,6 @@ import { makeOutboundMirrorSignature, readThreadMirrorDelta } from "./lib/thread
 import {
   closeForumTopic,
   createForumTopic,
-  deleteMessage,
   editForumTopic,
   editThenSendRichTextChunks,
   editMessageText,
@@ -190,7 +188,6 @@ async function loadConfig(configPath) {
       : DEFAULT_OUTBOUND_POLL_INTERVAL_MS,
     outboundMirrorPhases: normalizeOutboundMirrorPhases(fromFile?.outboundMirrorPhases),
     outboundProgressMode: normalizeOutboundProgressMode(fromFile?.outboundProgressMode),
-    outboundProgressCompleteMode: normalizeOutboundProgressCompleteMode(fromFile?.outboundProgressCompleteMode),
     codexUserDisplayName: normalizeText(fromFile?.codexUserDisplayName) || "Codex Desktop user",
     statusBarEnabled: fromFile?.statusBarEnabled !== false,
     statusBarPin: fromFile?.statusBarPin !== false,
@@ -489,22 +486,6 @@ async function completeOutboundProgressMessage({ config, binding, target }) {
   const messageId = binding.currentTurn?.codexProgressMessageId;
   if (!Number.isInteger(messageId)) {
     return [];
-  }
-  if (config.outboundProgressCompleteMode === "delete") {
-    try {
-      await deleteMessage(config.botToken, {
-        chatId: target.chatId,
-        messageId,
-      });
-      return [{ message_id: messageId, deleted: true }];
-    } catch (error) {
-      logBridgeEvent("outbound_progress_delete_error", {
-        chatId: target.chatId,
-        messageThreadId: target.messageThreadId ?? null,
-        messageId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
   }
   const text = formatOutboundProgressMirrorText({
     currentTurn: binding.currentTurn,

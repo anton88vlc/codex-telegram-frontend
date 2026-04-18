@@ -67,8 +67,7 @@ Docs should sound like a competent teammate at 2am: direct, practical, and a lit
 - retry on temporary Telegram fetch errors
 - inbound update checkpointing to avoid duplicate turns after restart
 - live outbound mirror: Codex Desktop user-turn surrogate and final answers are mirrored into the bound Telegram topic/chat
-- Codex-originated commentary is folded into one editable progress message while Codex works; by default it is deleted after the final answer
-- `outboundProgressMode: "generic"` hides details and `outboundProgressMode: "verbatim"` mirrors raw commentary
+- Codex-originated commentary is folded into one editable progress message with recent visible updates; `outboundProgressMode: "generic"` hides details and `outboundProgressMode: "verbatim"` mirrors raw commentary
 - Codex task plans are mirrored into the same progress bubble as a compact `Todo` block
 - pinned compact status bar in active topics with model/reasoning/context/rate/activity data
 - persisted outbound checkpoint and suppression layer to avoid duplicating bridge-originated replies

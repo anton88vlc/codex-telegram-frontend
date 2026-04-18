@@ -10,7 +10,6 @@
   "outboundPollIntervalMs": 2000,
   "outboundMirrorPhases": ["commentary", "final_answer"],
   "outboundProgressMode": "updates",
-  "outboundProgressCompleteMode": "delete",
   "codexUserDisplayName": "Codex Desktop user",
   "statusBarEnabled": true,
   "statusBarPin": true,
