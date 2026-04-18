@@ -123,6 +123,34 @@ def load_json(path: Path, fallback):
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def bootstrap_group_identity(group: dict):
+    for key in ("botApiChatId", "groupId", "groupTitle"):
+        value = group.get(key)
+        if value:
+            return f"{key}:{value}"
+    return None
+
+
+def merge_bootstrap_results(existing: dict, current: dict):
+    if not isinstance(existing, dict) or not isinstance(existing.get("groups"), list):
+        return current
+
+    merged = {**existing, **current}
+    groups_by_key = {}
+    ordered_keys = []
+    for group in [*existing.get("groups", []), *current.get("groups", [])]:
+        if not isinstance(group, dict):
+            continue
+        identity = bootstrap_group_identity(group)
+        if not identity:
+            continue
+        if identity not in groups_by_key:
+            ordered_keys.append(identity)
+        groups_by_key[identity] = group
+    merged["groups"] = [groups_by_key[key] for key in ordered_keys]
+    return merged
+
+
 def normalize_bot_username(value) -> str:
     return str(value or "").strip().lstrip("@")
 
@@ -1012,7 +1040,10 @@ async def command_bootstrap(args):
         await client.disconnect()
 
     save_json(args.bridge_state, bridge_state)
-    save_json(args.result_path, summary)
+    result_payload = summary
+    if not args.replace_result:
+        result_payload = merge_bootstrap_results(load_json(args.result_path, {}), summary)
+    save_json(args.result_path, result_payload)
     print(json.dumps(summary, ensure_ascii=False, indent=2))
 
 
@@ -1220,6 +1251,7 @@ def build_parser():
     bootstrap.add_argument("--bot-username", default=None)
     bootstrap.add_argument("--folder-title", default=None)
     bootstrap.add_argument("--topic-display", choices=["tabs", "list"], default=None)
+    bootstrap.add_argument("--replace-result", action="store_true")
     bootstrap.add_argument("--skip-folder", action="store_true")
     bootstrap.set_defaults(handler=command_bootstrap)
 

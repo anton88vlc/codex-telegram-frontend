@@ -122,6 +122,7 @@ admin/.venv/bin/python admin/telegram_user_admin.py bootstrap \
 
 `bootstrap` creates or updates the Telegram folder from the plan by default and puts project groups there.
 It also forces forum topics to display as `Tabs`; pass `--topic-display list` only for manual debugging.
+It merges groups into `state/bootstrap-result.json`; pass `--replace-result` only for an intentional clean rebuild.
 Use `--skip-folder` only when debugging folder automation.
 Bot username is read from `config.local.json -> botUsername`, `CODEX_TELEGRAM_BOT_USERNAME`, or `--bot-username`.
 
