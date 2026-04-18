@@ -44,6 +44,23 @@ test("parseAssistantMirrorChunk keeps only assistant final answers", () => {
   assert.equal(parsed.messages[0].text, "Финальный ответ");
 });
 
+test("parseThreadMirrorChunk can include commentary for live chat mirror", () => {
+  const chunk = [
+    makeAssistantLine({ text: "Промежуточный апдейт", phase: "commentary" }),
+    makeAssistantLine({ text: "Финальный ответ" }),
+  ].join("\n");
+
+  const parsed = parseThreadMirrorChunk(`${chunk}\n`, {
+    phases: ["commentary", "final_answer"],
+  });
+
+  assert.equal(parsed.messages.length, 2);
+  assert.equal(parsed.messages[0].phase, "commentary");
+  assert.equal(parsed.messages[0].text, "Промежуточный апдейт");
+  assert.equal(parsed.messages[1].phase, "final_answer");
+  assert.equal(parsed.messages[1].text, "Финальный ответ");
+});
+
 test("cleanupMirrorUserText strips file/image wrapper noise", () => {
   const cleaned = cleanupMirrorUserText(`# Files mentioned by the user:
 

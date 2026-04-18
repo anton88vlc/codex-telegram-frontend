@@ -30,14 +30,15 @@ Telegram как быстрый remote frontend для локального `Code
 - user-side history backfill из `rollout_path` в Telegram topic через `admin/telegram_user_admin.py backfill-thread`
 - retry на временных Telegram fetch errors
 - checkpoint на inbound updates, чтобы после рестарта не дублировать один и тот же turn
-- live outbound mirror: финальные ответы, появившиеся прямо в Codex thread, долетают обратно в привязанный Telegram topic/chat
-- для Codex-originated turn bridge сначала зеркалит безопасный user-turn surrogate (`Anton via Codex Desktop`), а уже assistant final answer приходит reply на него
+- live outbound mirror: user-turn surrogate, commentary updates и final answers из Codex Desktop долетают обратно в привязанный Telegram topic/chat
+- для Codex-originated turn bridge сначала зеркалит безопасный user-turn surrogate (`User via Codex Desktop`, имя задаётся в config), а уже assistant messages приходят reply на него
+- pinned compact status bar в active topics: bridge резервирует сообщение, пинит его и редактирует при изменении model/reasoning/context/rate-limit/activity данных
 - persisted outbound checkpoint и suppression-слой, чтобы live mirror не дублировал ответы, которые bridge уже сам отдал в Telegram
 - user-side Telegram admin helper на Telethon для bootstrap групп, topics и bot-admin прав
 
 ## Чего пока нет
 
-- streaming / commentary updates как в Codex UI; сейчас live mirror честно шлёт только human-visible final answers
+- настоящий token streaming из Codex UI; сейчас live mirror шлёт human-visible chat messages, включая commentary и final answers
 - вложения, картинки, voice
 - auto-create topics по watcher-правилам
 - heartbeat transport как отдельный режим
@@ -110,7 +111,7 @@ node /Users/antonnaumov/code/codex-telegram-frontend/bridge.mjs \
 
 - token можно брать не только из env, но и из macOS Keychain service `codex-telegram-bridge-bot-token`
 - если `app-control` недоступен, bridge всё равно живёт через fallback `app-server`
-- outbound mirror читает `rollout_path` bound thread-а и по умолчанию опрашивает его часто, поэтому final answers из Codex Desktop появляются в Telegram без ручного backfill
+- outbound mirror читает `rollout_path` bound thread-а и по умолчанию опрашивает его часто, поэтому user/commentary/final messages из Codex Desktop появляются в Telegram без ручного backfill
 - если в group topic обычный текст не долетает до бота, quickest fallback это `@cdxanton2026bot текст`; правильный фикс всё равно в privacy mode у бота
 - длинные ops-ответы вроде `/project-status` и `/sync-project` bridge по возможности скидывает в direct chat с ботом, оставляя в topic только короткий след
 - parked sync topics остаются отдельным классом: они не считаются активным working set и не мешают `/attach-latest` или следующему sync preview

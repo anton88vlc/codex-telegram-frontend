@@ -56,7 +56,8 @@ launchctl kickstart -k gui/$(id -u)/com.antonnaumov.codex.telegram-bridge
 2. Убедись, что bubble редактируется на месте, если ответ идёт дольше пары секунд.
 3. Для `/project-status` или `/sync-project dry-run` проверь, что topic получает короткий след, а детали уходят в direct chat с ботом.
 4. Для `/sync-project` проверь, что stale sync-topics паркуются, а не продолжают висеть как будто они всё ещё часть рабочего набора.
-5. Сделай любой короткий ответ прямо из Codex Desktop в уже привязанном thread и проверь, что финальный текст сам прилетает в связанный Telegram topic без ручного backfill.
+5. Сделай любой короткий turn прямо из Codex Desktop в уже привязанном thread и проверь, что surrogate user message, commentary updates и финальный текст сами прилетают в связанный Telegram topic без ручного backfill.
+6. Проверь, что в active topic есть pinned compact status message. Он должен показывать `model | reasoning`, context load, remaining rate limits with reset countdown и короткий status.
 
 ## Bootstrap / Telegram admin
 
@@ -110,8 +111,9 @@ Notes:
 
 - user-facing ответы рендерятся через Telegram HTML parse mode с fallback в plain text, если parse_mode ломается
 - progress bubble нарочно честный: это не настоящий streaming из Codex, а аккуратный in-place status update, чтобы в Telegram не было немой паузы
-- outbound mirror сейчас сознательно зеркалит только `final_answer`; commentary/event stream пока не льётся в topic, чтобы не устроить ботоспам
-- если turn пришёл из самого Codex Desktop, bridge сначала кладёт в topic bot-side surrogate user message (`Anton via Codex Desktop`), а потом шлёт assistant reply именно на него, чтобы UX не лип к корню topic
+- outbound mirror зеркалит human-visible `commentary` и `final_answer`; raw event stream и token streaming пока не льются в topic, чтобы не устроить ботоспам
+- если turn пришёл из самого Codex Desktop, bridge сначала кладёт в topic bot-side surrogate user message (`User via Codex Desktop`, имя задаётся в config), а потом шлёт assistant replies именно на него, чтобы UX не лип к корню topic
+- status bar живёт как отдельное pinned message в каждом active topic; bridge редактирует его only-on-change, а не спамит новый status на каждый poll
 - transport/raw exceptions не вываливаются пользователю в чат целиком; детали ищи в `logs/bridge.stderr.log`
 - parked sync topics считаются припаркованными слепками старого working set: они не участвуют в `attach-latest` и не должны восприниматься как активные рабочие thread-ы
 

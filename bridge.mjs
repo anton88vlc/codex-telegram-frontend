@@ -24,6 +24,7 @@ import {
   SYNC_PROJECT_CREATOR,
 } from "./lib/project-sync.mjs";
 import { buildSelfCheckReport, formatSelfCheckReport } from "./lib/runtime-health.mjs";
+import { buildStatusBarText, makeStatusBarHash, readRolloutRuntimeStatus } from "./lib/status-bar.mjs";
 import {
   getBinding,
   getOutboundMirror,
@@ -47,9 +48,12 @@ import {
   createForumTopic,
   editForumTopic,
   editThenSendRichTextChunks,
+  editMessageText,
   getMe,
   getUpdates,
+  pinChatMessage,
   reopenForumTopic,
+  sendMessage,
   sendRichTextChunks,
   sendTextChunks,
   sendTyping,
@@ -67,6 +71,8 @@ const DEFAULT_NATIVE_DEBUG_BASE_URL = process.env.CODEX_REMOTE_DEBUG_URL || "htt
 const DEFAULT_APP_SERVER_URL = process.env.CODEX_APP_SERVER_URL || "ws://127.0.0.1:27890";
 const DEFAULT_NATIVE_POLL_INTERVAL_MS = 1_000;
 const DEFAULT_OUTBOUND_POLL_INTERVAL_MS = 2_000;
+const DEFAULT_OUTBOUND_MIRROR_PHASES = ["commentary", "final_answer"];
+const DEFAULT_STATUS_BAR_TAIL_BYTES = 512 * 1024;
 const DEFAULT_BOT_TOKEN_KEYCHAIN_SERVICE = "codex-telegram-bridge-bot-token";
 const execFileAsync = promisify(execFile);
 
@@ -162,6 +168,13 @@ async function loadConfig(configPath) {
     outboundPollIntervalMs: Number.isFinite(fromFile?.outboundPollIntervalMs)
       ? fromFile.outboundPollIntervalMs
       : DEFAULT_OUTBOUND_POLL_INTERVAL_MS,
+    outboundMirrorPhases: normalizeOutboundMirrorPhases(fromFile?.outboundMirrorPhases),
+    codexUserDisplayName: normalizeText(fromFile?.codexUserDisplayName) || "Codex Desktop user",
+    statusBarEnabled: fromFile?.statusBarEnabled !== false,
+    statusBarPin: fromFile?.statusBarPin !== false,
+    statusBarTailBytes: Number.isFinite(fromFile?.statusBarTailBytes)
+      ? fromFile.statusBarTailBytes
+      : DEFAULT_STATUS_BAR_TAIL_BYTES,
     statePath: fromFile?.statePath || DEFAULT_STATE_PATH,
     nativeHelperPath: fromFile?.nativeHelperPath || DEFAULT_NATIVE_HELPER_PATH,
     nativeFallbackHelperPath: fromFile?.nativeFallbackHelperPath || DEFAULT_NATIVE_FALLBACK_HELPER_PATH,
@@ -169,6 +182,13 @@ async function loadConfig(configPath) {
     threadsDbPath: fromFile?.threadsDbPath || DEFAULT_THREADS_DB_PATH,
     syncDefaultLimit: Number.isFinite(fromFile?.syncDefaultLimit) ? fromFile.syncDefaultLimit : 3,
   };
+}
+
+function normalizeOutboundMirrorPhases(value) {
+  const allowed = new Set(["commentary", "final_answer"]);
+  const raw = Array.isArray(value) ? value : DEFAULT_OUTBOUND_MIRROR_PHASES;
+  const phases = Array.from(new Set(raw.map((item) => normalizeText(item)).filter((item) => allowed.has(item))));
+  return phases.length ? phases : [...DEFAULT_OUTBOUND_MIRROR_PHASES];
 }
 
 async function readKeychainSecret(serviceName) {
@@ -332,12 +352,37 @@ function isOutboundMirrorBindingEligible(binding) {
   return true;
 }
 
-function formatOutboundUserMirrorText(text) {
+function isStatusBarBindingEligible(binding) {
+  if (!isOutboundMirrorBindingEligible(binding)) {
+    return false;
+  }
+  return binding.messageThreadId != null;
+}
+
+function formatOutboundUserMirrorText(text, config = {}) {
   const normalized = normalizeText(text);
   if (!normalized) {
     return "";
   }
-  return `Anton via Codex Desktop\n\n${normalized}`;
+  const displayName = normalizeText(config.codexUserDisplayName).replace(/\s+/g, " ") || "Codex Desktop user";
+  return `${displayName} via Codex Desktop\n\n${normalized}`;
+}
+
+function isFinalAssistantMirrorMessage(message) {
+  return message?.role === "assistant" && (normalizeText(message?.phase) || "final_answer") === "final_answer";
+}
+
+function makePromptPreview(text) {
+  const normalized = normalizeText(text).replace(/\s+/g, " ");
+  if (normalized.length <= 160) {
+    return normalized;
+  }
+  return `${normalized.slice(0, 157)}...`;
+}
+
+function isMissingStatusBarMessageError(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /message to edit not found|message_id_invalid|message can't be edited|message not found/i.test(message);
 }
 
 function logBridgeEvent(type, payload = {}) {
@@ -436,6 +481,9 @@ async function renderBindingStatus(config, bindingKey, binding) {
   if (binding.lastMirroredAt) {
     lines.push(`last mirrored at: \`${binding.lastMirroredAt}\` (${binding.lastMirroredPhase || "assistant"})`);
   }
+  if (binding.statusBarMessageId) {
+    lines.push(`status bar message: \`${binding.statusBarMessageId}\``);
+  }
 
   try {
     const thread = await getThreadById(config.threadsDbPath, binding.threadId);
@@ -463,6 +511,7 @@ async function renderHealth(config, state, message, bindingKey, binding) {
     `native debug: \`${config.nativeDebugBaseUrl}\``,
     `app server: \`${config.appServerUrl}\``,
     `outbound mirror: ${config.outboundSyncEnabled === false ? "off" : `on (${config.outboundPollIntervalMs}ms poll)`}`,
+    `status bar: ${config.statusBarEnabled === false ? "off" : "on"}`,
   ];
 
   if (binding) {
@@ -472,6 +521,9 @@ async function renderHealth(config, state, message, bindingKey, binding) {
     }
     if (binding.lastMirroredAt) {
       lines.push(`last mirrored: \`${binding.lastMirroredAt}\` (${binding.lastMirroredPhase || "assistant"})`);
+    }
+    if (binding.statusBarMessageId) {
+      lines.push(`status bar message: \`${binding.statusBarMessageId}\``);
     }
   } else {
     lines.push("binding: none");
@@ -1112,12 +1164,19 @@ async function handlePlainText({ config, state, message, bindingKey, binding }) 
   }
 
   binding.lastInboundMessageId = message.message_id ?? null;
+  binding.currentTurn = {
+    source: "telegram",
+    startedAt: new Date().toISOString(),
+    promptPreview: makePromptPreview(prompt),
+  };
   binding.updatedAt = new Date().toISOString();
   state.bindings[bindingKey] = binding;
   rememberOutboundMirrorSuppression(state, bindingKey, prompt, {
     role: "user",
     phase: null,
   });
+  await refreshStatusBars({ config, state, onlyBindingKey: bindingKey });
+  await saveState(config.statePath, state);
 
   if (config.sendTyping) {
     await sendTyping(config.botToken, buildTargetFromMessage(message)).catch(() => null);
@@ -1153,6 +1212,7 @@ async function handlePlainText({ config, state, message, bindingKey, binding }) 
     });
     binding.updatedAt = new Date().toISOString();
     binding.lastTransportPath = result.transportPath || null;
+    delete binding.currentTurn;
     state.bindings[bindingKey] = binding;
     await progressBubble.stop();
     const replyText = normalizeText(result?.reply?.text) || "(пустой ответ)";
@@ -1166,6 +1226,9 @@ async function handlePlainText({ config, state, message, bindingKey, binding }) 
     });
   } catch (error) {
     await progressBubble.stop();
+    delete binding.currentTurn;
+    binding.updatedAt = new Date().toISOString();
+    state.bindings[bindingKey] = binding;
     logBridgeEvent("native_send_error", {
       threadId: binding.threadId,
       bindingKey,
@@ -1268,6 +1331,7 @@ async function syncOutboundMirrors({ config, state }) {
         rolloutPath: thread.rollout_path,
         mirrorState: previousMirror,
         threadId: binding.threadId,
+        phases: config.outboundMirrorPhases,
       });
     } catch (error) {
       logBridgeEvent("outbound_mirror_scan_error", {
@@ -1301,9 +1365,12 @@ async function syncOutboundMirrors({ config, state }) {
       if (consumeOutboundSuppression(state, bindingKey, message.signature)) {
         lastSignature = message.signature;
         if (message.role === "user") {
-          replyTargetMessageId = null;
+          replyTargetMessageId = Number.isInteger(binding.lastInboundMessageId) ? binding.lastInboundMessageId : null;
         } else if (message.role === "assistant") {
-          replyTargetMessageId = null;
+          if (isFinalAssistantMirrorMessage(message)) {
+            replyTargetMessageId = null;
+            delete binding.currentTurn;
+          }
         }
         suppressed += 1;
         changed = true;
@@ -1315,9 +1382,10 @@ async function syncOutboundMirrors({ config, state }) {
           chatId: binding.chatId,
           messageThreadId: binding.messageThreadId ?? null,
         };
+        const isFinalAssistant = isFinalAssistantMirrorMessage(message);
         const sent =
           message.role === "user"
-            ? await sendTextChunks(config.botToken, target, formatOutboundUserMirrorText(message.text))
+            ? await sendTextChunks(config.botToken, target, formatOutboundUserMirrorText(message.text, config))
             : await sendRichTextChunks(config.botToken, target, message.text, replyTargetMessageId);
         rememberOutbound(binding, sent);
         binding.updatedAt = new Date().toISOString();
@@ -1328,8 +1396,14 @@ async function syncOutboundMirrors({ config, state }) {
         if (message.role === "user") {
           replyTargetMessageId = sent[0]?.message_id ?? replyTargetMessageId;
           binding.lastMirroredUserMessageId = replyTargetMessageId;
-        } else {
+          binding.currentTurn = {
+            source: "codex",
+            startedAt: message.timestamp || new Date().toISOString(),
+            promptPreview: makePromptPreview(message.text),
+          };
+        } else if (isFinalAssistant) {
           replyTargetMessageId = null;
+          delete binding.currentTurn;
         }
         lastSignature = message.signature;
         delivered += 1;
@@ -1366,6 +1440,129 @@ async function syncOutboundMirrors({ config, state }) {
   }
 
   return { delivered, suppressed, changed };
+}
+
+async function reserveStatusBarMessage({ config, bindingKey, binding, text }) {
+  const sent = await sendMessage(config.botToken, {
+    chatId: binding.chatId,
+    messageThreadId: binding.messageThreadId,
+    text,
+  });
+  const messageId = sent?.message_id;
+  if (!Number.isInteger(messageId)) {
+    throw new Error(`status bar reserve returned invalid message_id for ${bindingKey}`);
+  }
+
+  if (config.statusBarPin !== false) {
+    try {
+      await pinChatMessage(config.botToken, {
+        chatId: binding.chatId,
+        messageId,
+        disableNotification: true,
+      });
+      binding.statusBarPinnedAt = new Date().toISOString();
+    } catch (error) {
+      logBridgeEvent("status_bar_pin_error", {
+        bindingKey,
+        chatId: binding.chatId,
+        messageThreadId: binding.messageThreadId,
+        messageId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  binding.statusBarMessageId = messageId;
+  return messageId;
+}
+
+async function refreshStatusBars({ config, state, onlyBindingKey = null } = {}) {
+  if (config.statusBarEnabled === false) {
+    return { changed: false, updated: 0 };
+  }
+
+  const bindingEntries = Object.entries(state.bindings ?? {}).filter(([bindingKey, binding]) => {
+    if (onlyBindingKey && bindingKey !== onlyBindingKey) {
+      return false;
+    }
+    return isStatusBarBindingEligible(binding);
+  });
+  if (bindingEntries.length === 0) {
+    return { changed: false, updated: 0 };
+  }
+
+  const threads = await getThreadsByIds(
+    config.threadsDbPath,
+    bindingEntries.map(([, binding]) => binding.threadId),
+  );
+  const threadsById = new Map(threads.map((thread) => [String(thread.id), thread]));
+  let changed = false;
+  let updated = 0;
+
+  for (const [bindingKey, binding] of bindingEntries) {
+    const thread = threadsById.get(String(binding.threadId));
+    if (!thread?.rollout_path || Number(thread.archived) !== 0) {
+      continue;
+    }
+
+    let runtime = null;
+    try {
+      runtime = await readRolloutRuntimeStatus(thread.rollout_path, {
+        tailBytes: config.statusBarTailBytes,
+      });
+    } catch (error) {
+      logBridgeEvent("status_bar_runtime_error", {
+        bindingKey,
+        threadId: binding.threadId,
+        rolloutPath: thread.rollout_path,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    const text = buildStatusBarText({
+      binding,
+      thread,
+      runtime,
+      config,
+    });
+    const hash = makeStatusBarHash(text);
+    if (binding.statusBarMessageId && binding.statusBarTextHash === hash) {
+      continue;
+    }
+
+    try {
+      if (!binding.statusBarMessageId) {
+        await reserveStatusBarMessage({ config, bindingKey, binding, text });
+      } else {
+        try {
+          await editMessageText(config.botToken, {
+            chatId: binding.chatId,
+            messageId: binding.statusBarMessageId,
+            text,
+          });
+        } catch (error) {
+          if (!isMissingStatusBarMessageError(error)) {
+            throw error;
+          }
+          delete binding.statusBarMessageId;
+          await reserveStatusBarMessage({ config, bindingKey, binding, text });
+        }
+      }
+      binding.statusBarTextHash = hash;
+      binding.statusBarUpdatedAt = new Date().toISOString();
+      state.bindings[bindingKey] = binding;
+      changed = true;
+      updated += 1;
+    } catch (error) {
+      logBridgeEvent("status_bar_update_error", {
+        bindingKey,
+        threadId: binding.threadId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  return { changed, updated };
 }
 
 async function checkpointMessage(statePath, state, update) {
@@ -1466,7 +1663,16 @@ async function main() {
       });
     }
 
-    if (syncResult.changed) {
+    let statusBarResult = { changed: false };
+    try {
+      statusBarResult = await refreshStatusBars({ config, state });
+    } catch (error) {
+      logBridgeEvent("status_bar_error", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    if (syncResult.changed || statusBarResult.changed) {
       await saveState(config.statePath, state);
     }
 
