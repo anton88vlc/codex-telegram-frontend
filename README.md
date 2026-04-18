@@ -152,6 +152,7 @@ npm run onboard:rehearsal -- \
 
 Запись в ignored runtime plan `admin/bootstrap-plan.json` только с `--write`.
 Для rehearsal запись идёт в ignored `admin/bootstrap-plan.rehearsal.json`.
+Новые и переиспользованные forum groups по дефолту переводятся в topic display `Tabs`.
 Структурный пример: [admin/bootstrap-plan.example.json](admin/bootstrap-plan.example.json).
 Полный flow: [docs/ONBOARDING.md](docs/ONBOARDING.md).
 

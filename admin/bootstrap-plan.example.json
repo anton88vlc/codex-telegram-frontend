@@ -3,6 +3,8 @@
   "generatedAt": "2026-01-01T00:00:00.000Z",
   "onboarding": {
     "threadsPerProject": 3,
+    "folderTitle": "codex",
+    "topicDisplay": "tabs",
     "historyMaxMessages": 40,
     "historyAssistantPhases": ["final_answer"],
     "note": "Preview first. Bootstrap creates Telegram groups/topics; backfill imports only clean user prompts + final answers."

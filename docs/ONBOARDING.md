@@ -96,6 +96,8 @@ admin/.venv/bin/python admin/telegram_user_admin.py bootstrap \
 
 This creates or reuses groups/topics from the plan and writes bridge bindings.
 By default it also creates or updates the Telegram folder from the plan, usually `codex`, and puts the project groups there.
+Forum topics are forced to display as `Tabs` by default because that maps better to Codex's project/thread column.
+Use `--topic-display list` only when you explicitly want Telegram's list-style topic view.
 Use `--skip-folder` only when debugging Telegram folder behavior.
 Bot username is read from `config.local.json -> botUsername`, `CODEX_TELEGRAM_BOT_USERNAME`, or `--bot-username`.
 

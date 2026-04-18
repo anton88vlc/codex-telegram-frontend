@@ -111,7 +111,7 @@ npm run onboard:rehearsal -- \
   --write
 ```
 
-Rehearsal writes `admin/bootstrap-plan.rehearsal.json` by default, uses `Codex Lab - ` group titles and folder `codex-lab`, and keeps the working set intentionally small.
+Rehearsal writes `admin/bootstrap-plan.rehearsal.json` by default, uses `Codex Lab - ` group titles and folder `codex-lab`, displays topics as tabs, and keeps the working set intentionally small.
 
 Create or reuse Telegram groups/topics and write bridge bindings:
 
@@ -121,6 +121,7 @@ admin/.venv/bin/python admin/telegram_user_admin.py bootstrap \
 ```
 
 `bootstrap` creates or updates the Telegram folder from the plan by default and puts project groups there.
+It also forces forum topics to display as `Tabs`; pass `--topic-display list` only for manual debugging.
 Use `--skip-folder` only when debugging folder automation.
 Bot username is read from `config.local.json -> botUsername`, `CODEX_TELEGRAM_BOT_USERNAME`, or `--bot-username`.
 

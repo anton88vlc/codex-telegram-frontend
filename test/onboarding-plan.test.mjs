@@ -56,10 +56,12 @@ test("buildBootstrapPlan keeps onboarding defaults near the generated plan", () 
   assert.equal(plan.onboarding.rehearsal, true);
   assert.equal(plan.onboarding.folderTitle, "codex-lab");
   assert.equal(plan.onboarding.groupPrefix, "Codex Lab - ");
+  assert.equal(plan.onboarding.topicDisplay, "tabs");
   assert.equal(plan.onboarding.threadsPerProject, 1);
   assert.equal(plan.onboarding.historyMaxMessages, 20);
   assert.equal(plan.projects.length, 1);
   assert.match(formatBootstrapPlanSummary(plan), /folder codex-lab/);
+  assert.match(formatBootstrapPlanSummary(plan), /display as tabs/);
   assert.match(formatBootstrapPlanSummary(plan), /Codex Lab - app/);
 });
 

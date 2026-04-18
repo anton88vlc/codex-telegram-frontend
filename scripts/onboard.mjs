@@ -11,6 +11,7 @@ import {
   buildProjectPlan,
   DEFAULT_REHEARSAL_FOLDER_TITLE,
   DEFAULT_REHEARSAL_GROUP_PREFIX,
+  DEFAULT_TOPIC_DISPLAY,
   formatBootstrapPlanSummary,
   formatScanSummary,
 } from "../lib/onboarding-plan.mjs";
@@ -36,6 +37,7 @@ function parseArgs(argv) {
     historyMaxMessages: 40,
     groupPrefix: null,
     folderTitle: null,
+    topicDisplay: DEFAULT_TOPIC_DISPLAY,
     threadsDbPath: DEFAULT_THREADS_DB_PATH,
     outputPath: DEFAULT_OUTPUT_PATH,
     json: false,
@@ -75,6 +77,12 @@ function parseArgs(argv) {
         break;
       case "--folder-title":
         args.folderTitle = rest[++index];
+        break;
+      case "--topic-display":
+        args.topicDisplay = rest[++index];
+        if (!["tabs", "list"].includes(args.topicDisplay)) {
+          fail("--topic-display must be tabs or list");
+        }
         break;
       case "--threads-db":
         args.threadsDbPath = rest[++index];
@@ -117,7 +125,7 @@ function renderHelp() {
   return [
     "Usage:",
     "  node scripts/onboard.mjs scan [--project-limit 8] [--threads-per-project 3] [--json]",
-    "  node scripts/onboard.mjs plan --project /path/to/repo [--project /path/to/other] [--threads-per-project 3] [--group-prefix 'Codex - '] [--folder-title codex] [--write]",
+    "  node scripts/onboard.mjs plan --project /path/to/repo [--project /path/to/other] [--threads-per-project 3] [--group-prefix 'Codex - '] [--folder-title codex] [--topic-display tabs|list] [--write]",
     "  node scripts/onboard.mjs plan --rehearsal --project /path/to/repo [--write]",
     "",
     "Notes:",
@@ -174,6 +182,7 @@ async function commandPlan(args) {
     historyMaxMessages: args.historyMaxMessages,
     groupPrefix: args.groupPrefix ?? undefined,
     folderTitle: args.folderTitle ?? undefined,
+    topicDisplay: args.topicDisplay,
     rehearsal: args.rehearsal,
   });
 

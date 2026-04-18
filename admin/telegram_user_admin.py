@@ -29,6 +29,7 @@ DEFAULT_PLAN_PATH = ROOT / "bootstrap-plan.json"
 DEFAULT_RESULT_PATH = PROJECT_ROOT / "state" / "bootstrap-result.json"
 DEFAULT_BRIDGE_STATE_PATH = PROJECT_ROOT / "state" / "state.json"
 DEFAULT_FOLDER_TITLE = "codex"
+DEFAULT_TOPIC_DISPLAY = "tabs"
 DEFAULT_THREADS_DB_PATH = Path.home() / ".codex" / "state_5.sqlite"
 DEFAULT_BOT_TOKEN_KEYCHAIN_SERVICE = "codex-telegram-bridge-bot-token"
 DEFAULT_MESSAGE_DELAY_MS = 1100
@@ -138,6 +139,14 @@ def resolve_bot_username(args) -> str:
 def resolve_folder_title(args, plan) -> str:
     plan_onboarding = plan.get("onboarding", {}) if isinstance(plan, dict) else {}
     return str(args.folder_title or plan_onboarding.get("folderTitle") or DEFAULT_FOLDER_TITLE).strip()
+
+
+def resolve_topic_display(args, plan) -> str:
+    plan_onboarding = plan.get("onboarding", {}) if isinstance(plan, dict) else {}
+    topic_display = str(args.topic_display or plan_onboarding.get("topicDisplay") or DEFAULT_TOPIC_DISPLAY).strip().lower()
+    if topic_display not in {"tabs", "list"}:
+        raise SystemExit("topic display must be 'tabs' or 'list'")
+    return topic_display
 
 
 def split_long_paragraph(paragraph: str, limit: int):
@@ -376,10 +385,21 @@ async def find_dialog_by_title(client: TelegramClient, title: str):
     return None
 
 
-async def ensure_forum_group(client: TelegramClient, title: str, about: str):
+async def ensure_forum_display(client: TelegramClient, channel, topic_display: str):
+    await client(
+        functions.channels.ToggleForumRequest(
+            channel=channel,
+            enabled=True,
+            tabs=topic_display == "tabs",
+        )
+    )
+
+
+async def ensure_forum_group(client: TelegramClient, title: str, about: str, topic_display: str):
     dialog = await find_dialog_by_title(client, title)
     if dialog is not None:
         entity = await client.get_entity(dialog.entity)
+        await ensure_forum_display(client, entity, topic_display)
         return entity, False
 
     updates = await client(
@@ -393,6 +413,7 @@ async def ensure_forum_group(client: TelegramClient, title: str, about: str):
     for chat in updates.chats:
         if getattr(chat, "title", None) == title:
             entity = await client.get_entity(chat)
+            await ensure_forum_display(client, entity, topic_display)
             return entity, True
     raise RuntimeError(f"Could not resolve created group for {title}")
 
@@ -921,6 +942,7 @@ async def command_bootstrap(args):
     bridge_state = load_json(args.bridge_state, {"version": 1, "lastUpdateId": 0, "bindings": {}})
     bot_username = resolve_bot_username(args)
     folder_title = resolve_folder_title(args, plan)
+    topic_display = resolve_topic_display(args, plan)
     if not bot_username:
         raise SystemExit(
             "Bot username is required. Pass --bot-username, set CODEX_TELEGRAM_BOT_USERNAME, or set botUsername in config.local.json."
@@ -938,6 +960,7 @@ async def command_bootstrap(args):
             "groups": [],
             "folder": None,
             "folderTitle": folder_title,
+            "topicDisplay": topic_display,
             "rehearsal": bool(plan.get("onboarding", {}).get("rehearsal")),
         }
         folder_channels = []
@@ -947,6 +970,7 @@ async def command_bootstrap(args):
                 client,
                 title=project["groupTitle"],
                 about=project.get("about", ""),
+                topic_display=topic_display,
             )
             folder_channels.append(group)
             await ensure_bot_member_and_admin(client, group, bot_username)
@@ -1194,6 +1218,7 @@ def build_parser():
     bootstrap.add_argument("--bridge-state", type=Path, default=DEFAULT_BRIDGE_STATE_PATH)
     bootstrap.add_argument("--bot-username", default=None)
     bootstrap.add_argument("--folder-title", default=None)
+    bootstrap.add_argument("--topic-display", choices=["tabs", "list"], default=None)
     bootstrap.add_argument("--skip-folder", action="store_true")
     bootstrap.set_defaults(handler=command_bootstrap)
 
