@@ -4,6 +4,7 @@ __pycache__/
 
 admin/.env
 admin/.venv/
+admin/bootstrap-plan.json
 
 config.local.json
 

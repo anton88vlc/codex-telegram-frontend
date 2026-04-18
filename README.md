@@ -69,6 +69,7 @@ Telegram как быстрый remote frontend для локального `Code
 - `state/anton_user.session`
 - `logs/*`
 - `admin/.env`
+- `admin/bootstrap-plan.json`
 
 ## Запуск
 
@@ -136,7 +137,9 @@ npm run onboard:plan -- \
   --threads-per-project 3
 ```
 
-Запись в `admin/bootstrap-plan.json` только с `--write`. Полный flow: [docs/ONBOARDING.md](docs/ONBOARDING.md).
+Запись в ignored runtime plan `admin/bootstrap-plan.json` только с `--write`.
+Структурный пример: [admin/bootstrap-plan.example.json](admin/bootstrap-plan.example.json).
+Полный flow: [docs/ONBOARDING.md](docs/ONBOARDING.md).
 
 ## Ops notes
 

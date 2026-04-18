@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { execFile } from "node:child_process";
+import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -66,7 +67,7 @@ const DEFAULT_STATE_PATH = path.join(PROJECT_ROOT, "state", "state.json");
 const DEFAULT_NATIVE_HELPER_PATH = path.join(PROJECT_ROOT, "scripts", "send_via_app_control.js");
 const DEFAULT_NATIVE_FALLBACK_HELPER_PATH = path.join(PROJECT_ROOT, "scripts", "send_via_app_server.js");
 const DEFAULT_PROJECT_INDEX_PATH = path.join(PROJECT_ROOT, "state", "bootstrap-result.json");
-const DEFAULT_THREADS_DB_PATH = path.join(process.env.HOME || "/Users/antonnaumov", ".codex", "state_5.sqlite");
+const DEFAULT_THREADS_DB_PATH = path.join(os.homedir(), ".codex", "state_5.sqlite");
 const DEFAULT_NATIVE_DEBUG_BASE_URL = process.env.CODEX_REMOTE_DEBUG_URL || "http://127.0.0.1:9222";
 const DEFAULT_APP_SERVER_URL = process.env.CODEX_APP_SERVER_URL || "ws://127.0.0.1:27890";
 const DEFAULT_NATIVE_POLL_INTERVAL_MS = 1_000;

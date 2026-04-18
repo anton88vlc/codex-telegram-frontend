@@ -8,6 +8,7 @@
 - state: `state/state.json`
 - project index: `state/bootstrap-result.json`
 - user session: `state/anton_user.session`
+- bootstrap plan: `admin/bootstrap-plan.json` (ignored runtime file)
 - logs: `logs/bridge.stdout.log`, `logs/bridge.stderr.log`
 - launchd label: `com.codex.telegram-frontend.bridge` by default
 - token Keychain service: `codex-telegram-bridge-bot-token` by default
@@ -111,6 +112,7 @@ admin/.venv/bin/python admin/telegram_user_admin.py bootstrap \
 
 `bootstrap` creates or updates the Telegram folder `codex` by default and puts project groups there.
 Use `--skip-folder` only when debugging folder automation.
+Bot username is read from `config.local.json -> botUsername`, `CODEX_TELEGRAM_BOT_USERNAME`, or `--bot-username`.
 
 ## Telegram Ops Commands
 

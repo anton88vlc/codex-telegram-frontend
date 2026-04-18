@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "generatedAt": "2026-01-01T00:00:00.000Z",
+  "onboarding": {
+    "threadsPerProject": 3,
+    "historyMaxMessages": 40,
+    "historyAssistantPhases": ["final_answer"],
+    "note": "Preview first. Bootstrap creates Telegram groups/topics; backfill imports only clean user prompts + final answers."
+  },
+  "projects": [
+    {
+      "projectRoot": "/path/to/codex-project",
+      "groupTitle": "Codex - codex-project",
+      "about": "Remote frontend for the codex-project Codex project.",
+      "topics": [
+        {
+          "title": "Main thread",
+          "threadId": "00000000-0000-0000-0000-000000000000"
+        }
+      ]
+    }
+  ]
+}

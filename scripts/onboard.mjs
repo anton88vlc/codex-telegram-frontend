@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -14,7 +15,7 @@ import {
 import { listProjectThreads, listRecentProjects, parsePositiveInt } from "../lib/thread-db.mjs";
 
 const PROJECT_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const DEFAULT_THREADS_DB_PATH = path.join(process.env.HOME || "/Users/antonnaumov", ".codex", "state_5.sqlite");
+const DEFAULT_THREADS_DB_PATH = path.join(os.homedir(), ".codex", "state_5.sqlite");
 const DEFAULT_OUTPUT_PATH = path.join(PROJECT_ROOT, "admin", "bootstrap-plan.json");
 
 function fail(message) {

@@ -22,12 +22,13 @@ from telethon import TelegramClient, errors, functions, types
 ROOT = Path(__file__).resolve().parent
 PROJECT_ROOT = ROOT.parent
 DEFAULT_ENV_PATH = ROOT / ".env"
+DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config.local.json"
 DEFAULT_SESSION_PATH = PROJECT_ROOT / "state" / "anton_user"
 DEFAULT_QR_PATH = PROJECT_ROOT / "state" / "login-qr.png"
 DEFAULT_PLAN_PATH = ROOT / "bootstrap-plan.json"
 DEFAULT_RESULT_PATH = PROJECT_ROOT / "state" / "bootstrap-result.json"
 DEFAULT_BRIDGE_STATE_PATH = PROJECT_ROOT / "state" / "state.json"
-DEFAULT_THREADS_DB_PATH = Path(os.environ.get("HOME", "/Users/antonnaumov")) / ".codex" / "state_5.sqlite"
+DEFAULT_THREADS_DB_PATH = Path.home() / ".codex" / "state_5.sqlite"
 DEFAULT_BOT_TOKEN_KEYCHAIN_SERVICE = "codex-telegram-bridge-bot-token"
 DEFAULT_MESSAGE_DELAY_MS = 1100
 DEFAULT_BACKFILL_MAX_HISTORY_MESSAGES = 40
@@ -96,7 +97,7 @@ def utc_now_iso() -> str:
 
 def load_env(env_path: Path) -> EnvConfig:
     if not env_path.exists():
-      raise SystemExit(f"env file not found: {env_path}")
+        raise SystemExit(f"env file not found: {env_path}")
     load_dotenv(env_path, override=False)
     api_id = os.getenv("API_ID")
     api_hash = os.getenv("API_HASH")
@@ -118,6 +119,19 @@ def load_json(path: Path, fallback):
     if not path.exists():
         return fallback
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def normalize_bot_username(value) -> str:
+    return str(value or "").strip().lstrip("@")
+
+
+def resolve_bot_username(args) -> str:
+    bridge_config = load_json(DEFAULT_CONFIG_PATH, {})
+    return normalize_bot_username(
+        args.bot_username
+        or os.getenv("CODEX_TELEGRAM_BOT_USERNAME")
+        or bridge_config.get("botUsername")
+    )
 
 
 def split_long_paragraph(paragraph: str, limit: int):
@@ -899,6 +913,11 @@ async def command_bootstrap(args):
     env = load_env(args.env_file)
     plan = load_json(args.plan, {"projects": []})
     bridge_state = load_json(args.bridge_state, {"version": 1, "lastUpdateId": 0, "bindings": {}})
+    bot_username = resolve_bot_username(args)
+    if not bot_username:
+        raise SystemExit(
+            "Bot username is required. Pass --bot-username, set CODEX_TELEGRAM_BOT_USERNAME, or set botUsername in config.local.json."
+        )
 
     client = make_client(args.session, env)
     await client.connect()
@@ -921,7 +940,7 @@ async def command_bootstrap(args):
                 about=project.get("about", ""),
             )
             folder_channels.append(group)
-            await ensure_bot_member_and_admin(client, group, args.bot_username)
+            await ensure_bot_member_and_admin(client, group, bot_username)
             chat_id = bot_api_chat_id(group.id)
 
             group_summary = {
@@ -1164,7 +1183,7 @@ def build_parser():
     bootstrap.add_argument("--plan", type=Path, default=DEFAULT_PLAN_PATH)
     bootstrap.add_argument("--result-path", type=Path, default=DEFAULT_RESULT_PATH)
     bootstrap.add_argument("--bridge-state", type=Path, default=DEFAULT_BRIDGE_STATE_PATH)
-    bootstrap.add_argument("--bot-username", default="cdxanton2026bot")
+    bootstrap.add_argument("--bot-username", default=None)
     bootstrap.add_argument("--folder-title", default="codex")
     bootstrap.add_argument("--skip-folder", action="store_true")
     bootstrap.set_defaults(handler=command_bootstrap)
