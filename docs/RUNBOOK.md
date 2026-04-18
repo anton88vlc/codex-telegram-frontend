@@ -152,10 +152,20 @@ Run without `--dry-run` after checking the preview.
 Notes:
 
 - `labeled-bot` is safer for imports: messages are sent as `Anton:` / `Codex:` by the bot and do not loop back as fresh user turns.
+- default `--render-mode html` uses the same Telegram renderer as live bridge messages; `--render-mode plain` is only a debugging fallback.
 - default backfill imports only clean tail: user prompts plus assistant `final_answer`
 - commentary, heartbeat/system-like entries and smoke noise are skipped by default
 - topic root, pinned status bar and recent live mirror ids from `state/state.json` are protected
 - Telegram `retry_after` is respected, so a partial 429 can usually be resumed by rerunning the command
+
+If a status bar message exists but Telegram Desktop does not surface the pinned banner, re-pin it via MTProto:
+
+```bash
+admin/.venv/bin/python admin/telegram_user_admin.py pin-message \
+  --chat-id <telegram-chat-id> \
+  --message-id <status-bar-message-id> \
+  --silent
+```
 
 ## Topic Cleanup
 

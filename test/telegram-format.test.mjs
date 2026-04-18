@@ -1,7 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { renderTelegramChunks } from "../lib/telegram-format.mjs";
+
+const PROJECT_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
 test("renderTelegramChunks formats bold, code and links into HTML", () => {
   const [chunk] = renderTelegramChunks("**Жирно** и `code`, плюс [ссылка](https://example.com)");
@@ -44,4 +49,18 @@ test("renderTelegramChunks leaves unmatched markdown markers literal", () => {
 
   assert.equal(chunk.html, "snake_case and **open bold and [bad link");
   assert.equal(chunk.plain, "snake_case and **open bold and [bad link");
+});
+
+test("render telegram text CLI exposes canonical HTML/plain chunks", () => {
+  const result = spawnSync(process.execPath, ["scripts/render_telegram_text.mjs"], {
+    cwd: PROJECT_ROOT,
+    input: JSON.stringify({ texts: ["**Anton:**\n- [x] done"] }),
+    encoding: "utf8",
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  const payload = JSON.parse(result.stdout);
+  assert.match(payload.rendered[0][0].html, /<b>Anton:<\/b>/);
+  assert.match(payload.rendered[0][0].html, /☑ done/);
+  assert.equal(payload.rendered[0][0].plain, "Anton:\n☑ done");
 });

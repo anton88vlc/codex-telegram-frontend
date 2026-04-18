@@ -366,7 +366,7 @@ function formatOutboundUserMirrorText(text, config = {}) {
     return "";
   }
   const displayName = normalizeText(config.codexUserDisplayName).replace(/\s+/g, " ") || "Codex Desktop user";
-  return `${displayName} via Codex Desktop\n\n${normalized}`;
+  return `**${displayName} via Codex Desktop**\n\n${normalized}`;
 }
 
 function isFinalAssistantMirrorMessage(message) {
@@ -1401,7 +1401,7 @@ async function syncOutboundMirrors({ config, state }) {
         const isFinalAssistant = isFinalAssistantMirrorMessage(message);
         const sent =
           message.role === "user"
-            ? await sendTextChunks(config.botToken, target, formatOutboundUserMirrorText(message.text, config))
+            ? await sendRichTextChunks(config.botToken, target, formatOutboundUserMirrorText(message.text, config))
             : await sendRichTextChunks(config.botToken, target, formatOutboundAssistantMirrorText(message), replyTargetMessageId);
         rememberOutbound(binding, sent);
         binding.updatedAt = new Date().toISOString();

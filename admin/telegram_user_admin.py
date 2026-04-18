@@ -28,6 +28,7 @@ DEFAULT_QR_PATH = PROJECT_ROOT / "state" / "login-qr.png"
 DEFAULT_PLAN_PATH = ROOT / "bootstrap-plan.json"
 DEFAULT_RESULT_PATH = PROJECT_ROOT / "state" / "bootstrap-result.json"
 DEFAULT_BRIDGE_STATE_PATH = PROJECT_ROOT / "state" / "state.json"
+DEFAULT_RENDER_HELPER_PATH = PROJECT_ROOT / "scripts" / "render_telegram_text.mjs"
 DEFAULT_FOLDER_TITLE = "codex"
 DEFAULT_TOPIC_DISPLAY = "tabs"
 DEFAULT_THREADS_DB_PATH = Path.home() / ".codex" / "state_5.sqlite"
@@ -36,6 +37,7 @@ DEFAULT_MESSAGE_DELAY_MS = 1100
 DEFAULT_BACKFILL_MAX_HISTORY_MESSAGES = 40
 DEFAULT_CLEANUP_SCAN_LIMIT = 300
 TELEGRAM_TEXT_LIMIT = 3500
+TELEGRAM_HTML_TEXT_LIMIT = 3500
 DEFAULT_BACKFILL_ASSISTANT_PHASES = ("final_answer",)
 DEFAULT_HISTORY_USER_NOISE_PREFIXES = (
     "Reply with exactly this text",
@@ -217,6 +219,34 @@ def split_telegram_text(text: str, limit: int = TELEGRAM_TEXT_LIMIT):
     if current:
         chunks.append(current)
     return chunks
+
+
+def render_texts_with_node(texts, render_helper: Path):
+    completed = subprocess.run(
+        ["node", str(render_helper)],
+        input=json.dumps({"texts": texts}, ensure_ascii=False),
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=True,
+    )
+    payload = json.loads(completed.stdout)
+    rendered = payload.get("rendered")
+    if not isinstance(rendered, list) or len(rendered) != len(texts):
+        raise RuntimeError(f"invalid renderer response from {render_helper}")
+    return rendered
+
+
+def render_history_texts(texts, render_mode: str, render_helper: Path):
+    if render_mode == "plain":
+        return [
+            [{"html": None, "plain": chunk} for chunk in split_telegram_text(text, TELEGRAM_HTML_TEXT_LIMIT)]
+            for text in texts
+        ]
+    try:
+        return render_texts_with_node(texts, render_helper)
+    except (FileNotFoundError, subprocess.CalledProcessError, json.JSONDecodeError, RuntimeError) as error:
+        raise SystemExit(f"Telegram HTML renderer failed: {error}") from error
 
 
 def read_keychain_secret(service_name: str):
@@ -914,39 +944,40 @@ async def delete_topic_messages(client: TelegramClient, chat_id: int, message_id
     return deleted
 
 
-async def send_user_chunks(client: TelegramClient, chat_id: int, topic_id: int, text: str):
+async def send_user_transmission(client: TelegramClient, chat_id: int, topic_id: int, transmission: dict):
     entity = await client.get_entity(chat_id)
-    sent = 0
-    for chunk in split_telegram_text(text):
-        await client.send_message(entity, chunk, reply_to=topic_id, link_preview=False)
-        sent += 1
-    return sent
+    html_text = transmission.get("html")
+    await client.send_message(
+        entity,
+        html_text or transmission["text"],
+        reply_to=topic_id,
+        link_preview=False,
+        parse_mode="html" if html_text else None,
+    )
+    return 1
 
 
-def send_bot_chunks(bot_token: str, chat_id: int, topic_id: int, text: str):
-    sent = 0
-    for chunk in split_telegram_text(text):
-        call_bot_api(
-            bot_token,
-            "sendMessage",
-            {
-                "chat_id": chat_id,
-                "message_thread_id": topic_id,
-                "text": chunk,
-                "disable_web_page_preview": True,
-            },
-        )
-        sent += 1
-    return sent
+def send_bot_transmission(bot_token: str, chat_id: int, topic_id: int, transmission: dict):
+    html_text = transmission.get("html")
+    payload = {
+        "chat_id": chat_id,
+        "message_thread_id": topic_id,
+        "text": html_text or transmission["text"],
+        "disable_web_page_preview": True,
+    }
+    if html_text:
+        payload["parse_mode"] = "HTML"
+    call_bot_api(bot_token, "sendMessage", payload)
+    return 1
 
 
 def format_labeled_history_text(item: dict):
     label = "Anton" if item.get("role") == "user" else "Codex"
-    return f"{label}:\n{item.get('text', '').strip()}".strip()
+    return f"**{label}:**\n{item.get('text', '').strip()}".strip()
 
 
-def build_history_transmissions(messages, sender_mode: str):
-    transmissions = []
+def build_history_transmissions(messages, sender_mode: str, render_mode: str, render_helper: Path):
+    base_items = []
     for item in messages:
         if sender_mode == "labeled-bot":
             base_text = format_labeled_history_text(item)
@@ -954,11 +985,19 @@ def build_history_transmissions(messages, sender_mode: str):
         else:
             base_text = item["text"]
             sender = "user" if item["role"] == "user" else "bot"
-        for chunk in split_telegram_text(base_text):
+        base_items.append({"sender": sender, "text": base_text, "role": item["role"]})
+
+    rendered_texts = render_history_texts([item["text"] for item in base_items], render_mode, render_helper)
+    transmissions = []
+    for item, rendered_chunks in zip(base_items, rendered_texts):
+        for chunk in rendered_chunks:
+            plain = str(chunk.get("plain") or "").strip()
+            html_text = str(chunk.get("html") or "").strip() or None
             transmissions.append(
                 {
-                    "sender": sender,
-                    "text": chunk,
+                    "sender": item["sender"],
+                    "text": plain or item["text"],
+                    "html": html_text,
                     "role": item["role"],
                 }
             )
@@ -1076,7 +1115,12 @@ async def command_backfill_thread(args):
     try:
         if not await client.is_user_authorized():
             raise SystemExit("Session is not authorized. Run login-qr first.")
-        transmissions = build_history_transmissions(messages, args.sender_mode)
+        transmissions = build_history_transmissions(
+            messages,
+            args.sender_mode,
+            render_mode=args.render_mode,
+            render_helper=args.render_helper,
+        )
         ignored_existing_ids = set(args.ignore_message_id or [])
         if args.ignore_live_state:
             ignored_existing_ids.update(
@@ -1114,6 +1158,7 @@ async def command_backfill_thread(args):
                         "maxHistoryMessages": args.max_history_messages,
                         "maxUserPrompts": args.max_user_prompts,
                         "senderMode": args.sender_mode,
+                        "renderMode": args.render_mode,
                         "preview": [
                             {
                                 "role": item["role"],
@@ -1132,15 +1177,14 @@ async def command_backfill_thread(args):
         sent_messages = 0
         user_messages = sum(1 for item in messages if item["role"] == "user")
         assistant_messages = sum(1 for item in messages if item["role"] == "assistant")
-        entity = await client.get_entity(args.chat_id)
 
         for transmission in pending_transmissions:
             if transmission["sender"] == "user":
-                await client.send_message(entity, transmission["text"], reply_to=args.topic_id, link_preview=False)
+                await send_user_transmission(client, args.chat_id, args.topic_id, transmission)
             else:
                 while True:
                     try:
-                        send_bot_chunks(bot_token, args.chat_id, args.topic_id, transmission["text"])
+                        send_bot_transmission(bot_token, args.chat_id, args.topic_id, transmission)
                         break
                     except TelegramRetryAfterError as error:
                         await asyncio.sleep(error.retry_after + 1)
@@ -1167,6 +1211,7 @@ async def command_backfill_thread(args):
                 "assistantMessages": assistant_messages,
                 "telegramMessagesSent": sent_messages,
                 "senderMode": args.sender_mode,
+                "renderMode": args.render_mode,
                 "assistantPhases": assistant_phases,
                 "maxHistoryMessages": args.max_history_messages,
                 "maxUserPrompts": args.max_user_prompts,
@@ -1225,6 +1270,39 @@ async def command_cleanup_topic(args):
     )
 
 
+async def command_pin_message(args):
+    env = load_env(args.env_file)
+    client = make_client(args.session, env)
+    await client.connect()
+    try:
+        if not await client.is_user_authorized():
+            raise SystemExit("Session is not authorized. Run login-qr first.")
+        entity = await client.get_entity(args.chat_id)
+        await client(
+            functions.messages.UpdatePinnedMessageRequest(
+                peer=entity,
+                id=args.message_id,
+                silent=args.silent,
+            )
+        )
+        message = await client.get_messages(entity, ids=args.message_id)
+    finally:
+        await client.disconnect()
+
+    print(
+        json.dumps(
+            {
+                "status": "ok",
+                "chatId": args.chat_id,
+                "messageId": args.message_id,
+                "pinned": bool(getattr(message, "pinned", False)),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
+
 def build_parser():
     parser = argparse.ArgumentParser(description="User-side Telegram admin helper for Codex bridge.")
     parser.add_argument("--env-file", type=Path, default=DEFAULT_ENV_PATH)
@@ -1265,6 +1343,8 @@ def build_parser():
     backfill.add_argument("--bot-token-env", default="CODEX_TELEGRAM_BOT_TOKEN")
     backfill.add_argument("--bot-token-keychain-service", default=DEFAULT_BOT_TOKEN_KEYCHAIN_SERVICE)
     backfill.add_argument("--message-delay-ms", type=int, default=DEFAULT_MESSAGE_DELAY_MS)
+    backfill.add_argument("--render-mode", choices=["html", "plain"], default="html")
+    backfill.add_argument("--render-helper", type=Path, default=DEFAULT_RENDER_HELPER_PATH)
     backfill.add_argument("--stop-after-user-text", default=None)
     backfill.add_argument("--assistant-phase", action="append", default=None)
     backfill.add_argument("--max-history-messages", type=int, default=DEFAULT_BACKFILL_MAX_HISTORY_MESSAGES)
@@ -1288,6 +1368,12 @@ def build_parser():
     cleanup.add_argument("--no-keep-live-state", dest="keep_live_state", action="store_false")
     cleanup.add_argument("--delete", action="store_true")
     cleanup.set_defaults(handler=command_cleanup_topic, keep_live_state=True)
+
+    pin_message = subparsers.add_parser("pin-message")
+    pin_message.add_argument("--chat-id", type=int, required=True)
+    pin_message.add_argument("--message-id", type=int, required=True)
+    pin_message.add_argument("--silent", action="store_true")
+    pin_message.set_defaults(handler=command_pin_message)
 
     return parser
 

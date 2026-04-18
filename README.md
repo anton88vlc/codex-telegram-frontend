@@ -29,6 +29,7 @@ Telegram как быстрый remote frontend для локального `Code
 - `/project-status` показывает желаемую thread column, active topics, parked sync topics и preview sync-плана
 - `/sync-project` больше не просто плодит темы: он rename/reopen/create/park для sync-managed topics под текущий working set
 - user-side history backfill из `rollout_path` в Telegram topic через `admin/telegram_user_admin.py backfill-thread`: по умолчанию только user prompts + `final_answer`, без commentary, ограниченный хвост истории
+- backfill использует тот же Markdown→Telegram HTML renderer, что и live bridge, чтобы импорт не выглядел как сырой `**markdown**`
 - safe cleanup для topic-мусора через `admin/telegram_user_admin.py cleanup-topic`: сначала dry-run, удаление только с `--delete`
 - bootstrap умеет создавать/обновлять Telegram folder `codex` и складывать туда проектные группы
 - retry на временных Telegram fetch errors

@@ -128,6 +128,17 @@ admin/.venv/bin/python admin/telegram_user_admin.py backfill-thread \
 Then run without `--dry-run`.
 
 Defaults intentionally skip commentary, heartbeat/system-like entries and smoke noise. If a future user wants more, make it configurable, not default.
+Backfill renders through the same Telegram HTML renderer as the live bridge by default (`--render-mode html`), so imported history should not show raw `**bold**`/markdown syntax.
+Use `--render-mode plain` only for debugging parser issues.
+
+If a freshly reserved status bar exists but Telegram Desktop does not show the pinned banner, re-pin it through the user-side helper:
+
+```bash
+admin/.venv/bin/python admin/telegram_user_admin.py pin-message \
+  --chat-id <telegram-chat-id> \
+  --message-id <status-bar-message-id> \
+  --silent
+```
 
 ## Step 5: Verify
 
