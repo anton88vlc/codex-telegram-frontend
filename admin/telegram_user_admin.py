@@ -588,6 +588,7 @@ def upsert_binding(bindings: dict, chat_id: str, topic_id: int, title: str, thre
     existing = bindings.get(key, {})
     created_at = existing.get("createdAt", now)
     bindings[key] = {
+        **existing,
         "threadId": thread_id,
         "transport": "native",
         "chatId": chat_id,

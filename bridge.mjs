@@ -37,7 +37,7 @@ import {
   rememberOutboundSuppression,
   removeBinding,
   removeOutboundMirror,
-  saveState,
+  saveStateMerged as saveState,
   setBinding,
   setOutboundMirror,
   consumeOutboundSuppression,
