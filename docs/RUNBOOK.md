@@ -7,7 +7,7 @@ Commands below assume they are run from the repository root. Run them from somew
 - config: `config.local.json`
 - state: `state/state.json`
 - project index: `state/bootstrap-result.json`
-- user session: `state/anton_user.session`
+- user session: `state/telegram_user.session`
 - bootstrap plan: `admin/bootstrap-plan.json` (ignored runtime file)
 - rehearsal plan: `admin/bootstrap-plan.rehearsal.json` (ignored runtime file)
 - logs: `logs/bridge.stdout.log`, `logs/bridge.stderr.log`

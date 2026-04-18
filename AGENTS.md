@@ -59,7 +59,7 @@ Use the smallest check that proves the change, then go wider before committing i
 ```bash
 npm test
 npm run check
-node bridge.mjs --self-check --config /Users/antonnaumov/code/codex-telegram-frontend/config.local.json
+node bridge.mjs --self-check --config "$PWD/config.local.json"
 ```
 
 For live UX changes, add a real Telegram smoke when safe. If Codex Desktop is down or only fallback is available, say so instead of hiding the weak evidence.

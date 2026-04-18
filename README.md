@@ -97,7 +97,7 @@ These are repo-local runtime files and are ignored by git:
 - `config.local.json`
 - `state/state.json`
 - `state/bootstrap-result.json`
-- `state/anton_user.session`
+- `state/telegram_user.session`
 - `logs/*`
 - `admin/.env`
 - `admin/bootstrap-plan.json`
