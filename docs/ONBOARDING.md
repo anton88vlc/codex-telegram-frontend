@@ -77,6 +77,16 @@ npm run onboard:plan -- \
   --write
 ```
 
+Rehearsal preview for a disposable Telegram surface:
+
+```bash
+npm run onboard:rehearsal -- \
+  --project /path/to/codex-project
+```
+
+Rehearsal defaults are intentionally small: 2 projects, 2 threads per project, last 20 clean history messages, group prefix `Codex Lab - `, folder `codex-lab`, output `admin/bootstrap-plan.rehearsal.json`.
+Use it before deleting or rebuilding the real `codex` surface.
+
 ## Step 3: Create Telegram Surface
 
 ```bash
@@ -85,9 +95,16 @@ admin/.venv/bin/python admin/telegram_user_admin.py bootstrap \
 ```
 
 This creates or reuses groups/topics from the plan and writes bridge bindings.
-By default it also creates or updates the Telegram folder `codex` and puts the project groups there.
+By default it also creates or updates the Telegram folder from the plan, usually `codex`, and puts the project groups there.
 Use `--skip-folder` only when debugging Telegram folder behavior.
 Bot username is read from `config.local.json -> botUsername`, `CODEX_TELEGRAM_BOT_USERNAME`, or `--bot-username`.
+
+For rehearsal apply, use the rehearsal plan explicitly:
+
+```bash
+admin/.venv/bin/python admin/telegram_user_admin.py bootstrap \
+  --plan admin/bootstrap-plan.rehearsal.json
+```
 
 ## Step 4: Clean History Backfill
 

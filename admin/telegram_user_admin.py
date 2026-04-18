@@ -28,6 +28,7 @@ DEFAULT_QR_PATH = PROJECT_ROOT / "state" / "login-qr.png"
 DEFAULT_PLAN_PATH = ROOT / "bootstrap-plan.json"
 DEFAULT_RESULT_PATH = PROJECT_ROOT / "state" / "bootstrap-result.json"
 DEFAULT_BRIDGE_STATE_PATH = PROJECT_ROOT / "state" / "state.json"
+DEFAULT_FOLDER_TITLE = "codex"
 DEFAULT_THREADS_DB_PATH = Path.home() / ".codex" / "state_5.sqlite"
 DEFAULT_BOT_TOKEN_KEYCHAIN_SERVICE = "codex-telegram-bridge-bot-token"
 DEFAULT_MESSAGE_DELAY_MS = 1100
@@ -132,6 +133,11 @@ def resolve_bot_username(args) -> str:
         or os.getenv("CODEX_TELEGRAM_BOT_USERNAME")
         or bridge_config.get("botUsername")
     )
+
+
+def resolve_folder_title(args, plan) -> str:
+    plan_onboarding = plan.get("onboarding", {}) if isinstance(plan, dict) else {}
+    return str(args.folder_title or plan_onboarding.get("folderTitle") or DEFAULT_FOLDER_TITLE).strip()
 
 
 def split_long_paragraph(paragraph: str, limit: int):
@@ -914,6 +920,7 @@ async def command_bootstrap(args):
     plan = load_json(args.plan, {"projects": []})
     bridge_state = load_json(args.bridge_state, {"version": 1, "lastUpdateId": 0, "bindings": {}})
     bot_username = resolve_bot_username(args)
+    folder_title = resolve_folder_title(args, plan)
     if not bot_username:
         raise SystemExit(
             "Bot username is required. Pass --bot-username, set CODEX_TELEGRAM_BOT_USERNAME, or set botUsername in config.local.json."
@@ -930,6 +937,8 @@ async def command_bootstrap(args):
             "me": me_payload(me),
             "groups": [],
             "folder": None,
+            "folderTitle": folder_title,
+            "rehearsal": bool(plan.get("onboarding", {}).get("rehearsal")),
         }
         folder_channels = []
 
@@ -973,7 +982,7 @@ async def command_bootstrap(args):
             summary["groups"].append(group_summary)
 
         if not args.skip_folder and folder_channels:
-            summary["folder"] = await ensure_dialog_folder(client, args.folder_title, folder_channels)
+            summary["folder"] = await ensure_dialog_folder(client, folder_title, folder_channels)
     finally:
         await client.disconnect()
 
@@ -1184,7 +1193,7 @@ def build_parser():
     bootstrap.add_argument("--result-path", type=Path, default=DEFAULT_RESULT_PATH)
     bootstrap.add_argument("--bridge-state", type=Path, default=DEFAULT_BRIDGE_STATE_PATH)
     bootstrap.add_argument("--bot-username", default=None)
-    bootstrap.add_argument("--folder-title", default="codex")
+    bootstrap.add_argument("--folder-title", default=None)
     bootstrap.add_argument("--skip-folder", action="store_true")
     bootstrap.set_defaults(handler=command_bootstrap)
 

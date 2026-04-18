@@ -143,7 +143,15 @@ npm run onboard:plan -- \
   --threads-per-project 3
 ```
 
+Песочница без сноса текущего Telegram:
+
+```bash
+npm run onboard:rehearsal -- \
+  --project /path/to/codex-project
+```
+
 Запись в ignored runtime plan `admin/bootstrap-plan.json` только с `--write`.
+Для rehearsal запись идёт в ignored `admin/bootstrap-plan.rehearsal.json`.
 Структурный пример: [admin/bootstrap-plan.example.json](admin/bootstrap-plan.example.json).
 Полный flow: [docs/ONBOARDING.md](docs/ONBOARDING.md).
 

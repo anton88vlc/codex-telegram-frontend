@@ -103,6 +103,16 @@ npm run onboard:plan -- \
   --write
 ```
 
+Write a disposable rehearsal plan:
+
+```bash
+npm run onboard:rehearsal -- \
+  --project /path/to/codex-project \
+  --write
+```
+
+Rehearsal writes `admin/bootstrap-plan.rehearsal.json` by default, uses `Codex Lab - ` group titles and folder `codex-lab`, and keeps the working set intentionally small.
+
 Create or reuse Telegram groups/topics and write bridge bindings:
 
 ```bash
@@ -110,7 +120,7 @@ admin/.venv/bin/python admin/telegram_user_admin.py bootstrap \
   --plan admin/bootstrap-plan.json
 ```
 
-`bootstrap` creates or updates the Telegram folder `codex` by default and puts project groups there.
+`bootstrap` creates or updates the Telegram folder from the plan by default and puts project groups there.
 Use `--skip-folder` only when debugging folder automation.
 Bot username is read from `config.local.json -> botUsername`, `CODEX_TELEGRAM_BOT_USERNAME`, or `--bot-username`.
 

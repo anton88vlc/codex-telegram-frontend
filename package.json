@@ -13,7 +13,8 @@
     "check:python": "python3 -m py_compile admin/telegram_user_admin.py",
     "check:launchd": "sh -n ops/install-launchd.sh && ./ops/install-launchd.sh --dry-run > /tmp/codex-telegram-bridge.plist && plutil -lint /tmp/codex-telegram-bridge.plist",
     "onboard:scan": "node scripts/onboard.mjs scan",
-    "onboard:plan": "node scripts/onboard.mjs plan"
+    "onboard:plan": "node scripts/onboard.mjs plan",
+    "onboard:rehearsal": "node scripts/onboard.mjs plan --rehearsal"
   },
   "engines": {
     "node": ">=20.0.0",
