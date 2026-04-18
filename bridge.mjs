@@ -1,136 +1,74 @@
 #!/usr/bin/env node
 
-import { spawn } from "node:child_process";
-import fs from "node:fs/promises";
+import { execFile } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 
 import { sendNativeTurn } from "./lib/codex-native.mjs";
+import { normalizeInboundPrompt, normalizeText, parseCommand } from "./lib/message-routing.mjs";
+import { getInitialProgressText, startProgressBubble } from "./lib/progress-bubble.mjs";
 import {
+  getBindingsForChat,
+  getBoundThreadIdsForChat,
+  getProjectGroupForChat,
+  loadProjectIndex,
+  readJsonIfExists,
+} from "./lib/project-data.mjs";
+import {
+  buildProjectSyncPlan,
+  isClosedSyncBinding,
+  isSyncManagedBinding,
+  sanitizeTopicTitle,
+  SYNC_PROJECT_CREATOR,
+} from "./lib/project-sync.mjs";
+import { buildSelfCheckReport, formatSelfCheckReport } from "./lib/runtime-health.mjs";
+import {
+  getBinding,
+  getOutboundMirror,
+  hasProcessedMessage,
   loadState,
-  saveState,
   makeBindingKey,
   makeMessageKey,
-  getBinding,
-  setBinding,
-  removeBinding,
-  hasProcessedMessage,
   markProcessedMessage,
+  rememberOutboundSuppression,
+  removeBinding,
+  removeOutboundMirror,
+  saveState,
+  setBinding,
+  setOutboundMirror,
+  consumeOutboundSuppression,
 } from "./lib/state.mjs";
-import { createForumTopic, editThenSendTextChunks, getUpdates, sendTextChunks, sendTyping } from "./lib/telegram.mjs";
+import { clamp, getThreadById, getThreadsByIds, listProjectThreads, parsePositiveInt } from "./lib/thread-db.mjs";
+import { makeOutboundMirrorSignature, readThreadMirrorDelta } from "./lib/thread-rollout.mjs";
+import {
+  closeForumTopic,
+  createForumTopic,
+  editForumTopic,
+  editThenSendRichTextChunks,
+  getMe,
+  getUpdates,
+  reopenForumTopic,
+  sendRichTextChunks,
+  sendTextChunks,
+  sendTyping,
+} from "./lib/telegram.mjs";
 
 const PROJECT_ROOT = path.dirname(fileURLToPath(import.meta.url));
 
 const DEFAULT_CONFIG_PATH = path.join(PROJECT_ROOT, "config.local.json");
-
 const DEFAULT_STATE_PATH = path.join(PROJECT_ROOT, "state", "state.json");
-
 const DEFAULT_NATIVE_HELPER_PATH = path.join(PROJECT_ROOT, "scripts", "send_via_app_control.js");
-
 const DEFAULT_NATIVE_FALLBACK_HELPER_PATH = path.join(PROJECT_ROOT, "scripts", "send_via_app_server.js");
-
 const DEFAULT_PROJECT_INDEX_PATH = path.join(PROJECT_ROOT, "state", "bootstrap-result.json");
-
-const DEFAULT_THREADS_DB_PATH = path.join(
-  process.env.HOME || "/Users/antonnaumov",
-  ".codex",
-  "state_5.sqlite",
-);
-
-function fail(message, extra = {}) {
-  const payload = { ok: false, error: message, ...extra };
-  process.stderr.write(`${JSON.stringify(payload, null, 2)}\n`);
-  process.exit(1);
-}
-
-function parseArgs(argv) {
-  const out = {
-    configPath: DEFAULT_CONFIG_PATH,
-    once: false,
-  };
-  for (let idx = 0; idx < argv.length; idx += 1) {
-    const arg = argv[idx];
-    switch (arg) {
-      case "--config":
-        out.configPath = argv[++idx];
-        break;
-      case "--once":
-        out.once = true;
-        break;
-      default:
-        fail(`unknown argument: ${arg}`, { argv });
-    }
-  }
-  return out;
-}
-
-async function readJsonIfExists(filePath, fallback = null) {
-  try {
-    const raw = await fs.readFile(filePath, "utf8");
-    return JSON.parse(raw);
-  } catch (error) {
-    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
-      return fallback;
-    }
-    throw error;
-  }
-}
-
-async function loadConfig(configPath) {
-  const fromFile = await readJsonIfExists(configPath, {});
-  const botTokenEnv = fromFile?.botTokenEnv || "CODEX_TELEGRAM_BOT_TOKEN";
-  const botToken = process.env[botTokenEnv] || fromFile?.botToken || null;
-  if (!botToken) {
-    fail(`missing Telegram bot token; set ${botTokenEnv} or botToken in config`, { configPath });
-  }
-
-  const config = {
-    botToken,
-    botTokenEnv,
-    allowedUserIds: Array.isArray(fromFile?.allowedUserIds) ? fromFile.allowedUserIds.map(Number).filter(Number.isFinite) : [],
-    allowedChatIds: Array.isArray(fromFile?.allowedChatIds) ? fromFile.allowedChatIds.map(String) : [],
-    pollTimeoutSeconds: Number.isFinite(fromFile?.pollTimeoutSeconds) ? fromFile.pollTimeoutSeconds : 30,
-    sendTyping: fromFile?.sendTyping !== false,
-    nativeTimeoutMs: Number.isFinite(fromFile?.nativeTimeoutMs) ? fromFile.nativeTimeoutMs : 120_000,
-    statePath: fromFile?.statePath || DEFAULT_STATE_PATH,
-    nativeHelperPath: fromFile?.nativeHelperPath || DEFAULT_NATIVE_HELPER_PATH,
-    nativeFallbackHelperPath:
-      fromFile?.nativeFallbackHelperPath || DEFAULT_NATIVE_FALLBACK_HELPER_PATH,
-    projectIndexPath: fromFile?.projectIndexPath || DEFAULT_PROJECT_INDEX_PATH,
-    threadsDbPath: fromFile?.threadsDbPath || DEFAULT_THREADS_DB_PATH,
-    syncDefaultLimit: Number.isFinite(fromFile?.syncDefaultLimit) ? fromFile.syncDefaultLimit : 3,
-  };
-
-  return config;
-}
-
-function normalizeText(value) {
-  return String(value ?? "").trim();
-}
-
-function stripCommandTarget(text) {
-  const [head, ...rest] = normalizeText(text).split(/\s+/);
-  const cleanedHead = head.replace(/@[^ ]+$/, "");
-  return [cleanedHead, ...rest].join(" ").trim();
-}
-
-function parseCommand(text) {
-  const stripped = stripCommandTarget(text);
-  if (!stripped.startsWith("/")) return null;
-  const [command, ...args] = stripped.split(/\s+/);
-  return {
-    command: command.toLowerCase(),
-    args,
-  };
-}
-
-function buildTargetFromMessage(message) {
-  return {
-    chatId: message.chat.id,
-    messageThreadId: message.message_thread_id ?? null,
-  };
-}
+const DEFAULT_THREADS_DB_PATH = path.join(process.env.HOME || "/Users/antonnaumov", ".codex", "state_5.sqlite");
+const DEFAULT_NATIVE_DEBUG_BASE_URL = process.env.CODEX_REMOTE_DEBUG_URL || "http://127.0.0.1:9222";
+const DEFAULT_APP_SERVER_URL = process.env.CODEX_APP_SERVER_URL || "ws://127.0.0.1:27890";
+const DEFAULT_NATIVE_POLL_INTERVAL_MS = 1_000;
+const DEFAULT_OUTBOUND_POLL_INTERVAL_MS = 2_000;
+const DEFAULT_BOT_TOKEN_KEYCHAIN_SERVICE = "codex-telegram-bridge-bot-token";
+const execFileAsync = promisify(execFile);
 
 const TELEGRAM_SERVICE_MESSAGE_KEYS = [
   "forum_topic_created",
@@ -157,6 +95,108 @@ const TELEGRAM_SERVICE_MESSAGE_KEYS = [
   "chat_background_set",
 ];
 
+function fail(message, extra = {}) {
+  const payload = { ok: false, error: message, ...extra };
+  process.stderr.write(`${JSON.stringify(payload, null, 2)}\n`);
+  process.exit(1);
+}
+
+function parseArgs(argv) {
+  const out = {
+    configPath: DEFAULT_CONFIG_PATH,
+    once: false,
+    selfCheck: false,
+  };
+  for (let idx = 0; idx < argv.length; idx += 1) {
+    const arg = argv[idx];
+    switch (arg) {
+      case "--config":
+        out.configPath = argv[++idx];
+        break;
+      case "--once":
+        out.once = true;
+        break;
+      case "--self-check":
+        out.selfCheck = true;
+        break;
+      default:
+        fail(`unknown argument: ${arg}`, { argv });
+    }
+  }
+  return out;
+}
+
+async function loadConfig(configPath) {
+  const fromFile = await readJsonIfExists(configPath, {});
+  const botTokenEnv = fromFile?.botTokenEnv || "CODEX_TELEGRAM_BOT_TOKEN";
+  const botTokenKeychainService = fromFile?.botTokenKeychainService || DEFAULT_BOT_TOKEN_KEYCHAIN_SERVICE;
+  const botToken =
+    process.env[botTokenEnv] ||
+    fromFile?.botToken ||
+    (await readKeychainSecret(botTokenKeychainService)) ||
+    null;
+  if (!botToken) {
+    fail(`missing Telegram bot token; set ${botTokenEnv}, botToken, or Keychain item ${botTokenKeychainService}`, {
+      configPath,
+    });
+  }
+
+  return {
+    botToken,
+    botTokenEnv,
+    botTokenKeychainService,
+    botUsername: normalizeText(fromFile?.botUsername).replace(/^@+/, "") || null,
+    allowedUserIds: Array.isArray(fromFile?.allowedUserIds)
+      ? fromFile.allowedUserIds.map(Number).filter(Number.isFinite)
+      : [],
+    allowedChatIds: Array.isArray(fromFile?.allowedChatIds) ? fromFile.allowedChatIds.map(String) : [],
+    pollTimeoutSeconds: Number.isFinite(fromFile?.pollTimeoutSeconds) ? fromFile.pollTimeoutSeconds : 30,
+    sendTyping: fromFile?.sendTyping !== false,
+    nativeTimeoutMs: Number.isFinite(fromFile?.nativeTimeoutMs) ? fromFile.nativeTimeoutMs : 120_000,
+    nativePollIntervalMs: Number.isFinite(fromFile?.nativePollIntervalMs)
+      ? fromFile.nativePollIntervalMs
+      : DEFAULT_NATIVE_POLL_INTERVAL_MS,
+    nativeDebugBaseUrl: fromFile?.nativeDebugBaseUrl || DEFAULT_NATIVE_DEBUG_BASE_URL,
+    appServerUrl: fromFile?.appServerUrl || DEFAULT_APP_SERVER_URL,
+    outboundSyncEnabled: fromFile?.outboundSyncEnabled !== false,
+    outboundPollIntervalMs: Number.isFinite(fromFile?.outboundPollIntervalMs)
+      ? fromFile.outboundPollIntervalMs
+      : DEFAULT_OUTBOUND_POLL_INTERVAL_MS,
+    statePath: fromFile?.statePath || DEFAULT_STATE_PATH,
+    nativeHelperPath: fromFile?.nativeHelperPath || DEFAULT_NATIVE_HELPER_PATH,
+    nativeFallbackHelperPath: fromFile?.nativeFallbackHelperPath || DEFAULT_NATIVE_FALLBACK_HELPER_PATH,
+    projectIndexPath: fromFile?.projectIndexPath || DEFAULT_PROJECT_INDEX_PATH,
+    threadsDbPath: fromFile?.threadsDbPath || DEFAULT_THREADS_DB_PATH,
+    syncDefaultLimit: Number.isFinite(fromFile?.syncDefaultLimit) ? fromFile.syncDefaultLimit : 3,
+  };
+}
+
+async function readKeychainSecret(serviceName) {
+  const normalizedService = normalizeText(serviceName);
+  if (!normalizedService) {
+    return null;
+  }
+  try {
+    const { stdout } = await execFileAsync("/usr/bin/security", [
+      "find-generic-password",
+      "-s",
+      normalizedService,
+      "-w",
+    ]);
+    const secret = String(stdout ?? "").trim();
+    return secret || null;
+  } catch {
+    return null;
+  }
+}
+
+function buildTargetFromMessage(message) {
+  return {
+    chatId: message.chat.id,
+    messageThreadId: message.message_thread_id ?? null,
+  };
+}
+
 function isTelegramServiceMessage(message) {
   return TELEGRAM_SERVICE_MESSAGE_KEYS.some((key) => key in (message || {}));
 }
@@ -164,124 +204,12 @@ function isTelegramServiceMessage(message) {
 function renderNativeSendError(error) {
   const raw = error instanceof Error ? error.message : String(error);
   if (/timed out|timeout/i.test(raw)) {
-    return "Не дождался ответа от Codex вовремя. Если хочешь, просто повтори сообщение.";
+    return "Codex отвечает слишком долго. Мост жив, но этот запрос лучше повторить позже.";
   }
-  return `Споткнулся на отправке в Codex: ${raw}`;
-}
-
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
-}
-
-function parsePositiveInt(value, fallback) {
-  const parsed = Number.parseInt(String(value ?? ""), 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return fallback;
+  if (/fetch failed|econnrefused|websocket closed|no page targets found|couldn't connect/i.test(raw)) {
+    return "Не смог сейчас достучаться до Codex. Мост жив, но transport споткнулся; попробуй ещё раз через пару секунд.";
   }
-  return parsed;
-}
-
-function sanitizeTopicTitle(value, fallback = "Codex thread") {
-  const text = String(value ?? "")
-    .replace(/\s+/g, " ")
-    .trim();
-  const base = text || fallback;
-  return base.length <= 120 ? base : `${base.slice(0, 117).trimEnd()}...`;
-}
-
-function execJsonCommand(command, args, { timeoutMs = 30_000 } = {}) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-
-    let stdout = "";
-    let stderr = "";
-    const timer = setTimeout(() => {
-      child.kill("SIGTERM");
-      reject(new Error(`${command} timed out after ${timeoutMs}ms`));
-    }, timeoutMs);
-
-    child.stdout.on("data", (chunk) => {
-      stdout += chunk.toString("utf8");
-    });
-
-    child.stderr.on("data", (chunk) => {
-      stderr += chunk.toString("utf8");
-    });
-
-    child.on("error", (error) => {
-      clearTimeout(timer);
-      reject(error);
-    });
-
-    child.on("close", (code) => {
-      clearTimeout(timer);
-      if (code !== 0) {
-        reject(new Error(stderr.trim() || stdout.trim() || `${command} failed with exit code ${code}`));
-        return;
-      }
-      try {
-        resolve(JSON.parse(stdout));
-      } catch (error) {
-        reject(new Error(`failed to parse JSON from ${command}: ${error instanceof Error ? error.message : String(error)}`));
-      }
-    });
-  });
-}
-
-async function loadProjectIndex(projectIndexPath) {
-  const parsed = await readJsonIfExists(projectIndexPath, null);
-  if (!parsed?.groups || !Array.isArray(parsed.groups)) {
-    throw new Error(`project index missing groups: ${projectIndexPath}`);
-  }
-  return parsed.groups.map((group) => ({
-    projectRoot: normalizeText(group.projectRoot),
-    groupTitle: normalizeText(group.groupTitle),
-    chatId: String(group.botApiChatId),
-    topics: Array.isArray(group.topics) ? group.topics : [],
-  }));
-}
-
-function getProjectGroupForChat(groups, chatId) {
-  return groups.find((group) => String(group.chatId) === String(chatId)) ?? null;
-}
-
-function getBoundThreadIdsForChat(state, chatId) {
-  const ids = new Set();
-  for (const binding of Object.values(state.bindings ?? {})) {
-    if (String(binding?.chatId) === String(chatId) && binding?.threadId) {
-      ids.add(String(binding.threadId));
-    }
-  }
-  return ids;
-}
-
-async function listProjectThreads(threadsDbPath, projectRoot, { limit = 10 } = {}) {
-  const cappedLimit = clamp(parsePositiveInt(limit, 10), 1, 20);
-  const sql = `
-    select
-      id,
-      title,
-      cwd,
-      archived,
-      updated_at,
-      coalesce(updated_at_ms, updated_at * 1000) as updated_at_ms,
-      source
-    from threads
-    where cwd = '${String(projectRoot).replaceAll("'", "''")}'
-      and archived = 0
-      and coalesce(agent_nickname, '') = ''
-      and coalesce(agent_role, '') = ''
-      and source not like '{"subagent":%'
-    order by updated_at desc, id desc
-    limit ${cappedLimit};
-  `;
-
-  const rows = await execJsonCommand("sqlite3", ["-json", threadsDbPath, sql], {
-    timeoutMs: 15_000,
-  });
-  return Array.isArray(rows) ? rows : [];
+  return "Не смог донести сообщение до Codex. Короткая версия: запрос не уехал, подробности уже в логе.";
 }
 
 function formatThreadBullet(thread) {
@@ -314,42 +242,469 @@ function isAuthorized(config, message) {
 }
 
 async function reply(token, message, text) {
+  return sendRichTextChunks(token, buildTargetFromMessage(message), text, message.message_id);
+}
+
+async function replyPlain(token, message, text) {
   return sendTextChunks(token, buildTargetFromMessage(message), text, message.message_id);
 }
 
+function isTopicMessage(message) {
+  return message.message_thread_id != null && (message.chat.type === "group" || message.chat.type === "supergroup");
+}
+
+function buildOpsDmIntro(message) {
+  const chatTitle = normalizeText(message.chat.title || message.chat.username || message.chat.first_name || "чат");
+  const topic = message.message_thread_id != null ? `, topic ${message.message_thread_id}` : "";
+  return `**Ops-детали** из **${chatTitle}**${topic}\n\n`;
+}
+
+async function sendCommandResponse({
+  config,
+  message,
+  text,
+  quietInTopic = false,
+  topicSummary = null,
+}) {
+  if (quietInTopic && isTopicMessage(message) && Number.isInteger(message.from?.id)) {
+    try {
+      await sendRichTextChunks(
+        config.botToken,
+        {
+          chatId: message.from.id,
+          messageThreadId: null,
+        },
+        `${buildOpsDmIntro(message)}${text}`,
+      );
+      return reply(
+        config.botToken,
+        message,
+        topicSummary || "Готово. Подробности кинул в direct chat с ботом, чтобы не шуметь в topic.",
+      );
+    } catch (error) {
+      logBridgeEvent("ops_direct_chat_fallback", {
+        chatId: message.chat.id,
+        messageId: message.message_id ?? null,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  return reply(config.botToken, message, text);
+}
+
 function rememberOutbound(binding, sentMessages) {
-  if (!binding || !Array.isArray(sentMessages)) return;
+  if (!binding || !Array.isArray(sentMessages)) {
+    return;
+  }
   binding.lastOutboundMessageIds = sentMessages
     .map((item) => item?.message_id)
     .filter((value) => Number.isInteger(value));
+}
+
+function rememberOutboundMirrorSuppression(state, bindingKey, text, { phase = "final_answer" } = {}) {
+  const normalizedText = normalizeText(text);
+  if (!normalizedText) {
+    return null;
+  }
+  const signature = makeOutboundMirrorSignature({
+    phase,
+    text: normalizedText,
+  });
+  rememberOutboundSuppression(state, bindingKey, signature);
+  return signature;
+}
+
+function isOutboundMirrorBindingEligible(binding) {
+  if (!binding?.threadId) {
+    return false;
+  }
+  if ((binding.transport || "native") !== "native") {
+    return false;
+  }
+  if (isClosedSyncBinding(binding)) {
+    return false;
+  }
+  if (!binding.chatId) {
+    return false;
+  }
+  return true;
 }
 
 function logBridgeEvent(type, payload = {}) {
   process.stderr.write(`${JSON.stringify({ ts: new Date().toISOString(), type, ...payload }, null, 2)}\n`);
 }
 
-function renderHelp() {
+function renderHelp(config) {
+  const mentionHint = config.botUsername
+    ? `Если group privacy всё ещё мешает, пиши с mention: \`@${config.botUsername} текст\`.`
+    : "Если group privacy всё ещё мешает, временно используй mention к боту.";
   return [
-    "Команды:",
-    "/attach <thread-id> - привязать текущий чат или topic к Codex thread",
-    "/attach-latest - привязать текущий topic к самому свежему непривязанному thread этого проекта",
-    "/detach - снять привязку",
-    "/sync-project [count] - создать topics для свежих непривязанных thread проекта",
-    "/status - показать текущую привязку",
-    "/mode native - явно зафиксировать native transport",
-    "/help - показать это сообщение",
+    "**Команды**",
+    "`/attach <thread-id>` - привязать текущий чат или topic к Codex thread",
+    "`/attach-latest` - привязать текущий topic к самому свежему непривязанному thread этого проекта",
+    "`/detach` - снять привязку",
+    "`/status` - показать текущую привязку и thread",
+    "`/health` - показать health этого чата/topic и transport paths",
+    "`/project-status [count]` - показать желаемую thread column, текущие topics и preview sync-плана",
+    "`/sync-project [count] [dry-run]` - синхронизировать sync-managed topics под текущий working set проекта",
+    "`/mode native` - явно зафиксировать native transport",
+    "`/help` - показать это сообщение",
     "",
-    "После /attach обычный текст из этого чата уходит в привязанный Codex thread.",
-    "v1 честный: только native transport. Heartbeat/UI-visible путь оставлен на phase 2.",
-    "Full-auto sync я специально не включал: иначе Telegram быстро превращается в мусорку.",
+    "После `/attach` обычный текст из этого чата уходит в привязанный Codex thread.",
+    mentionHint,
+    "v1 честный: только **native transport**. Heartbeat/UI-visible путь оставлен на phase 2.",
+    "Final answers из самого Codex thread теперь тоже зеркалятся обратно в привязанный Telegram chat/topic.",
   ].join("\n");
+}
+
+async function loadProjectGroupForMessage(config, message) {
+  const groups = await loadProjectIndex(config.projectIndexPath);
+  return {
+    groups,
+    projectGroup: getProjectGroupForChat(groups, message.chat.id),
+  };
+}
+
+async function loadThreadsByBindings(config, entries) {
+  const threadIds = entries
+    .map(({ binding }) => String(binding?.threadId ?? "").trim())
+    .filter(Boolean);
+  const rows = await getThreadsByIds(config.threadsDbPath, threadIds);
+  return new Map(rows.map((row) => [String(row.id), row]));
+}
+
+async function collectChatBindingDiagnostics(config, state, chatId) {
+  const entries = getBindingsForChat(state, chatId);
+  if (!entries.length) {
+    return {
+      entries,
+      threadsById: new Map(),
+      issues: [],
+    };
+  }
+
+  const threadsById = await loadThreadsByBindings(config, entries);
+  const issues = [];
+  for (const { bindingKey, binding } of entries) {
+    const threadId = String(binding?.threadId ?? "").trim();
+    const thread = threadId ? threadsById.get(threadId) ?? null : null;
+    if (!threadId) {
+      issues.push(`- ${bindingKey}: missing threadId`);
+      continue;
+    }
+    if (!thread) {
+      issues.push(`- ${bindingKey}: thread ${threadId} missing in threads DB`);
+      continue;
+    }
+    if (Number(thread.archived) !== 0) {
+      issues.push(`- ${bindingKey}: thread ${threadId} archived`);
+    }
+  }
+  return {
+    entries,
+    threadsById,
+    issues,
+  };
+}
+
+async function renderBindingStatus(config, bindingKey, binding) {
+  const lines = [
+    "**Текущая привязка**",
+    `thread: \`${binding.threadId}\``,
+    `transport: \`${binding.transport || "native"}\``,
+    `key: \`${bindingKey}\``,
+  ];
+  if (binding.threadTitle) {
+    lines.push(`thread title: ${binding.threadTitle}`);
+  }
+  if (binding.lastInboundMessageId != null) {
+    lines.push(`last inbound message: \`${binding.lastInboundMessageId}\``);
+  }
+  if (Array.isArray(binding.lastOutboundMessageIds) && binding.lastOutboundMessageIds.length) {
+    lines.push(`last outbound messages: \`${binding.lastOutboundMessageIds.join(", ")}\``);
+  }
+  if (binding.lastMirroredAt) {
+    lines.push(`last mirrored at: \`${binding.lastMirroredAt}\` (${binding.lastMirroredPhase || "assistant"})`);
+  }
+
+  try {
+    const thread = await getThreadById(config.threadsDbPath, binding.threadId);
+    if (!thread) {
+      lines.push("warning: thread не найден в локальном threads DB");
+    } else {
+      lines.push(`thread cwd: \`${thread.cwd}\``);
+      lines.push(`thread archived: ${Number(thread.archived) !== 0 ? "yes" : "no"}`);
+      lines.push(`thread title db: ${sanitizeTopicTitle(thread.title, thread.id)}`);
+    }
+  } catch (error) {
+    lines.push(`warning: threads DB lookup failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  return lines.join("\n");
+}
+
+async function renderHealth(config, state, message, bindingKey, binding) {
+  const lines = [
+    "**Bridge health**",
+    `bot: ${config.botUsername ? `\`@${config.botUsername}\`` : "unknown username"}`,
+    `chat: \`${String(message.chat.id)}\` (${message.chat.type || "unknown"})`,
+    `topic: \`${message.message_thread_id ?? "direct/no-topic"}\``,
+    `binding key: \`${bindingKey}\``,
+    `native debug: \`${config.nativeDebugBaseUrl}\``,
+    `app server: \`${config.appServerUrl}\``,
+    `outbound mirror: ${config.outboundSyncEnabled === false ? "off" : `on (${config.outboundPollIntervalMs}ms poll)`}`,
+  ];
+
+  if (binding) {
+    lines.push(`binding thread: ${binding.threadId}`);
+    if (binding.threadTitle) {
+      lines.push(`binding title: ${binding.threadTitle}`);
+    }
+    if (binding.lastMirroredAt) {
+      lines.push(`last mirrored: \`${binding.lastMirroredAt}\` (${binding.lastMirroredPhase || "assistant"})`);
+    }
+  } else {
+    lines.push("binding: none");
+  }
+
+  try {
+    const { projectGroup } = await loadProjectGroupForMessage(config, message);
+    if (projectGroup) {
+      lines.push(`project group: ${projectGroup.groupTitle}`);
+      lines.push(`project root: \`${projectGroup.projectRoot}\``);
+      lines.push(`bootstrap topics: ${projectGroup.topics.length}`);
+    } else {
+      lines.push("warning: chat not found in bootstrap result");
+    }
+  } catch (error) {
+    lines.push(`warning: project index unavailable: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  if (binding) {
+    try {
+      const thread = await getThreadById(config.threadsDbPath, binding.threadId);
+      if (!thread) {
+        lines.push(`warning: thread ${binding.threadId} missing in threads DB`);
+      } else {
+        lines.push(`thread cwd: \`${thread.cwd}\``);
+        lines.push(`thread archived: ${Number(thread.archived) !== 0 ? "yes" : "no"}`);
+      }
+    } catch (error) {
+      lines.push(`warning: threads lookup failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  if (message.chat.type === "supergroup" || message.chat.type === "group") {
+    lines.push(
+      config.botUsername
+        ? `hint: если обычный текст в topic не долетает, проверь privacy mode у бота или пиши как @${config.botUsername} текст`
+        : "hint: если обычный текст в topic не долетает, проверь privacy mode у бота",
+    );
+  }
+
+  return lines.join("\n");
+}
+
+function parseSyncProjectArgs(args, defaultLimit) {
+  const dryRun = args.some((arg) => /^(dry-run|--dry-run)$/i.test(String(arg)));
+  const numericArg = args.find((arg) => /^\d+$/.test(String(arg)));
+  const requestedLimit = clamp(parsePositiveInt(numericArg, defaultLimit), 1, 10);
+  return {
+    dryRun,
+    requestedLimit,
+  };
+}
+
+async function buildSyncContext(config, state, message, requestedLimit) {
+  const { projectGroup } = await loadProjectGroupForMessage(config, message);
+  if (!projectGroup) {
+    return {
+      projectGroup: null,
+      diagnostics: null,
+      plan: null,
+    };
+  }
+
+  const diagnostics = await collectChatBindingDiagnostics(config, state, message.chat.id);
+  const threads = await listProjectThreads(config.threadsDbPath, projectGroup.projectRoot, {
+    limit: requestedLimit,
+  });
+  const plan = buildProjectSyncPlan({
+    entries: diagnostics.entries,
+    threads,
+    requestedLimit,
+  });
+
+  return {
+    projectGroup,
+    diagnostics,
+    plan,
+  };
+}
+
+function formatBindingLine(entry, thread) {
+  const tags = [];
+  if (isSyncManagedBinding(entry.binding)) {
+    tags.push(isClosedSyncBinding(entry.binding) ? "sync-parked" : "sync");
+  } else {
+    tags.push("manual");
+  }
+  if (entry.binding.transport) {
+    tags.push(entry.binding.transport);
+  }
+  return `- topic ${entry.binding.messageThreadId ?? "direct"} -> ${sanitizeTopicTitle(
+    thread?.title || entry.binding.threadTitle,
+    entry.binding.threadId,
+  )} (${entry.binding.threadId}) [${tags.join(", ")}]`;
+}
+
+function renderSyncPreview(plan) {
+  const lines = [
+    `sync preview: keep ${plan.summary.keepCount}, rename ${plan.summary.renameCount}, reopen ${plan.summary.reopenCount}, create ${plan.summary.createCount}, park ${plan.summary.parkCount}`,
+  ];
+
+  if (plan.rename.length) {
+    lines.push("", "**Rename sync topics**");
+    for (const item of plan.rename) {
+      lines.push(
+        `- topic ${item.entry.binding.messageThreadId}: ${sanitizeTopicTitle(item.entry.binding.threadTitle, item.entry.binding.threadId)} -> ${sanitizeTopicTitle(item.thread.title, item.thread.id)}`,
+      );
+    }
+  }
+
+  if (plan.reopen.length) {
+    lines.push("", "**Reopen parked sync topics**");
+    for (const item of plan.reopen) {
+      const action = item.renameNeeded ? "reopen + rename" : "reopen";
+      lines.push(`- topic ${item.entry.binding.messageThreadId}: ${action} -> ${sanitizeTopicTitle(item.thread.title, item.thread.id)} (${item.thread.id})`);
+    }
+  }
+
+  if (plan.create.length) {
+    lines.push("", "**Create topics**");
+    for (const item of plan.create) {
+      lines.push(formatThreadBullet(item.thread));
+    }
+  }
+
+  if (plan.park.length) {
+    lines.push("", "**Park stale sync topics**");
+    for (const item of plan.park) {
+      lines.push(
+        `- topic ${item.entry.binding.messageThreadId}: ${sanitizeTopicTitle(item.entry.binding.threadTitle, item.entry.binding.threadId)} (${item.entry.binding.threadId}) [${item.reason}]`,
+      );
+    }
+  }
+
+  if (
+    plan.rename.length === 0 &&
+    plan.reopen.length === 0 &&
+    plan.create.length === 0 &&
+    plan.park.length === 0
+  ) {
+    lines.push("", "sync preview: already aligned");
+  }
+
+  return lines.join("\n");
+}
+
+async function renderProjectStatus(config, state, message, requestedLimit) {
+  const { projectGroup, diagnostics, plan } = await buildSyncContext(config, state, message, requestedLimit);
+  if (!projectGroup || !diagnostics || !plan) {
+    return "Для этой группы я не нашёл project mapping. Значит bootstrap ещё не дотянут или chat id другой.";
+  }
+
+  const lines = [
+    `**Project status:** ${projectGroup.groupTitle}`,
+    `project root: \`${projectGroup.projectRoot}\``,
+    `desired thread column: ${plan.summary.desiredCount}`,
+    `active bindings in this chat: ${plan.summary.activeCount}`,
+    `parked sync topics: ${plan.summary.parkedCount}`,
+    `bootstrap topics: ${projectGroup.topics.length}`,
+    `stale bindings: ${diagnostics.issues.length}`,
+  ];
+
+  if (plan.desiredThreads.length) {
+    lines.push("", "**Desired thread column**");
+    for (const thread of plan.desiredThreads) {
+      lines.push(formatThreadBullet(thread));
+    }
+  } else {
+    lines.push("", "Desired thread column: empty");
+  }
+
+  if (plan.activeEntries.length) {
+    lines.push("", "**Current active topics**");
+    for (const entry of plan.activeEntries.slice(0, 12)) {
+      const thread = diagnostics.threadsById.get(String(entry.binding.threadId)) ?? null;
+      lines.push(formatBindingLine(entry, thread));
+    }
+  } else {
+    lines.push("", "Current active topics: none");
+  }
+
+  if (plan.parkedEntries.length) {
+    lines.push("", "**Parked sync topics**");
+    for (const entry of plan.parkedEntries.slice(0, 12)) {
+      const thread = diagnostics.threadsById.get(String(entry.binding.threadId)) ?? null;
+      lines.push(formatBindingLine(entry, thread));
+    }
+  }
+
+  if (diagnostics.issues.length) {
+    lines.push("", "**Stale bindings**");
+    lines.push(...diagnostics.issues);
+  }
+
+  lines.push("", "**Sync plan**");
+  lines.push(renderSyncPreview(plan));
+
+  return lines.join("\n");
+}
+
+async function validateBindingForSend(config, binding) {
+  if (isClosedSyncBinding(binding)) {
+    return {
+      ok: false,
+      message: "Этот sync-topic сейчас припаркован и не должен жить как рабочий чат. Запусти `/sync-project`, чтобы вернуть его в active set.",
+    };
+  }
+  try {
+    const thread = await getThreadById(config.threadsDbPath, binding.threadId);
+    if (!thread) {
+      return {
+        ok: false,
+        message: `Эта привязка смотрит в thread ${binding.threadId}, которого уже нет в локальном Codex DB. Лучше /detach и привязать заново.`,
+      };
+    }
+    if (Number(thread.archived) !== 0) {
+      return {
+        ok: false,
+        message: `Эта привязка смотрит в архивированный thread ${binding.threadId}. Лучше /detach и выбрать живой thread.`,
+      };
+    }
+    return { ok: true, thread };
+  } catch (error) {
+    logBridgeEvent("binding_validation_error", {
+      threadId: binding.threadId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return { ok: true, thread: null };
+  }
 }
 
 async function handleCommand({ config, state, message, bindingKey, binding, parsed }) {
   switch (parsed.command) {
     case "/help":
     case "/start":
-      await reply(config.botToken, message, renderHelp());
+      await sendCommandResponse({
+        config,
+        message,
+        text: renderHelp(config),
+        quietInTopic: true,
+        topicSummary: "Справку кинул в direct chat с ботом, чтобы не раздувать topic.",
+      });
       return true;
 
     case "/attach": {
@@ -358,6 +713,7 @@ async function handleCommand({ config, state, message, bindingKey, binding, pars
         await reply(config.botToken, message, "Нужен thread id: /attach <thread-id>");
         return true;
       }
+      removeOutboundMirror(state, bindingKey);
       setBinding(state, bindingKey, {
         threadId,
         transport: "native",
@@ -379,14 +735,21 @@ async function handleCommand({ config, state, message, bindingKey, binding, pars
         return true;
       }
       if (binding) {
-        await reply(config.botToken, message, `Этот topic уже привязан к ${binding.threadId}. Если хочешь перекинуть его, сначала /detach.`);
+        await reply(
+          config.botToken,
+          message,
+          `Этот topic уже привязан к ${binding.threadId}. Если хочешь перекинуть его, сначала /detach.`,
+        );
         return true;
       }
 
-      const groups = await loadProjectIndex(config.projectIndexPath);
-      const projectGroup = getProjectGroupForChat(groups, message.chat.id);
+      const { projectGroup } = await loadProjectGroupForMessage(config, message);
       if (!projectGroup) {
-        await reply(config.botToken, message, "Для этой группы я не нашёл project mapping. Сначала нужен bootstrap или ручная привязка.");
+        await reply(
+          config.botToken,
+          message,
+          "Для этой группы я не нашёл project mapping. Сначала нужен bootstrap или ручная привязка.",
+        );
         return true;
       }
 
@@ -408,6 +771,7 @@ async function handleCommand({ config, state, message, bindingKey, binding, pars
           chatTitle: projectGroup.groupTitle,
         }),
       );
+      removeOutboundMirror(state, bindingKey);
       const sent = await reply(
         config.botToken,
         message,
@@ -423,6 +787,7 @@ async function handleCommand({ config, state, message, bindingKey, binding, pars
         return true;
       }
       removeBinding(state, bindingKey);
+      removeOutboundMirror(state, bindingKey);
       await reply(config.botToken, message, `Отвязал thread ${binding.threadId}.`);
       return true;
 
@@ -431,40 +796,126 @@ async function handleCommand({ config, state, message, bindingKey, binding, pars
         await reply(config.botToken, message, "Привязки нет. Используй /attach <thread-id>.");
         return true;
       }
-      const sent = await reply(
-        config.botToken,
-        message,
-        `Текущая привязка:\nthread: ${binding.threadId}\ntransport: ${binding.transport || "native"}\nkey: ${bindingKey}`,
-      );
-      rememberOutbound(binding, sent);
+      rememberOutbound(binding, await reply(config.botToken, message, await renderBindingStatus(config, bindingKey, binding)));
       return true;
 
-    case "/sync-project": {
-      const groups = await loadProjectIndex(config.projectIndexPath);
-      const projectGroup = getProjectGroupForChat(groups, message.chat.id);
-      if (!projectGroup) {
-        await reply(config.botToken, message, "Для этой группы я не нашёл project mapping. Значит bootstrap ещё не дотянут или chat id другой.");
-        return true;
-      }
+    case "/health":
+      rememberOutbound(binding, await reply(config.botToken, message, await renderHealth(config, state, message, bindingKey, binding)));
+      return true;
 
-      const requestedLimit = clamp(
-        parsePositiveInt(parsed.args[0], config.syncDefaultLimit),
-        1,
-        10,
+    case "/project-status": {
+      const requestedLimit = clamp(parsePositiveInt(parsed.args[0], config.syncDefaultLimit), 1, 10);
+      rememberOutbound(
+        binding,
+        await sendCommandResponse({
+          config,
+          message,
+          text: await renderProjectStatus(config, state, message, requestedLimit),
+          quietInTopic: true,
+          topicSummary: "Сводку по проекту кинул в direct chat с ботом, чтобы не засирать topic.",
+        }),
       );
-      const boundThreadIds = getBoundThreadIdsForChat(state, message.chat.id);
-      const threads = await listProjectThreads(config.threadsDbPath, projectGroup.projectRoot, {
-        limit: Math.max(requestedLimit * 4, 12),
-      });
-      const unboundThreads = threads.filter((thread) => !boundThreadIds.has(String(thread.id))).slice(0, requestedLimit);
+      return true;
+    }
 
-      if (!unboundThreads.length) {
-        await reply(config.botToken, message, "Новых непривязанных thread для этого проекта сейчас нет.");
+    case "/sync-project": {
+      const { dryRun, requestedLimit } = parseSyncProjectArgs(parsed.args, config.syncDefaultLimit);
+      const { projectGroup, plan } = await buildSyncContext(config, state, message, requestedLimit);
+      if (!projectGroup || !plan) {
+        await reply(
+          config.botToken,
+          message,
+          "Для этой группы я не нашёл project mapping. Значит bootstrap ещё не дотянут или chat id другой.",
+        );
         return true;
       }
 
-      const created = [];
-      for (const thread of unboundThreads) {
+      const previewText = [
+        dryRun ? `**Dry-run:** ${projectGroup.groupTitle}` : `**Sync plan:** ${projectGroup.groupTitle}`,
+        `desired thread column: ${plan.summary.desiredCount}`,
+        renderSyncPreview(plan),
+      ].join("\n\n");
+
+      if (dryRun) {
+        await sendCommandResponse({
+          config,
+          message,
+          text: previewText,
+          quietInTopic: true,
+          topicSummary: "Preview `/sync-project` кинул в direct chat с ботом, чтобы не раздувать topic.",
+        });
+        return true;
+      }
+
+      const now = new Date().toISOString();
+      const parkCurrentTopic = new Set(
+        plan.park
+          .filter((item) => item.entry.bindingKey === bindingKey)
+          .map((item) => item.entry.bindingKey),
+      );
+      const parkBeforeReply = plan.park.filter((item) => !parkCurrentTopic.has(item.entry.bindingKey));
+      const parkAfterReply = plan.park.filter((item) => parkCurrentTopic.has(item.entry.bindingKey));
+      const changed = {
+        renamed: [],
+        reopened: [],
+        created: [],
+        parked: [],
+      };
+
+      for (const item of plan.rename) {
+        const nextTitle = sanitizeTopicTitle(item.thread.title, item.thread.id);
+        await editForumTopic(config.botToken, {
+          chatId: message.chat.id,
+          messageThreadId: item.entry.binding.messageThreadId,
+          name: nextTitle,
+        });
+        state.bindings[item.entry.bindingKey] = {
+          ...item.entry.binding,
+          threadTitle: nextTitle,
+          syncManaged: true,
+          syncState: "active",
+          topicStatus: "open",
+          updatedAt: now,
+          lastSyncedAt: now,
+        };
+        changed.renamed.push({
+          topicId: item.entry.binding.messageThreadId,
+          title: nextTitle,
+          threadId: String(item.thread.id),
+        });
+      }
+
+      for (const item of plan.reopen) {
+        await reopenForumTopic(config.botToken, {
+          chatId: message.chat.id,
+          messageThreadId: item.entry.binding.messageThreadId,
+        });
+        const nextTitle = sanitizeTopicTitle(item.thread.title, item.thread.id);
+        if (item.renameNeeded) {
+          await editForumTopic(config.botToken, {
+            chatId: message.chat.id,
+            messageThreadId: item.entry.binding.messageThreadId,
+            name: nextTitle,
+          });
+        }
+        state.bindings[item.entry.bindingKey] = {
+          ...item.entry.binding,
+          threadTitle: nextTitle,
+          syncManaged: true,
+          syncState: "active",
+          topicStatus: "open",
+          updatedAt: now,
+          lastSyncedAt: now,
+        };
+        changed.reopened.push({
+          topicId: item.entry.binding.messageThreadId,
+          title: nextTitle,
+          threadId: String(item.thread.id),
+        });
+      }
+
+      for (const item of plan.create) {
+        const { thread } = item;
         const topic = await createForumTopic(config.botToken, {
           chatId: message.chat.id,
           name: sanitizeTopicTitle(thread.title, thread.id),
@@ -477,33 +928,126 @@ async function handleCommand({ config, state, message, bindingKey, binding, pars
           chatId: message.chat.id,
           messageThreadId: topicId,
         });
-        setBinding(
-          state,
-          topicBindingKey,
-          {
-            ...buildBindingPayload({
-              message: {
-                ...message,
-                message_thread_id: topicId,
-              },
-              thread,
-              chatTitle: projectGroup.groupTitle,
-            }),
-            createdBy: "sync-project",
-          },
-        );
-        created.push({
+        setBinding(state, topicBindingKey, {
+          ...buildBindingPayload({
+            message: {
+              ...message,
+              message_thread_id: topicId,
+            },
+            thread,
+            chatTitle: projectGroup.groupTitle,
+          }),
+          createdBy: SYNC_PROJECT_CREATOR,
+          syncManaged: true,
+          syncState: "active",
+          topicStatus: "open",
+          lastSyncedAt: now,
+        });
+        changed.created.push({
           topicId,
           title: sanitizeTopicTitle(thread.title, thread.id),
           threadId: String(thread.id),
         });
       }
 
+      for (const item of parkBeforeReply) {
+        await closeForumTopic(config.botToken, {
+          chatId: message.chat.id,
+          messageThreadId: item.entry.binding.messageThreadId,
+        });
+        state.bindings[item.entry.bindingKey] = {
+          ...item.entry.binding,
+          syncManaged: true,
+          syncState: "closed",
+          topicStatus: "closed",
+          updatedAt: now,
+          lastSyncedAt: now,
+        };
+        changed.parked.push({
+          topicId: item.entry.binding.messageThreadId,
+          title: sanitizeTopicTitle(item.entry.binding.threadTitle, item.entry.binding.threadId),
+          threadId: String(item.entry.binding.threadId),
+          reason: item.reason,
+        });
+      }
+
       const lines = [
-        `Создал ${created.length} topic(s) для ${projectGroup.groupTitle}.`,
-        ...created.map((item) => `- [topic ${item.topicId}] ${item.title} -> ${item.threadId}`),
+        `Синхронизировал working set для ${projectGroup.groupTitle}.`,
+        `rename ${changed.renamed.length}, reopen ${changed.reopened.length}, create ${changed.created.length}, park ${plan.park.length}`,
       ];
-      await reply(config.botToken, message, lines.join("\n"));
+      if (changed.renamed.length) {
+        lines.push("", "**Renamed**");
+        lines.push(...changed.renamed.map((item) => `- topic ${item.topicId}: ${item.title} -> ${item.threadId}`));
+      }
+      if (changed.reopened.length) {
+        lines.push("", "**Reopened**");
+        lines.push(...changed.reopened.map((item) => `- topic ${item.topicId}: ${item.title} -> ${item.threadId}`));
+      }
+      if (changed.created.length) {
+        lines.push("", "**Created**");
+        lines.push(...changed.created.map((item) => `- topic ${item.topicId}: ${item.title} -> ${item.threadId}`));
+      }
+      if (plan.park.length) {
+        lines.push("", "**Parked**");
+        const parkedLines = [
+          ...changed.parked,
+          ...parkAfterReply.map((item) => ({
+            topicId: item.entry.binding.messageThreadId,
+            title: sanitizeTopicTitle(item.entry.binding.threadTitle, item.entry.binding.threadId),
+            threadId: String(item.entry.binding.threadId),
+            reason: item.reason,
+          })),
+        ];
+        lines.push(...parkedLines.map((item) => `- topic ${item.topicId}: ${item.title} -> ${item.threadId} [${item.reason}]`));
+      }
+      if (
+        changed.renamed.length === 0 &&
+        changed.reopened.length === 0 &&
+        changed.created.length === 0 &&
+        plan.park.length === 0
+      ) {
+        lines.push("", "Уже выровнено. Ничего трогать не пришлось.");
+      }
+      await sendCommandResponse({
+        config,
+        message,
+        text: lines.join("\n"),
+        quietInTopic: true,
+        topicSummary:
+          plan.park.length > 0
+            ? "Working set синхронизировал; детали кинул в direct chat с ботом."
+            : "Working set уже в порядке; детали кинул в direct chat с ботом.",
+      });
+
+      for (const item of parkAfterReply) {
+        try {
+          await closeForumTopic(config.botToken, {
+            chatId: message.chat.id,
+            messageThreadId: item.entry.binding.messageThreadId,
+          });
+          state.bindings[item.entry.bindingKey] = {
+            ...item.entry.binding,
+            syncManaged: true,
+            syncState: "closed",
+            topicStatus: "closed",
+            updatedAt: now,
+            lastSyncedAt: now,
+          };
+          changed.parked.push({
+            topicId: item.entry.binding.messageThreadId,
+            title: sanitizeTopicTitle(item.entry.binding.threadTitle, item.entry.binding.threadId),
+            threadId: String(item.entry.binding.threadId),
+            reason: item.reason,
+          });
+        } catch (error) {
+          logBridgeEvent("sync_project_park_after_reply_error", {
+            chatId: message.chat.id,
+            messageThreadId: item.entry.binding.messageThreadId,
+            threadId: item.entry.binding.threadId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
       return true;
     }
 
@@ -523,8 +1067,7 @@ async function handleCommand({ config, state, message, bindingKey, binding, pars
       }
       binding.transport = "native";
       binding.updatedAt = new Date().toISOString();
-      const sent = await reply(config.botToken, message, "Ок, transport = native.");
-      rememberOutbound(binding, sent);
+      rememberOutbound(binding, await reply(config.botToken, message, "Ок, transport = native."));
       return true;
     }
 
@@ -545,6 +1088,20 @@ async function handlePlainText({ config, state, message, bindingKey, binding }) 
     return;
   }
 
+  const prompt = normalizeInboundPrompt(message.text, {
+    botUsername: config.botUsername,
+  });
+  if (!prompt) {
+    await reply(config.botToken, message, "Текст пустой. Если пингуешь через mention, после него нужен сам запрос.");
+    return;
+  }
+
+  const bindingValidation = await validateBindingForSend(config, binding);
+  if (!bindingValidation.ok) {
+    await reply(config.botToken, message, bindingValidation.message);
+    return;
+  }
+
   binding.lastInboundMessageId = message.message_id ?? null;
   binding.updatedAt = new Date().toISOString();
   state.bindings[bindingKey] = binding;
@@ -553,15 +1110,22 @@ async function handlePlainText({ config, state, message, bindingKey, binding }) 
     await sendTyping(config.botToken, buildTargetFromMessage(message)).catch(() => null);
   }
 
-  const prompt = normalizeText(message.text);
   const target = buildTargetFromMessage(message);
-  const receipt = await reply(
-    config.botToken,
-    message,
-    "Работаю...",
-  );
+  const receipt = await replyPlain(config.botToken, message, getInitialProgressText());
   const receiptMessageId = receipt[0]?.message_id ?? null;
   rememberOutbound(binding, receipt);
+  const progressBubble = startProgressBubble({
+    token: config.botToken,
+    target,
+    messageId: receiptMessageId,
+    onError(error) {
+      logBridgeEvent("progress_bubble_error", {
+        threadId: binding.threadId,
+        bindingKey,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    },
+  });
 
   try {
     const result = await sendNativeTurn({
@@ -570,15 +1134,22 @@ async function handlePlainText({ config, state, message, bindingKey, binding }) 
       threadId: binding.threadId,
       prompt,
       timeoutMs: config.nativeTimeoutMs,
+      debugBaseUrl: config.nativeDebugBaseUrl,
+      appServerUrl: config.appServerUrl,
+      pollIntervalMs: config.nativePollIntervalMs,
     });
     binding.updatedAt = new Date().toISOString();
+    binding.lastTransportPath = result.transportPath || null;
     state.bindings[bindingKey] = binding;
+    await progressBubble.stop();
     const replyText = normalizeText(result?.reply?.text) || "(пустой ответ)";
     const sent = receiptMessageId
-      ? await editThenSendTextChunks(config.botToken, target, receiptMessageId, replyText)
+      ? await editThenSendRichTextChunks(config.botToken, target, receiptMessageId, replyText)
       : await reply(config.botToken, message, replyText);
     rememberOutbound(binding, sent);
+    rememberOutboundMirrorSuppression(state, bindingKey, replyText);
   } catch (error) {
+    await progressBubble.stop();
     logBridgeEvent("native_send_error", {
       threadId: binding.threadId,
       bindingKey,
@@ -586,16 +1157,22 @@ async function handlePlainText({ config, state, message, bindingKey, binding }) 
     });
     const errorText = renderNativeSendError(error);
     const sent = receiptMessageId
-      ? await editThenSendTextChunks(config.botToken, target, receiptMessageId, errorText)
+      ? await editThenSendRichTextChunks(config.botToken, target, receiptMessageId, errorText)
       : await reply(config.botToken, message, errorText);
     rememberOutbound(binding, sent);
   }
 }
 
 async function processMessage({ config, state, message }) {
-  if (!message?.chat?.id) return false;
-  if (message?.from?.is_bot) return false;
-  if (!isAuthorized(config, message)) return false;
+  if (!message?.chat?.id) {
+    return false;
+  }
+  if (message?.from?.is_bot) {
+    return false;
+  }
+  if (!isAuthorized(config, message)) {
+    return false;
+  }
   if (isTelegramServiceMessage(message)) {
     logBridgeEvent("skip_service_message", {
       chatId: message.chat.id,
@@ -622,13 +1199,141 @@ async function processMessage({ config, state, message }) {
     }
     return await handlePlainText({ config, state, message, bindingKey, binding });
   } catch (error) {
+    logBridgeEvent("process_message_error", {
+      chatId: message.chat.id,
+      messageId: message.message_id ?? null,
+      bindingKey,
+      command: parsed?.command || null,
+      error: error instanceof Error ? error.message : String(error),
+    });
     await reply(
       config.botToken,
       message,
-      `Bridge споткнулся: ${error instanceof Error ? error.message : String(error)}`,
+      parsed
+        ? "Не смог выполнить команду. Короткая версия уже здесь, а техподробности я сложил в лог."
+        : "Не смог обработать сообщение. Мост не умер, но этот конкретный запрос споткнулся; подробности уже в логе.",
     );
     return true;
   }
+}
+
+async function syncOutboundMirrors({ config, state }) {
+  if (config.outboundSyncEnabled === false) {
+    return { delivered: 0, suppressed: 0, changed: false };
+  }
+
+  const bindingEntries = Object.entries(state.bindings ?? {}).filter(([, binding]) =>
+    isOutboundMirrorBindingEligible(binding),
+  );
+  if (bindingEntries.length === 0) {
+    return { delivered: 0, suppressed: 0, changed: false };
+  }
+
+  const threads = await getThreadsByIds(
+    config.threadsDbPath,
+    bindingEntries.map(([, binding]) => binding.threadId),
+  );
+  const threadsById = new Map(threads.map((thread) => [String(thread.id), thread]));
+
+  let delivered = 0;
+  let suppressed = 0;
+  let changed = false;
+
+  for (const [bindingKey, binding] of bindingEntries) {
+    const thread = threadsById.get(String(binding.threadId));
+    if (!thread?.rollout_path || Number(thread.archived) !== 0) {
+      continue;
+    }
+
+    const previousMirror = getOutboundMirror(state, bindingKey);
+    let delta;
+    try {
+      delta = await readThreadMirrorDelta({
+        rolloutPath: thread.rollout_path,
+        mirrorState: previousMirror,
+        threadId: binding.threadId,
+      });
+    } catch (error) {
+      logBridgeEvent("outbound_mirror_scan_error", {
+        bindingKey,
+        threadId: binding.threadId,
+        rolloutPath: thread.rollout_path,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      continue;
+    }
+
+    const carryPending =
+      previousMirror?.threadId === binding.threadId && previousMirror?.rolloutPath === delta.mirror.rolloutPath
+        ? Array.isArray(previousMirror?.pendingMessages)
+          ? previousMirror.pendingMessages
+          : []
+        : [];
+    const queuedMessages = [...carryPending, ...delta.messages];
+    let pendingMessages = [];
+    let lastSignature = normalizeText(delta.mirror.lastSignature) || null;
+
+    for (let index = 0; index < queuedMessages.length; index += 1) {
+      const message = queuedMessages[index];
+      if (!message?.text || !message?.signature) {
+        continue;
+      }
+
+      if (consumeOutboundSuppression(state, bindingKey, message.signature)) {
+        lastSignature = message.signature;
+        suppressed += 1;
+        changed = true;
+        continue;
+      }
+
+      try {
+        const sent = await sendRichTextChunks(
+          config.botToken,
+          {
+            chatId: binding.chatId,
+            messageThreadId: binding.messageThreadId ?? null,
+          },
+          message.text,
+        );
+        rememberOutbound(binding, sent);
+        binding.updatedAt = new Date().toISOString();
+        binding.lastMirroredAt = message.timestamp || binding.updatedAt;
+        binding.lastMirroredPhase = message.phase;
+        state.bindings[bindingKey] = binding;
+        lastSignature = message.signature;
+        delivered += 1;
+        changed = true;
+      } catch (error) {
+        pendingMessages = queuedMessages.slice(index);
+        logBridgeEvent("outbound_mirror_delivery_error", {
+          bindingKey,
+          threadId: binding.threadId,
+          rolloutPath: thread.rollout_path,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        break;
+      }
+    }
+
+    const liveMirror = getOutboundMirror(state, bindingKey);
+    const nextSuppressions = Array.isArray(liveMirror?.suppressions)
+      ? liveMirror.suppressions.filter((item) => item !== lastSignature)
+      : [];
+    const nextMirror = {
+      ...delta.mirror,
+      threadId: binding.threadId,
+      rolloutPath: thread.rollout_path,
+      lastSignature,
+      pendingMessages,
+      suppressions: nextSuppressions,
+    };
+    if (JSON.stringify(previousMirror ?? null) !== JSON.stringify(nextMirror)) {
+      setOutboundMirror(state, bindingKey, nextMirror);
+      changed = true;
+    }
+  }
+
+  return { delivered, suppressed, changed };
 }
 
 async function checkpointMessage(statePath, state, update) {
@@ -646,18 +1351,49 @@ async function checkpointMessage(statePath, state, update) {
   return { messageKey, alreadyProcessed: false };
 }
 
+async function hydrateBotIdentity(config) {
+  if (config.botUsername) {
+    return;
+  }
+  try {
+    const me = await getMe(config.botToken);
+    if (me?.username) {
+      config.botUsername = String(me.username).replace(/^@+/, "");
+    }
+  } catch (error) {
+    logBridgeEvent("telegram_me_error", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const config = await loadConfig(args.configPath);
   const state = await loadState(config.statePath);
-  let consecutivePollErrors = 0;
+  const effectivePollTimeoutSeconds =
+    config.outboundSyncEnabled === false
+      ? config.pollTimeoutSeconds
+      : Math.min(config.pollTimeoutSeconds, clamp(Math.ceil(config.outboundPollIntervalMs / 1000), 1, 10));
 
+  await hydrateBotIdentity(config);
+
+  if (args.selfCheck) {
+    const report = await buildSelfCheckReport({ config, state });
+    process.stdout.write(`${formatSelfCheckReport(report, config)}\n`);
+    if (!report.ok) {
+      process.exitCode = 1;
+    }
+    return;
+  }
+
+  let consecutivePollErrors = 0;
   while (true) {
     let updates = [];
     try {
       updates = await getUpdates(config.botToken, {
         offset: state.lastUpdateId > 0 ? state.lastUpdateId + 1 : 0,
-        timeoutSeconds: config.pollTimeoutSeconds,
+        timeoutSeconds: effectivePollTimeoutSeconds,
         limit: 50,
       });
       consecutivePollErrors = 0;
@@ -689,7 +1425,16 @@ async function main() {
       }
     }
 
-    if (updates.length === 0) {
+    let syncResult = { changed: false };
+    try {
+      syncResult = await syncOutboundMirrors({ config, state });
+    } catch (error) {
+      logBridgeEvent("outbound_mirror_error", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    if (syncResult.changed) {
       await saveState(config.statePath, state);
     }
 

@@ -4,8 +4,11 @@ Telegram как быстрый remote frontend для локального `Code
 
 Не “ещё один бот”, а аккуратный мост:
 
+- `Telegram folder codex = внешний контейнер / shell`
 - `Telegram group = Codex project`
+- `Telegram topic list inside group = мобильный аналог project thread column`
 - `Telegram topic = Codex thread`
+- несколько direct chats = projectless / global chats
 - `Codex Desktop` остаётся backend и source of truth
 - мост живёт отдельно от `~/.codex`, как нормальный проект
 
@@ -13,18 +16,27 @@ Telegram как быстрый remote frontend для локального `Code
 
 - long polling через Telegram Bot API
 - direct chat и forum topics
-- `/attach`, `/attach-latest`, `/detach`, `/status`, `/sync-project`, `/mode native`
+- `/attach`, `/attach-latest`, `/detach`, `/status`, `/health`, `/project-status`, `/sync-project`, `/mode native`
 - native send через renderer-aware `app-control -> threads.send_message`, с fallback на local `app-server`, если Codex запущен без debug-port
-- immediate receipt в Telegram
+- in-place progress bubble в Telegram: receipt живёт в одном сообщении и обновляется, пока Codex думает
 - reply-style ответы на входящее сообщение
+- HTML rendering layer для `**bold**`, `` `code` ``, lists и `[links](https://...)` с fallback в plain text, если Telegram parse_mode закапризничал
+- короткий human error UX в чат, техподробности в лог
+- шумные ops-команды можно уводить в direct chat с ботом, чтобы не пачкать рабочие topics
+- mention-aware ingress (`@bot текст`) как fallback, если group privacy мешает plain text
+- `sync-project dry-run` и CLI `--self-check` для ops
+- `/project-status` показывает желаемую thread column, active topics, parked sync topics и preview sync-плана
+- `/sync-project` больше не просто плодит темы: он rename/reopen/create/park для sync-managed topics под текущий working set
+- user-side history backfill из `rollout_path` в Telegram topic через `admin/telegram_user_admin.py backfill-thread`
 - retry на временных Telegram fetch errors
 - checkpoint на inbound updates, чтобы после рестарта не дублировать один и тот же turn
+- live outbound mirror: финальные ответы, появившиеся прямо в Codex thread, долетают обратно в привязанный Telegram topic/chat
+- persisted outbound checkpoint и suppression-слой, чтобы live mirror не дублировал ответы, которые bridge уже сам отдал в Telegram
 - user-side Telegram admin helper на Telethon для bootstrap групп, topics и bot-admin прав
 
 ## Чего пока нет
 
-- streaming / commentary updates как в Codex UI
-- markdown-rich rendering layer для Telegram
+- streaming / commentary updates как в Codex UI; сейчас live mirror честно шлёт только human-visible final answers
 - вложения, картинки, voice
 - auto-create topics по watcher-правилам
 - heartbeat transport как отдельный режим
@@ -66,6 +78,14 @@ node /Users/antonnaumov/code/codex-telegram-frontend/bridge.mjs \
   --config /Users/antonnaumov/code/codex-telegram-frontend/config.local.json
 ```
 
+One-shot self-check:
+
+```bash
+node /Users/antonnaumov/code/codex-telegram-frontend/bridge.mjs \
+  --config /Users/antonnaumov/code/codex-telegram-frontend/config.local.json \
+  --self-check
+```
+
 ## launchd
 
 Установка/обновление launchd:
@@ -76,10 +96,20 @@ node /Users/antonnaumov/code/codex-telegram-frontend/bridge.mjs \
 
 ## Telegram модель
 
-- папка `codex` — руками
-- одна group на проект — руками или через admin helper
-- внутри groups включены topics
-- один topic = один активный thread
-- direct chat с ботом = projectless / ops
+- папка `codex` в Telegram — внешний контейнер всего remote frontend
+- одна Telegram group = один Codex project
+- внутри group включены topics, и их список должен ощущаться как колонка thread-ов этого проекта в Codex
+- один topic = один Codex thread
+- в идеале topics копируют рабочий set thread-ов проекта, а не случайный шум и не весь исторический мусор подряд
+- direct chat с ботом — projectless / global / ops surface, но таких чатов должно быть немного
 
 Это и есть правильный v1. Не надо зеркалить весь sidebar подряд, иначе всё быстро превращается в мусорку.
+
+## Ops notes
+
+- token можно брать не только из env, но и из macOS Keychain service `codex-telegram-bridge-bot-token`
+- если `app-control` недоступен, bridge всё равно живёт через fallback `app-server`
+- outbound mirror читает `rollout_path` bound thread-а и по умолчанию опрашивает его часто, поэтому final answers из Codex Desktop появляются в Telegram без ручного backfill
+- если в group topic обычный текст не долетает до бота, quickest fallback это `@cdxanton2026bot текст`; правильный фикс всё равно в privacy mode у бота
+- длинные ops-ответы вроде `/project-status` и `/sync-project` bridge по возможности скидывает в direct chat с ботом, оставляя в topic только короткий след
+- parked sync topics остаются отдельным классом: они не считаются активным working set и не мешают `/attach-latest` или следующему sync preview

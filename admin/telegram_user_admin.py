@@ -6,9 +6,13 @@ import inspect
 import json
 import os
 import getpass
+import sqlite3
+import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib import error as urllib_error
+from urllib import request as urllib_request
 
 import qrcode
 from dotenv import load_dotenv
@@ -23,12 +27,22 @@ DEFAULT_QR_PATH = PROJECT_ROOT / "state" / "login-qr.png"
 DEFAULT_PLAN_PATH = ROOT / "bootstrap-plan.json"
 DEFAULT_RESULT_PATH = PROJECT_ROOT / "state" / "bootstrap-result.json"
 DEFAULT_BRIDGE_STATE_PATH = PROJECT_ROOT / "state" / "state.json"
+DEFAULT_THREADS_DB_PATH = Path(os.environ.get("HOME", "/Users/antonnaumov")) / ".codex" / "state_5.sqlite"
+DEFAULT_BOT_TOKEN_KEYCHAIN_SERVICE = "codex-telegram-bridge-bot-token"
+DEFAULT_MESSAGE_DELAY_MS = 1100
+TELEGRAM_TEXT_LIMIT = 3500
 
 
 @dataclass
 class EnvConfig:
     api_id: int
     api_hash: str
+
+
+class TelegramRetryAfterError(RuntimeError):
+    def __init__(self, retry_after: int, message: str):
+        super().__init__(message)
+        self.retry_after = retry_after
 
 
 def utc_now_iso() -> str:
@@ -59,6 +73,97 @@ def load_json(path: Path, fallback):
     if not path.exists():
         return fallback
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def split_long_paragraph(paragraph: str, limit: int):
+    chunks = []
+    remaining = paragraph
+    while len(remaining) > limit:
+        slice_at = remaining.rfind("\n", 0, limit)
+        if slice_at < int(limit * 0.5):
+            slice_at = remaining.rfind(" ", 0, limit)
+        if slice_at < int(limit * 0.5):
+            slice_at = limit
+        chunks.append(remaining[:slice_at].strip())
+        remaining = remaining[slice_at:].strip()
+    if remaining:
+        chunks.append(remaining)
+    return chunks
+
+
+def split_telegram_text(text: str, limit: int = TELEGRAM_TEXT_LIMIT):
+    normalized = str(text or "").replace("\r\n", "\n").strip()
+    if not normalized:
+        return [""]
+
+    paragraphs = [part.strip() for part in normalized.split("\n\n") if part.strip()]
+    if not paragraphs:
+        return [""]
+
+    chunks = []
+    current = ""
+    for paragraph in paragraphs:
+        parts = split_long_paragraph(paragraph, limit) if len(paragraph) > limit else [paragraph]
+        for part in parts:
+            candidate = f"{current}\n\n{part}" if current else part
+            if len(candidate) <= limit:
+                current = candidate
+            else:
+                if current:
+                    chunks.append(current)
+                current = part
+    if current:
+        chunks.append(current)
+    return chunks
+
+
+def read_keychain_secret(service_name: str):
+    try:
+        result = subprocess.run(
+            ["/usr/bin/security", "find-generic-password", "-s", service_name, "-w"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        secret = result.stdout.strip()
+        return secret or None
+    except Exception:
+        return None
+
+
+def load_bot_token(bot_token_env: str, bot_token_keychain_service: str):
+    token = os.getenv(bot_token_env) or read_keychain_secret(bot_token_keychain_service)
+    if not token:
+        raise SystemExit(
+            f"missing Telegram bot token; set {bot_token_env} or Keychain item {bot_token_keychain_service}"
+        )
+    return token
+
+
+def call_bot_api(token: str, method: str, payload: dict):
+    body = json.dumps(payload).encode("utf-8")
+    req = urllib_request.Request(
+        f"https://api.telegram.org/bot{token}/{method}",
+        data=body,
+        headers={"content-type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib_request.urlopen(req) as response:
+            result = json.loads(response.read().decode("utf-8"))
+    except urllib_error.HTTPError as exc:
+        body = exc.read().decode("utf-8", "replace")
+        try:
+            parsed = json.loads(body) if body else {}
+        except Exception:
+            parsed = {}
+        retry_after = parsed.get("parameters", {}).get("retry_after")
+        if exc.code == 429 and retry_after:
+            raise TelegramRetryAfterError(int(retry_after), parsed.get("description") or body or str(exc)) from exc
+        raise RuntimeError(f"telegram {method} failed: {body or exc}") from exc
+    if not result.get("ok"):
+        raise RuntimeError(f"telegram {method} failed: {result.get('description') or result}")
+    return result.get("result")
 
 
 def make_client(session_path: Path, env: EnvConfig) -> TelegramClient:
@@ -305,6 +410,172 @@ def upsert_binding(bindings: dict, chat_id: str, topic_id: int, title: str, thre
     }
 
 
+def lookup_rollout_path(threads_db: Path, thread_id: str):
+    conn = sqlite3.connect(threads_db)
+    try:
+        row = conn.execute("select rollout_path from threads where id = ?", (thread_id,)).fetchone()
+        return row[0] if row else None
+    finally:
+        conn.close()
+
+
+def extract_text_parts(content):
+    parts = []
+    for item in content or []:
+        if not isinstance(item, dict):
+            continue
+        text = item.get("text")
+        if isinstance(text, str):
+            parts.append(text)
+    return "\n".join(parts).strip()
+
+
+def cleanup_user_text(text: str):
+    normalized = str(text or "").strip()
+    if not normalized:
+        return None
+    if normalized.startswith("# AGENTS.md instructions"):
+        return None
+    if normalized.startswith("<turn_aborted>"):
+        return None
+
+    if normalized.startswith("<heartbeat>"):
+        start = normalized.find("<instructions>")
+        end = normalized.find("</instructions>")
+        if start != -1 and end != -1 and end > start:
+            instructions = normalized[start + len("<instructions>"):end].strip()
+            if instructions:
+                return f"[heartbeat]\n{instructions}"
+        return None
+
+    files_header = "# Files mentioned by the user:"
+    if normalized.startswith(files_header):
+        request_marker = "## My request for Codex:"
+        files = []
+        for line in normalized.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("## ") and stripped.endswith(":") and stripped != request_marker:
+                files.append(stripped.removeprefix("## ").removesuffix(":").strip())
+        request = normalized.split(request_marker, 1)[1].strip() if request_marker in normalized else normalized
+        cleaned_lines = []
+        image_count = 0
+        for line in request.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("<image ") or stripped == "</image>":
+                if stripped.startswith("<image "):
+                    image_count += 1
+                continue
+            cleaned_lines.append(line)
+        body = "\n".join(cleaned_lines).strip()
+        prefix = []
+        if files:
+            prefix.append("[files]\n" + "\n".join(f"- {name}" for name in files))
+        if image_count:
+            prefix.append(f"[attached images omitted: {image_count}]")
+        if body:
+            prefix.append(body)
+        return "\n\n".join(part for part in prefix if part).strip() or None
+
+    return normalized
+
+
+def load_thread_history(rollout_path: Path, stop_after_user_text: str | None = None):
+    messages = []
+    stop_text = str(stop_after_user_text or "").strip() or None
+    for line in rollout_path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        obj = json.loads(line)
+        if obj.get("type") != "response_item":
+            continue
+        payload = obj.get("payload", {})
+        if payload.get("type") != "message":
+            continue
+        role = payload.get("role")
+        if role not in {"user", "assistant"}:
+            continue
+        raw_text = extract_text_parts(payload.get("content", []))
+        if not raw_text:
+            continue
+        if role == "user":
+            text = cleanup_user_text(raw_text)
+        else:
+            text = raw_text.strip()
+        if not text:
+            continue
+        messages.append(
+            {
+                "role": role,
+                "phase": payload.get("phase"),
+                "text": text,
+            }
+        )
+        if stop_text and role == "user" and text.strip() == stop_text:
+            break
+    return messages
+
+
+async def topic_message_count(client: TelegramClient, chat_id: int, topic_id: int, limit: int = 500):
+    entity = await client.get_entity(chat_id)
+    count = 0
+    async for message in client.iter_messages(entity, limit=limit, reply_to=topic_id):
+        if getattr(message, "action", None) is not None:
+            continue
+        count += 1
+    return count
+
+
+async def send_user_chunks(client: TelegramClient, chat_id: int, topic_id: int, text: str):
+    entity = await client.get_entity(chat_id)
+    sent = 0
+    for chunk in split_telegram_text(text):
+        await client.send_message(entity, chunk, reply_to=topic_id, link_preview=False)
+        sent += 1
+    return sent
+
+
+def send_bot_chunks(bot_token: str, chat_id: int, topic_id: int, text: str):
+    sent = 0
+    for chunk in split_telegram_text(text):
+        call_bot_api(
+            bot_token,
+            "sendMessage",
+            {
+                "chat_id": chat_id,
+                "message_thread_id": topic_id,
+                "text": chunk,
+                "disable_web_page_preview": True,
+            },
+        )
+        sent += 1
+    return sent
+
+
+def format_labeled_history_text(item: dict):
+    label = "Anton" if item.get("role") == "user" else "Codex"
+    return f"{label}:\n{item.get('text', '').strip()}".strip()
+
+
+def build_history_transmissions(messages, sender_mode: str):
+    transmissions = []
+    for item in messages:
+        if sender_mode == "labeled-bot":
+            base_text = format_labeled_history_text(item)
+            sender = "bot"
+        else:
+            base_text = item["text"]
+            sender = "user" if item["role"] == "user" else "bot"
+        for chunk in split_telegram_text(base_text):
+            transmissions.append(
+                {
+                    "sender": sender,
+                    "text": chunk,
+                    "role": item["role"],
+                }
+            )
+    return transmissions
+
+
 async def command_bootstrap(args):
     env = load_env(args.env_file)
     plan = load_json(args.plan, {"projects": []})
@@ -367,6 +638,78 @@ async def command_bootstrap(args):
     print(json.dumps(summary, ensure_ascii=False, indent=2))
 
 
+async def command_backfill_thread(args):
+    env = load_env(args.env_file)
+    client = make_client(args.session, env)
+    bot_token = load_bot_token(args.bot_token_env, args.bot_token_keychain_service)
+    rollout_path = args.rollout_path
+    if rollout_path is None:
+        resolved = lookup_rollout_path(args.threads_db, args.thread_id)
+        if not resolved:
+            raise SystemExit(f"thread not found in threads DB: {args.thread_id}")
+        rollout_path = Path(resolved)
+    if not rollout_path.exists():
+        raise SystemExit(f"rollout path not found: {rollout_path}")
+
+    messages = load_thread_history(rollout_path, stop_after_user_text=args.stop_after_user_text)
+    if not messages:
+        raise SystemExit(f"no clean history messages found in {rollout_path}")
+
+    await client.connect()
+    try:
+        if not await client.is_user_authorized():
+            raise SystemExit("Session is not authorized. Run login-qr first.")
+        transmissions = build_history_transmissions(messages, args.sender_mode)
+        existing_count = await topic_message_count(client, args.chat_id, args.topic_id, limit=len(transmissions) + 50)
+        start_index = min(existing_count, len(transmissions)) if not args.force else 0
+        if existing_count > len(transmissions) and not args.force:
+            raise SystemExit(
+                f"topic already has {existing_count} visible message(s), which is more than planned transmissions {len(transmissions)}"
+            )
+
+        sent_messages = start_index
+        user_messages = sum(1 for item in messages if item["role"] == "user")
+        assistant_messages = sum(1 for item in messages if item["role"] == "assistant")
+        entity = await client.get_entity(args.chat_id)
+
+        for transmission in transmissions[start_index:]:
+            if transmission["sender"] == "user":
+                await client.send_message(entity, transmission["text"], reply_to=args.topic_id, link_preview=False)
+            else:
+                while True:
+                    try:
+                        send_bot_chunks(bot_token, args.chat_id, args.topic_id, transmission["text"])
+                        break
+                    except TelegramRetryAfterError as error:
+                        await asyncio.sleep(error.retry_after + 1)
+            sent_messages += 1
+            if args.message_delay_ms > 0:
+                await asyncio.sleep(args.message_delay_ms / 1000)
+    finally:
+        await client.disconnect()
+
+    print(
+        json.dumps(
+            {
+                "status": "ok",
+                "threadId": args.thread_id,
+                "chatId": args.chat_id,
+                "topicId": args.topic_id,
+                "rolloutPath": str(rollout_path),
+                "historyMessages": len(messages),
+                "transmissions": len(transmissions),
+                "resumedFrom": start_index,
+                "userMessages": user_messages,
+                "assistantMessages": assistant_messages,
+                "telegramMessagesSent": sent_messages,
+                "senderMode": args.sender_mode,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
+
 def build_parser():
     parser = argparse.ArgumentParser(description="User-side Telegram admin helper for Codex bridge.")
     parser.add_argument("--env-file", type=Path, default=DEFAULT_ENV_PATH)
@@ -392,6 +735,20 @@ def build_parser():
     bootstrap.add_argument("--bridge-state", type=Path, default=DEFAULT_BRIDGE_STATE_PATH)
     bootstrap.add_argument("--bot-username", default="cdxanton2026bot")
     bootstrap.set_defaults(handler=command_bootstrap)
+
+    backfill = subparsers.add_parser("backfill-thread")
+    backfill.add_argument("--thread-id", required=True)
+    backfill.add_argument("--chat-id", type=int, required=True)
+    backfill.add_argument("--topic-id", type=int, required=True)
+    backfill.add_argument("--threads-db", type=Path, default=DEFAULT_THREADS_DB_PATH)
+    backfill.add_argument("--rollout-path", type=Path, default=None)
+    backfill.add_argument("--bot-token-env", default="CODEX_TELEGRAM_BOT_TOKEN")
+    backfill.add_argument("--bot-token-keychain-service", default=DEFAULT_BOT_TOKEN_KEYCHAIN_SERVICE)
+    backfill.add_argument("--message-delay-ms", type=int, default=DEFAULT_MESSAGE_DELAY_MS)
+    backfill.add_argument("--stop-after-user-text", default=None)
+    backfill.add_argument("--sender-mode", choices=["labeled-bot", "mixed"], default="labeled-bot")
+    backfill.add_argument("--force", action="store_true")
+    backfill.set_defaults(handler=command_backfill_thread)
 
     return parser
 

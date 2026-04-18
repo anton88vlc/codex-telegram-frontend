@@ -34,6 +34,17 @@
       ]
     },
     {
+      "projectRoot": "/Users/antonnaumov/code/codex-telegram-frontend",
+      "groupTitle": "Codex - codex-telegram-frontend",
+      "about": "Remote frontend for the codex-telegram-frontend Codex project.",
+      "topics": [
+        {
+          "title": "Изучи контекст репозитория",
+          "threadId": "019da196-14ae-78d0-a7b1-5b493dd26b4c"
+        }
+      ]
+    },
+    {
       "projectRoot": "/Users/antonnaumov/.codex",
       "groupTitle": "Codex - .codex",
       "about": "Remote frontend for the .codex workspace.",
