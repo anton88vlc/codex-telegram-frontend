@@ -21,6 +21,21 @@ This project is a frontend, not a standalone Codex runtime.
 - If the debug port is unavailable, the bridge can use local `app-server` fallback, but that is a degraded path: useful for emergency sends, weaker for UI-aware mirroring, progress and diagnostics.
 - If `Codex.app` is closed or crashed, Telegram can still receive bot/admin commands, but real Codex turns cannot complete normally until the app is open again.
 
+## Supported Environment
+
+Current v1 target: a local macOS machine running Codex Desktop.
+
+The onboarding wizard is not Anton-machine-only, but it is not cross-platform magic either. On another Mac it should work after local setup. On Linux or Windows it is not supported yet because the runtime assumes Codex Desktop for macOS, `launchd`, macOS Keychain as an optional token source and a local Codex DB.
+
+Required local inputs:
+
+- installed `Codex.app`
+- local Codex state DB, normally `~/.codex/state_5.sqlite`
+- Telegram bot token from BotFather
+- Telegram `API_ID` and `API_HASH` for the user-side admin helper
+- one authorized Telegram user session for creating folders, groups and topics
+- Node.js and Python dependencies from this repo
+
 ## What Works
 
 - Telegram Bot API long polling

@@ -14,6 +14,8 @@ The intended model:
 
 The Telegram bridge does not replace Codex Desktop. It gives Telegram a clean remote surface for the local Codex app.
 
+Current v1 is macOS-first. It can run on another properly prepared Mac; it is not expected to run on Linux or Windows yet.
+
 For live work and onboarding smoke tests, `Codex.app` should be open. The best path is launching it with:
 
 ```bash
@@ -21,6 +23,19 @@ For live work and onboarding smoke tests, `Codex.app` should be open. The best p
 ```
 
 That exposes `app-control` on `http://127.0.0.1:9222`. If it is unavailable, the bridge can fall back to the local app-server, but fallback is weaker and should be treated as degraded mode, not the normal product experience.
+
+## Preflight Checklist
+
+Before running the wizard on a fresh machine, make sure these exist:
+
+- `Codex.app` is installed and has been opened at least once.
+- The local Codex DB exists, usually `~/.codex/state_5.sqlite`.
+- `config.local.json` exists and points at the right local paths if defaults do not fit.
+- The Telegram bot token is available through env, config or macOS Keychain.
+- `admin/.env` contains Telegram `API_ID` and `API_HASH`.
+- The user-side Telegram session has been authorized once with `login-qr` or `login-phone`.
+
+The wizard has a checklist, but it cannot create BotFather tokens, Telegram API credentials or a Codex Desktop installation for the user. Those remain manual setup.
 
 ## What The User Must Do
 

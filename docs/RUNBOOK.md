@@ -20,6 +20,18 @@ The bridge is only the Telegram frontend. `Codex.app` remains the engine and sou
 
 Keep `Codex.app` open for real work. Prefer `app-control` on `http://127.0.0.1:9222`; the app-server fallback is allowed for resilience, but it is degraded and should not be sold as the primary path.
 
+## Install Assumptions
+
+The current ops path assumes macOS:
+
+- `Codex.app` is the local engine.
+- Codex project/thread data comes from the local `~/.codex/state_5.sqlite` DB unless config overrides it.
+- `launchd` is used for the daemon.
+- macOS Keychain can hold the bot token, though env/config also work.
+- Telethon uses a local user session file to create Telegram folders, groups and topics.
+
+If any of those are missing, run `npm run self-check` first and fix the reported local prerequisite before debugging Telegram UX.
+
 Useful launchd overrides:
 
 ```bash
