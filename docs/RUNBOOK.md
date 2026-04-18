@@ -148,6 +148,19 @@ npm run onboard:rehearsal -- \
 
 Rehearsal writes `admin/bootstrap-plan.rehearsal.json` by default, uses `Codex Lab - ` group titles and folder `codex-lab`, displays topics as tabs, and keeps the working set intentionally small.
 
+Clean rebuild preview for the selected rehearsal topics:
+
+```bash
+npm run onboard:wizard:rehearsal -- \
+  --project /path/to/codex-project \
+  --write \
+  --apply \
+  --cleanup-dry-run \
+  --backfill-dry-run
+```
+
+`--cleanup` is the real delete switch. It runs the same preview first, then deletes visible topic messages except protected root/status messages.
+
 Create or reuse Telegram groups/topics and write bridge bindings:
 
 ```bash
@@ -227,6 +240,7 @@ Notes:
 
 - cleanup protects topic root and pinned status bar automatically
 - add `--keep-message-id` for extra protected messages
+- add `--all-visible` only for a deliberate clean rebuild; it targets every visible text message not protected by state/keep ids
 - defaults target service actions and explicit ops/smoke noise, not real working history; deleting the useful conversation is not a cleanup strategy
 
 ## UX Notes

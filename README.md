@@ -183,6 +183,8 @@ npm run onboard:wizard:rehearsal -- \
 Optional side-effect flags:
 
 - `--apply` creates/reuses Telegram groups/topics and writes bindings.
+- `--cleanup-dry-run` previews a clean rebuild by listing visible topic messages that would be removed.
+- `--cleanup` deletes those visible topic messages after running the preview first; use it only when you are intentionally rebuilding a topic.
 - `--backfill-dry-run` previews clean history import.
 - `--backfill` sends clean history import.
 - `--smoke` sends a Telegram smoke prompt and waits for the expected answer.

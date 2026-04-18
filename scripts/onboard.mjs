@@ -54,6 +54,9 @@ function parseArgs(argv) {
     yes: false,
     noInput: false,
     apply: false,
+    cleanupDryRun: false,
+    cleanup: false,
+    cleanupScanLimit: 500,
     backfill: false,
     backfillDryRun: false,
     smoke: false,
@@ -133,6 +136,15 @@ function parseArgs(argv) {
       case "--apply":
         args.apply = true;
         break;
+      case "--cleanup-dry-run":
+        args.cleanupDryRun = true;
+        break;
+      case "--cleanup":
+        args.cleanup = true;
+        break;
+      case "--cleanup-scan-limit":
+        args.cleanupScanLimit = parsePositiveInt(rest[++index], args.cleanupScanLimit);
+        break;
       case "--backfill":
         args.backfill = true;
         break;
@@ -196,12 +208,13 @@ function renderHelp() {
     "  node scripts/onboard.mjs scan [--project-limit 8] [--threads-per-project 3] [--json]",
     "  node scripts/onboard.mjs plan --project /path/to/repo [--project /path/to/other] [--threads-per-project 3] [--group-prefix 'Codex - '] [--folder-title codex] [--topic-display tabs|list] [--write]",
     "  node scripts/onboard.mjs plan --rehearsal --project /path/to/repo [--write]",
-    "  node scripts/onboard.mjs wizard [--rehearsal] [--write] [--apply] [--backfill-dry-run|--backfill] [--smoke]",
+    "  node scripts/onboard.mjs wizard [--rehearsal] [--write] [--apply] [--cleanup-dry-run|--cleanup] [--backfill-dry-run|--backfill] [--smoke]",
     "",
     "Notes:",
     "  scan is read-only and shows candidate Codex projects/threads.",
     "  plan is a preview by default; add --write to update admin/bootstrap-plan.json.",
     "  wizard is interactive by default and keeps Telegram side effects behind explicit confirmation or flags.",
+    "  --cleanup-dry-run previews a clean rebuild for bootstrapped topics; --cleanup deletes visible topic messages except protected root/status ids.",
     "  --rehearsal writes admin/bootstrap-plan.rehearsal.json by default and uses codex-lab/Codex Lab naming.",
     "  bootstrap/apply is still handled by admin/telegram_user_admin.py bootstrap.",
   ].join("\n");
@@ -400,6 +413,32 @@ async function runBackfillForSummary(args, python, bootstrapSummary, { dryRun = 
       }
       if (dryRun) {
         commandArgs.push("--dry-run");
+      }
+      results.push(await runJsonCommand(python, commandArgs, { timeoutMs: 240_000 }));
+    }
+  }
+  return results;
+}
+
+async function runCleanupForSummary(args, python, bootstrapSummary, { dryRun = true } = {}) {
+  const results = [];
+  for (const group of bootstrapSummary?.groups ?? []) {
+    for (const topic of group.topics ?? []) {
+      const commandArgs = [
+        ...adminBaseArgs(args),
+        "cleanup-topic",
+        "--chat-id",
+        String(group.botApiChatId),
+        "--topic-id",
+        String(topic.topicId),
+        "--bridge-state",
+        args.bridgeStatePath,
+        "--scan-limit",
+        String(args.cleanupScanLimit),
+        "--all-visible",
+      ];
+      if (!dryRun) {
+        commandArgs.push("--delete");
       }
       results.push(await runJsonCommand(python, commandArgs, { timeoutMs: 240_000 }));
     }
@@ -630,6 +669,40 @@ async function commandWizard(args) {
     let bootstrapSummary = null;
     if (await shouldRunStep(args, rl, args.apply, "Run Telegram bootstrap now?")) {
       bootstrapSummary = await runBootstrap(args, python);
+    }
+
+    let cleanupPreviewRan = false;
+    const shouldCleanupDryRun = await shouldRunStep(
+      args,
+      rl,
+      args.cleanupDryRun || args.cleanup,
+      "Run clean rebuild cleanup dry-run now?",
+    );
+    if (shouldCleanupDryRun) {
+      if (!bootstrapSummary) {
+        process.stdout.write("Skipping cleanup dry-run: bootstrap was not run in this wizard session.\n");
+      } else {
+        await runCleanupForSummary(args, python, bootstrapSummary, { dryRun: true });
+        cleanupPreviewRan = true;
+      }
+    }
+
+    const shouldCleanup = await shouldRunStep(
+      args,
+      rl,
+      args.cleanup,
+      "Delete visible topic messages for clean rebuild now?",
+    );
+    if (shouldCleanup) {
+      if (!bootstrapSummary) {
+        process.stdout.write("Skipping cleanup: bootstrap was not run in this wizard session.\n");
+      } else {
+        if (!cleanupPreviewRan) {
+          process.stdout.write("Running cleanup dry-run first because deleting Telegram messages deserves one last look.\n");
+          await runCleanupForSummary(args, python, bootstrapSummary, { dryRun: true });
+        }
+        await runCleanupForSummary(args, python, bootstrapSummary, { dryRun: false });
+      }
     }
 
     const shouldBackfillDryRun = await shouldRunStep(

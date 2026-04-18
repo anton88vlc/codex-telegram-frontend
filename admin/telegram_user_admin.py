@@ -916,7 +916,7 @@ def preview_text(text: str, limit: int = 180) -> str:
     return normalized[: limit - 1] + "…"
 
 
-def cleanup_candidate_reason(message, prefixes, contains, keep_message_ids):
+def cleanup_candidate_reason(message, prefixes, contains, keep_message_ids, all_visible: bool = False):
     if message.id in keep_message_ids:
         return None
     if getattr(message, "action", None) is not None:
@@ -925,6 +925,8 @@ def cleanup_candidate_reason(message, prefixes, contains, keep_message_ids):
     text = str(message.message or "").strip()
     if not text:
         return None
+    if all_visible:
+        return "all-visible"
     for prefix in prefixes:
         if text.startswith(prefix):
             return f"prefix:{prefix}"
@@ -943,11 +945,12 @@ async def collect_topic_cleanup_candidates(
     prefixes,
     contains,
     keep_message_ids,
+    all_visible: bool = False,
 ):
     entity = await client.get_entity(chat_id)
     candidates = []
     async for message in client.iter_messages(entity, limit=scan_limit, reply_to=topic_id):
-        reason = cleanup_candidate_reason(message, prefixes, contains, keep_message_ids)
+        reason = cleanup_candidate_reason(message, prefixes, contains, keep_message_ids, all_visible=all_visible)
         if not reason:
             continue
         candidates.append(
@@ -1275,6 +1278,7 @@ async def command_cleanup_topic(args):
             prefixes=prefixes,
             contains=contains,
             keep_message_ids=keep_message_ids,
+            all_visible=args.all_visible,
         )
         deleted = 0
         if args.delete and candidates:
@@ -1289,6 +1293,7 @@ async def command_cleanup_topic(args):
                 "chatId": args.chat_id,
                 "topicId": args.topic_id,
                 "scanLimit": args.scan_limit,
+                "allVisible": args.all_visible,
                 "candidateCount": len(candidates),
                 "deletedCount": deleted,
                 "keepMessageIds": sorted(keep_message_ids),
@@ -1473,6 +1478,7 @@ def build_parser():
     cleanup.add_argument("--contains", action="append", default=None)
     cleanup.add_argument("--keep-message-id", action="append", type=int, default=None)
     cleanup.add_argument("--no-keep-live-state", dest="keep_live_state", action="store_false")
+    cleanup.add_argument("--all-visible", action="store_true")
     cleanup.add_argument("--delete", action="store_true")
     cleanup.set_defaults(handler=command_cleanup_topic, keep_live_state=True)
 

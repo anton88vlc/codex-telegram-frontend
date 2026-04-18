@@ -86,6 +86,8 @@ npm run onboard:wizard:rehearsal -- \
 Side-effect flags are intentionally explicit. Creating Telegram groups is fine; doing it by accident is not.
 
 - `--apply` creates/reuses Telegram groups/topics and writes bridge bindings.
+- `--cleanup-dry-run` previews a clean rebuild by listing visible topic messages that would be removed.
+- `--cleanup` deletes visible topic messages after running the preview first. This is sharp; use it for intentional rebuilds, not casual tidying.
 - `--backfill-dry-run` previews clean history import.
 - `--backfill` sends clean history import.
 - `--smoke` sends a Telegram smoke prompt and waits for the expected answer.
@@ -146,6 +148,19 @@ npm run onboard:rehearsal -- \
 
 Rehearsal defaults are intentionally small: 2 projects, 2 threads per project, last 20 clean history messages, group prefix `Codex Lab - `, folder `codex-lab`, output `admin/bootstrap-plan.rehearsal.json`.
 Use rehearsal before deleting or rebuilding the real `codex` surface. Future you will appreciate this small act of mercy.
+
+Clean rebuild path:
+
+```bash
+npm run onboard:wizard:rehearsal -- \
+  --project /path/to/codex-project \
+  --write \
+  --apply \
+  --cleanup-dry-run \
+  --backfill-dry-run
+```
+
+If the preview is sane, replace `--cleanup-dry-run` with `--cleanup` and `--backfill-dry-run` with `--backfill`. Do not skip rehearsal unless you enjoy archaeology.
 
 ## Step 3: Create Telegram Surface
 

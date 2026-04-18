@@ -76,6 +76,7 @@ test("onboard CLI supports top-level help", () => {
   assert.equal(result.status, 0);
   assert.match(result.stdout, /wizard/);
   assert.match(result.stdout, /--rehearsal/);
+  assert.match(result.stdout, /--cleanup-dry-run/);
 });
 
 test("onboard wizard can write a non-interactive rehearsal plan", () => {
