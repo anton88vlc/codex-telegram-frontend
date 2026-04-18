@@ -10,6 +10,7 @@ import { promisify } from "node:util";
 import { sendNativeTurn } from "./lib/codex-native.mjs";
 import { readRecentBridgeEvents, summarizeBridgeEvents } from "./lib/bridge-events.mjs";
 import { normalizeInboundPrompt, normalizeText, parseCommand } from "./lib/message-routing.mjs";
+import { appendTransportNotice, renderNativeSendError } from "./lib/native-ux.mjs";
 import {
   appendOutboundProgressItem,
   formatOutboundProgressMirrorText,
@@ -231,17 +232,6 @@ function buildTargetFromMessage(message) {
 
 function isTelegramServiceMessage(message) {
   return TELEGRAM_SERVICE_MESSAGE_KEYS.some((key) => key in (message || {}));
-}
-
-function renderNativeSendError(error) {
-  const raw = error instanceof Error ? error.message : String(error);
-  if (/timed out|timeout/i.test(raw)) {
-    return "Codex is taking too long. The bridge is alive, but this request is better retried later.";
-  }
-  if (/fetch failed|econnrefused|websocket closed|no page targets found|couldn't connect/i.test(raw)) {
-    return "I cannot reach Codex right now. The bridge is alive, but the transport stumbled; try again in a few seconds.";
-  }
-  return "I could not deliver this message to Codex. Short version: it was not sent; details are in the log.";
 }
 
 function formatThreadBullet(thread) {
@@ -629,6 +619,11 @@ async function renderHealth(config, state, message, bindingKey, binding) {
     }
     if (binding.lastTransportPath) {
       lines.push(`last transport path: \`${binding.lastTransportPath}\``);
+    }
+    if (binding.lastTransportErrorAt) {
+      lines.push(
+        `last transport error: \`${binding.lastTransportErrorKind || "send_failed"}\` at \`${binding.lastTransportErrorAt}\``,
+      );
     }
   } else {
     lines.push("binding: none");
@@ -1352,6 +1347,8 @@ async function handlePlainText({ config, state, message, bindingKey, binding }) 
     });
     binding.updatedAt = new Date().toISOString();
     binding.lastTransportPath = result.transportPath || null;
+    delete binding.lastTransportErrorAt;
+    delete binding.lastTransportErrorKind;
     logBridgeEvent("native_send_success", {
       threadId: binding.threadId,
       bindingKey,
@@ -1362,9 +1359,10 @@ async function handlePlainText({ config, state, message, bindingKey, binding }) 
     state.bindings[bindingKey] = binding;
     await progressBubble.stop();
     const replyText = normalizeText(result?.reply?.text) || "(empty reply)";
+    const deliveredReplyText = appendTransportNotice(replyText, result);
     const sent = receiptMessageId
-      ? await editThenSendRichTextChunks(config.botToken, target, receiptMessageId, replyText)
-      : await reply(config.botToken, message, replyText);
+      ? await editThenSendRichTextChunks(config.botToken, target, receiptMessageId, deliveredReplyText)
+      : await reply(config.botToken, message, deliveredReplyText);
     rememberOutbound(binding, sent);
     rememberOutboundMirrorSuppression(state, bindingKey, replyText, {
       role: "assistant",
@@ -1374,10 +1372,14 @@ async function handlePlainText({ config, state, message, bindingKey, binding }) 
     await progressBubble.stop();
     delete binding.currentTurn;
     binding.updatedAt = new Date().toISOString();
+    binding.lastTransportErrorAt = new Date().toISOString();
+    binding.lastTransportErrorKind = normalizeText(error?.kind) || "send_failed";
     state.bindings[bindingKey] = binding;
     logBridgeEvent("native_send_error", {
       threadId: binding.threadId,
       bindingKey,
+      kind: binding.lastTransportErrorKind,
+      attempts: Array.isArray(error?.attempts) ? error.attempts : undefined,
       error: error instanceof Error ? error.message : String(error),
     });
     const errorText = renderNativeSendError(error);

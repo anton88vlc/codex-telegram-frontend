@@ -100,6 +100,8 @@ Do this in order. Random poking makes the bridge look haunted when it is usually
 
 If `self-check` says `app-control: fetch failed`, but `app-server: reachable`, that is not fatal.
 It means the bridge is using fallback transport and some UI-aware behavior may be weaker.
+Successful fallback replies include a short transport note in Telegram, so the user knows the request did not use the happy path.
+If both paths fail, Telegram shows a short recovery hint: open `Codex.app`, preferably with `--remote-debugging-port=9222`, then retry.
 
 ## UX Smoke
 
