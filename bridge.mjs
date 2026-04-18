@@ -373,6 +373,10 @@ function isFinalAssistantMirrorMessage(message) {
   return message?.role === "assistant" && (normalizeText(message?.phase) || "final_answer") === "final_answer";
 }
 
+function isCommentaryAssistantMirrorMessage(message) {
+  return message?.role === "assistant" && normalizeText(message?.phase) === "commentary";
+}
+
 function formatOutboundAssistantMirrorText(message) {
   const text = normalizeText(message?.text);
   if (!text || message?.role !== "assistant") {
@@ -386,6 +390,60 @@ function formatOutboundAssistantMirrorText(message) {
     .split("\n")
     .map((line) => (line.trim() ? `> ${line}` : ">"))
     .join("\n");
+}
+
+function compactProgressMirrorText(text, { limit = 1200 } = {}) {
+  const normalized = normalizeText(text).replace(/\r\n/g, "\n");
+  if (normalized.length <= limit) {
+    return normalized;
+  }
+  return `${normalized.slice(0, limit - 1).trimEnd()}…`;
+}
+
+function formatOutboundProgressMirrorText(message) {
+  const text = compactProgressMirrorText(message?.text);
+  if (!text) {
+    return "";
+  }
+  return `**Progress**\n${text}`;
+}
+
+async function upsertOutboundProgressMessage({ config, binding, target, replyToMessageId, message }) {
+  const text = formatOutboundProgressMirrorText(message);
+  if (!text) {
+    return [];
+  }
+  const messageId = binding.currentTurn?.codexProgressMessageId;
+  if (Number.isInteger(messageId)) {
+    const edited = await editThenSendRichTextChunks(config.botToken, target, messageId, text);
+    return edited.length ? edited : [{ message_id: messageId }];
+  }
+  const sent = await sendRichTextChunks(config.botToken, target, text, replyToMessageId);
+  const progressMessageId = sent[0]?.message_id;
+  if (Number.isInteger(progressMessageId)) {
+    binding.currentTurn = {
+      source: "codex",
+      startedAt: message.timestamp || binding.currentTurn?.startedAt || new Date().toISOString(),
+      promptPreview: binding.currentTurn?.promptPreview || "Codex progress",
+      ...(binding.currentTurn || {}),
+      codexProgressMessageId: progressMessageId,
+    };
+  }
+  return sent;
+}
+
+async function completeOutboundProgressMessage({ config, binding, target }) {
+  const messageId = binding.currentTurn?.codexProgressMessageId;
+  if (!Number.isInteger(messageId)) {
+    return [];
+  }
+  const edited = await editThenSendRichTextChunks(
+    config.botToken,
+    target,
+    messageId,
+    "**Progress**\nГотово, финальный ответ ниже.",
+  );
+  return edited.length ? edited : [{ message_id: messageId }];
 }
 
 function makePromptPreview(text) {
@@ -1399,10 +1457,24 @@ async function syncOutboundMirrors({ config, state }) {
           messageThreadId: binding.messageThreadId ?? null,
         };
         const isFinalAssistant = isFinalAssistantMirrorMessage(message);
-        const sent =
-          message.role === "user"
-            ? await sendRichTextChunks(config.botToken, target, formatOutboundUserMirrorText(message.text, config))
-            : await sendRichTextChunks(config.botToken, target, formatOutboundAssistantMirrorText(message), replyTargetMessageId);
+        const isCommentaryAssistant = isCommentaryAssistantMirrorMessage(message);
+        let sent = [];
+        if (message.role === "user") {
+          sent = await sendRichTextChunks(config.botToken, target, formatOutboundUserMirrorText(message.text, config));
+        } else if (isCommentaryAssistant) {
+          sent = await upsertOutboundProgressMessage({
+            config,
+            binding,
+            target,
+            replyToMessageId: replyTargetMessageId,
+            message,
+          });
+        } else {
+          sent = await sendRichTextChunks(config.botToken, target, formatOutboundAssistantMirrorText(message), replyTargetMessageId);
+          if (isFinalAssistant) {
+            await completeOutboundProgressMessage({ config, binding, target });
+          }
+        }
         rememberOutbound(binding, sent);
         binding.updatedAt = new Date().toISOString();
         binding.lastMirroredAt = message.timestamp || binding.updatedAt;

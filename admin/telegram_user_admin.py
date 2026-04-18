@@ -6,6 +6,7 @@ import inspect
 import json
 import os
 import getpass
+import re
 import sqlite3
 import subprocess
 from dataclasses import dataclass
@@ -39,6 +40,12 @@ DEFAULT_CLEANUP_SCAN_LIMIT = 300
 TELEGRAM_TEXT_LIMIT = 3500
 TELEGRAM_HTML_TEXT_LIMIT = 3500
 DEFAULT_BACKFILL_ASSISTANT_PHASES = ("final_answer",)
+CODEX_APP_DIRECTIVE_LINE = re.compile(r"^::[a-z][\w-]*\{.*\}\s*$", re.IGNORECASE)
+MEMORY_CITATION_BLOCK_PATTERN = re.compile(r"<oai-mem-citation>[\s\S]*?(?:</oai-mem-citation>|$)", re.IGNORECASE)
+MEMORY_CITATION_CHILD_BLOCK_PATTERN = re.compile(
+    r"<(?:citation_entries|rollout_ids)>[\s\S]*?</(?:citation_entries|rollout_ids)>",
+    re.IGNORECASE,
+)
 DEFAULT_HISTORY_USER_NOISE_PREFIXES = (
     "Reply with exactly this text",
     "Тест",
@@ -728,6 +735,21 @@ def cleanup_user_text(text: str, include_heartbeats: bool = False):
     return normalized
 
 
+def cleanup_assistant_text(text: str):
+    normalized = str(text or "").replace("\r\n", "\n").strip()
+    if not normalized:
+        return None
+    without_internal_blocks = MEMORY_CITATION_BLOCK_PATTERN.sub("", normalized)
+    without_internal_blocks = MEMORY_CITATION_CHILD_BLOCK_PATTERN.sub("", without_internal_blocks)
+    cleaned = "\n".join(
+        line
+        for line in without_internal_blocks.split("\n")
+        if not CODEX_APP_DIRECTIVE_LINE.match(line.strip())
+    )
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
+    return cleaned or None
+
+
 def is_history_noise(role: str, text: str) -> bool:
     prefixes = (
         DEFAULT_HISTORY_USER_NOISE_PREFIXES
@@ -794,7 +816,7 @@ def load_thread_history(
             else:
                 if payload.get("phase") not in allowed_assistant_phases:
                     continue
-                text = raw_text.strip()
+                text = cleanup_assistant_text(raw_text)
             if not text:
                 continue
             if is_history_noise(role, text):

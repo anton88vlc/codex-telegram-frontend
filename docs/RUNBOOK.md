@@ -154,7 +154,7 @@ Notes:
 - `labeled-bot` is safer for imports: messages are sent as `Anton:` / `Codex:` by the bot and do not loop back as fresh user turns.
 - default `--render-mode html` uses the same Telegram renderer as live bridge messages; `--render-mode plain` is only a debugging fallback.
 - default backfill imports only clean tail: user prompts plus assistant `final_answer`
-- commentary, heartbeat/system-like entries and smoke noise are skipped by default
+- commentary, heartbeat/system-like entries, Codex app directives and memory citations are skipped by default
 - topic root, pinned status bar and recent live mirror ids from `state/state.json` are protected
 - Telegram `retry_after` is respected, so a partial 429 can usually be resumed by rerunning the command
 
@@ -198,7 +198,7 @@ Notes:
 
 - user-facing replies render through Telegram HTML parse mode with plain-text fallback
 - progress bubble is an honest in-place status update, not true Codex token streaming yet
-- outbound mirror sends human-visible `commentary` and `final_answer`, not raw event streams
+- outbound mirror sends user surrogate plus final answers; human-visible `commentary` is folded into one editable progress message per turn
 - Codex Desktop-originated turns first create a bot-side surrogate user message, then assistant replies attach to it
 - status bar is one pinned message per active topic and edits only on change
 - transport/raw exceptions stay in logs; users get short human messages

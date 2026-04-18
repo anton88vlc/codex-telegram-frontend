@@ -34,7 +34,7 @@ Telegram как быстрый remote frontend для локального `Code
 - bootstrap умеет создавать/обновлять Telegram folder `codex` и складывать туда проектные группы
 - retry на временных Telegram fetch errors
 - checkpoint на inbound updates, чтобы после рестарта не дублировать один и тот же turn
-- live outbound mirror: user-turn surrogate, commentary updates и final answers из Codex Desktop долетают обратно в привязанный Telegram topic/chat
+- live outbound mirror: user-turn surrogate и final answers из Codex Desktop долетают обратно в привязанный Telegram topic/chat; commentary схлопывается в один редактируемый progress message
 - для Codex-originated turn bridge сначала зеркалит безопасный user-turn surrogate (`User via Codex Desktop`, имя задаётся в config), а уже assistant messages приходят reply на него
 - pinned compact status bar в active topics: bridge резервирует сообщение, пинит его и редактирует при изменении model/reasoning/context/rate-limit/activity данных
 - persisted outbound checkpoint и suppression-слой, чтобы live mirror не дублировал ответы, которые bridge уже сам отдал в Telegram
@@ -42,7 +42,7 @@ Telegram как быстрый remote frontend для локального `Code
 
 ## Чего пока нет
 
-- настоящий token streaming из Codex UI; сейчас live mirror шлёт human-visible chat messages, включая commentary и final answers
+- настоящий token streaming из Codex UI; сейчас live mirror шлёт human-visible chat messages, а commentary держит как один редактируемый progress message
 - вложения, картинки, voice
 - auto-create topics по watcher-правилам
 - heartbeat transport как отдельный режим

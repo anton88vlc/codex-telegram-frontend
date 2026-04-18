@@ -127,7 +127,7 @@ admin/.venv/bin/python admin/telegram_user_admin.py backfill-thread \
 
 Then run without `--dry-run`.
 
-Defaults intentionally skip commentary, heartbeat/system-like entries and smoke noise. If a future user wants more, make it configurable, not default.
+Defaults intentionally skip commentary, heartbeat/system-like entries, Codex app directives, memory citations and smoke noise. If a future user wants more, make it configurable, not default.
 Backfill renders through the same Telegram HTML renderer as the live bridge by default (`--render-mode html`), so imported history should not show raw `**bold**`/markdown syntax.
 Use `--render-mode plain` only for debugging parser issues.
 
@@ -151,7 +151,7 @@ Expected UX:
 - active topics have a pinned compact status bar
 - user prompts from Codex Desktop appear as bot-side surrogate messages
 - assistant replies attach to the surrogate user message
-- Telegram-originated prompts get a progress bubble and final reply
+- Telegram-originated prompts get one editable progress bubble and a final reply
 - `/project-status` and `/sync-project dry-run` do not flood working topics with ops walls
 
 ## Recommended Defaults
