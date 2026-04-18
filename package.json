@@ -14,7 +14,9 @@
     "check:launchd": "sh -n ops/install-launchd.sh && ./ops/install-launchd.sh --dry-run > /tmp/codex-telegram-bridge.plist && plutil -lint /tmp/codex-telegram-bridge.plist",
     "onboard:scan": "node scripts/onboard.mjs scan",
     "onboard:plan": "node scripts/onboard.mjs plan",
-    "onboard:rehearsal": "node scripts/onboard.mjs plan --rehearsal"
+    "onboard:rehearsal": "node scripts/onboard.mjs plan --rehearsal",
+    "onboard:wizard": "node scripts/onboard.mjs wizard",
+    "onboard:wizard:rehearsal": "node scripts/onboard.mjs wizard --rehearsal"
   },
   "engines": {
     "node": ">=20.0.0",

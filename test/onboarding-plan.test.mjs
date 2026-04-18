@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -72,5 +74,66 @@ test("onboard CLI supports top-level help", () => {
   });
 
   assert.equal(result.status, 0);
+  assert.match(result.stdout, /wizard/);
   assert.match(result.stdout, /--rehearsal/);
+});
+
+test("onboard wizard can write a non-interactive rehearsal plan", () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codex-onboard-"));
+  const dbPath = path.join(tmpDir, "state.sqlite");
+  const outputPath = path.join(tmpDir, "bootstrap-plan.rehearsal.json");
+  const sql = `
+    create table threads (
+      id text,
+      title text,
+      cwd text,
+      archived integer,
+      updated_at integer,
+      updated_at_ms integer,
+      source text,
+      rollout_path text,
+      model_provider text,
+      model text,
+      reasoning_effort text,
+      tokens_used integer,
+      agent_nickname text,
+      agent_role text
+    );
+    insert into threads values ('t1', 'Setup thread', '/tmp/project-a', 0, 20, 20000, 'local', '/tmp/rollout-a.jsonl', '', 'gpt-5.4', 'high', 10, '', '');
+    insert into threads values ('t2', 'Second thread', '/tmp/project-a', 0, 10, 10000, 'local', '/tmp/rollout-b.jsonl', '', 'gpt-5.4', 'high', 10, '', '');
+  `;
+  const sqlite = spawnSync("sqlite3", [dbPath, sql], {
+    cwd: PROJECT_ROOT,
+    encoding: "utf8",
+  });
+  assert.equal(sqlite.status, 0, sqlite.stderr);
+
+  const result = spawnSync(
+    process.execPath,
+    [
+      "scripts/onboard.mjs",
+      "wizard",
+      "--rehearsal",
+      "--no-input",
+      "--write",
+      "--threads-db",
+      dbPath,
+      "--output",
+      outputPath,
+    ],
+    {
+      cwd: PROJECT_ROOT,
+      encoding: "utf8",
+    },
+  );
+
+  assert.equal(result.status, 0, result.stderr);
+  const plan = JSON.parse(fs.readFileSync(outputPath, "utf8"));
+  assert.equal(plan.onboarding.rehearsal, true);
+  assert.equal(plan.onboarding.folderTitle, "codex-lab");
+  assert.equal(plan.projects[0].groupTitle, "Codex Lab - project-a");
+  assert.deepEqual(
+    plan.projects[0].topics.map((topic) => topic.threadId),
+    ["t1", "t2"],
+  );
 });

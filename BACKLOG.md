@@ -13,7 +13,7 @@
 1. True streaming/commentary transport instead of timer-based progress bubbles.
 2. Cleaner split between ops/admin quiet path and working replies, possibly with a dedicated ops topic or configurable routing.
 3. Richer rendering: blockquotes, tables, cleaner local file links.
-4. Onboarding wizard on top of `scripts/onboard.mjs`: interactive project/thread selection, BotFather/token checklist, bootstrap, clean history backfill and smoke in one guided flow.
+4. Onboarding wizard polish: safer clean rebuild flow, restore/reuse existing Telegram surfaces, clearer BotFather/token guidance and nicer selectors.
 
 ## P2 - Transport And Observability
 

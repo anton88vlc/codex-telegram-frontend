@@ -166,11 +166,19 @@ def normalize_bot_username(value) -> str:
 
 def resolve_bot_username(args) -> str:
     bridge_config = load_json(DEFAULT_CONFIG_PATH, {})
-    return normalize_bot_username(
+    configured = normalize_bot_username(
         args.bot_username
         or os.getenv("CODEX_TELEGRAM_BOT_USERNAME")
         or bridge_config.get("botUsername")
     )
+    if configured:
+        return configured
+    try:
+        token = load_bot_token("CODEX_TELEGRAM_BOT_TOKEN", DEFAULT_BOT_TOKEN_KEYCHAIN_SERVICE)
+        profile = call_bot_api(token, "getMe", {})
+        return normalize_bot_username(profile.get("username"))
+    except Exception:
+        return ""
 
 
 def resolve_folder_title(args, plan) -> str:
@@ -1325,6 +1333,83 @@ async def command_pin_message(args):
     )
 
 
+async def command_send_topic_message(args):
+    env = load_env(args.env_file)
+    client = make_client(args.session, env)
+    await client.connect()
+    try:
+        if not await client.is_user_authorized():
+            raise SystemExit("Session is not authorized. Run login-qr first.")
+        entity = await client.get_entity(args.chat_id)
+        message = await client.send_message(
+            entity,
+            args.text,
+            reply_to=args.topic_id,
+            link_preview=False,
+        )
+    finally:
+        await client.disconnect()
+
+    print(
+        json.dumps(
+            {
+                "status": "ok",
+                "chatId": args.chat_id,
+                "topicId": args.topic_id,
+                "messageId": message.id,
+                "text": args.text,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
+
+async def command_wait_topic_text(args):
+    env = load_env(args.env_file)
+    client = make_client(args.session, env)
+    deadline = asyncio.get_running_loop().time() + max(1, args.timeout_seconds)
+    match = None
+    await client.connect()
+    try:
+        if not await client.is_user_authorized():
+            raise SystemExit("Session is not authorized. Run login-qr first.")
+        entity = await client.get_entity(args.chat_id)
+        while asyncio.get_running_loop().time() <= deadline:
+            async for message in client.iter_messages(entity, limit=args.scan_limit, reply_to=args.topic_id):
+                if args.after_message_id and message.id <= args.after_message_id:
+                    continue
+                text = message.message or ""
+                if args.contains in text:
+                    match = {
+                        "messageId": message.id,
+                        "textPreview": preview_text(text),
+                    }
+                    break
+            if match:
+                break
+            await asyncio.sleep(args.poll_interval_seconds)
+    finally:
+        await client.disconnect()
+
+    if not match:
+        raise SystemExit(f"timed out waiting for topic text containing: {args.contains}")
+
+    print(
+        json.dumps(
+            {
+                "status": "ok",
+                "chatId": args.chat_id,
+                "topicId": args.topic_id,
+                "contains": args.contains,
+                "match": match,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
+
 def build_parser():
     parser = argparse.ArgumentParser(description="User-side Telegram admin helper for Codex bridge.")
     parser.add_argument("--env-file", type=Path, default=DEFAULT_ENV_PATH)
@@ -1396,6 +1481,22 @@ def build_parser():
     pin_message.add_argument("--message-id", type=int, required=True)
     pin_message.add_argument("--silent", action="store_true")
     pin_message.set_defaults(handler=command_pin_message)
+
+    send_topic_message = subparsers.add_parser("send-topic-message")
+    send_topic_message.add_argument("--chat-id", type=int, required=True)
+    send_topic_message.add_argument("--topic-id", type=int, required=True)
+    send_topic_message.add_argument("--text", required=True)
+    send_topic_message.set_defaults(handler=command_send_topic_message)
+
+    wait_topic_text = subparsers.add_parser("wait-topic-text")
+    wait_topic_text.add_argument("--chat-id", type=int, required=True)
+    wait_topic_text.add_argument("--topic-id", type=int, required=True)
+    wait_topic_text.add_argument("--contains", required=True)
+    wait_topic_text.add_argument("--timeout-seconds", type=int, default=90)
+    wait_topic_text.add_argument("--poll-interval-seconds", type=int, default=3)
+    wait_topic_text.add_argument("--scan-limit", type=int, default=30)
+    wait_topic_text.add_argument("--after-message-id", type=int, default=None)
+    wait_topic_text.set_defaults(handler=command_wait_topic_text)
 
     return parser
 

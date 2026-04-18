@@ -86,6 +86,18 @@ It means the bridge is using fallback transport and some UI-aware behavior may b
 
 ## Bootstrap / Telegram Admin
 
+Preferred guided flow:
+
+```bash
+npm run onboard:wizard
+```
+
+Disposable rehearsal:
+
+```bash
+npm run onboard:wizard:rehearsal
+```
+
 Generate plan preview from the local Codex DB:
 
 ```bash

@@ -33,6 +33,39 @@ admin/.venv/bin/python admin/telegram_user_admin.py login-qr
 
 BotFather does not provide a proper public API for fully automated bot creation. Do not pretend this can be scripted cleanly. Everything after that should be as automated as possible.
 
+## Recommended Guided Flow
+
+Interactive:
+
+```bash
+npm run onboard:wizard
+```
+
+Disposable rehearsal:
+
+```bash
+npm run onboard:wizard:rehearsal
+```
+
+Non-interactive rehearsal plan write:
+
+```bash
+npm run onboard:wizard:rehearsal -- \
+  --project /path/to/codex-project \
+  --write \
+  --no-input
+```
+
+Side-effect flags are intentionally explicit:
+
+- `--apply` creates/reuses Telegram groups/topics and writes bridge bindings.
+- `--backfill-dry-run` previews clean history import.
+- `--backfill` sends clean history import.
+- `--smoke` sends a Telegram smoke prompt and waits for the expected answer.
+- `--smoke-timeout-seconds 240` controls how long the wizard waits for a mirrored smoke answer.
+
+The lower-level steps below are still useful for debugging or automation.
+
 ## Step 1: Scan Codex Projects
 
 Read-only preview from the local Codex DB:

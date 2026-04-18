@@ -25,7 +25,8 @@ This is not "one more bot". The intended shape is a clean bridge:
 - noisy ops commands can be routed to direct chat with the bot to keep work topics clean
 - mention-aware ingress (`@bot your request`) when group privacy blocks plain text
 - `sync-project dry-run` and CLI `--self-check`
-- npm scripts for running, self-checks, tests and onboarding preview
+- npm scripts for running, self-checks, tests and guided onboarding
+- onboarding wizard with interactive project/thread selection, checklist, plan write, optional bootstrap, clean backfill dry-run/send and Telegram smoke
 - `/project-status` shows desired thread column, active topics, parked sync topics and sync preview
 - `/sync-project` can rename/reopen/create/park sync-managed topics for the current working set
 - user-side history backfill from `rollout_path` into Telegram topics via `admin/telegram_user_admin.py backfill-thread`; defaults to user prompts plus assistant `final_answer`, with a bounded clean history tail
@@ -54,7 +55,7 @@ This is not "one more bot". The intended shape is a clean bridge:
 - [lib/codex-native.mjs](lib/codex-native.mjs) - native Codex send wrapper
 - [scripts/send_via_app_control.js](scripts/send_via_app_control.js) - renderer-aware send through Codex app-control
 - [scripts/send_via_app_server.js](scripts/send_via_app_server.js) - fallback transport through local Codex app-server
-- [scripts/onboard.mjs](scripts/onboard.mjs) - onboarding scan/plan generator from the local Codex DB
+- [scripts/onboard.mjs](scripts/onboard.mjs) - onboarding scan/plan/wizard generator from the local Codex DB
 - [admin/telegram_user_admin.py](admin/telegram_user_admin.py) - user-side bootstrap/admin helper for Telegram groups and topics
 - [docs/ONBOARDING.md](docs/ONBOARDING.md) - recommended setup flow for a new user
 - [docs/RUNBOOK.md](docs/RUNBOOK.md) - ops runbook
@@ -127,7 +128,38 @@ Install or refresh the launchd agent:
 
 That is the right v1. Mirroring the whole sidebar blindly turns the product into a landfill with push notifications.
 
-## Onboarding Preview
+## Onboarding Wizard
+
+Interactive guided flow:
+
+```bash
+npm run onboard:wizard
+```
+
+Disposable rehearsal surface:
+
+```bash
+npm run onboard:wizard:rehearsal
+```
+
+Non-interactive rehearsal plan write:
+
+```bash
+npm run onboard:wizard:rehearsal -- \
+  --project /path/to/codex-project \
+  --write \
+  --no-input
+```
+
+Optional side-effect flags:
+
+- `--apply` creates/reuses Telegram groups/topics and writes bindings.
+- `--backfill-dry-run` previews clean history import.
+- `--backfill` sends clean history import.
+- `--smoke` sends a Telegram smoke prompt and waits for the expected answer.
+- `--smoke-timeout-seconds 240` controls how long the wizard waits for a mirrored smoke answer.
+
+## Onboarding Preview Commands
 
 Inspect projects and recent threads from the local Codex DB:
 
