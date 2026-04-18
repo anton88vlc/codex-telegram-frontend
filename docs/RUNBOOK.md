@@ -182,7 +182,7 @@ Bot username is read from `config.local.json -> botUsername`, `CODEX_TELEGRAM_BO
 
 ## Telegram Ops Commands
 
-- `/health` - quick health for the current chat/topic: binding, project mapping, transport endpoints
+- `/health` - quick health for the current chat/topic: binding, project mapping, transport endpoints, delivery clues and recent failures
 - `/settings` or `/config` - safe read-only runtime settings; sent to direct chat from topics
 - `/project-status [count]` - desired thread column, active topics, parked sync topics and sync preview
 - `/sync-project [count] dry-run` - safe preview before rename/reopen/create/park

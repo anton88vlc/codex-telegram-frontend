@@ -31,6 +31,7 @@ Use this for things that should survive restarts and should not be changed from 
 | `nativeDebugBaseUrl` | `http://127.0.0.1:9222` | Preferred Codex Desktop app-control endpoint. |
 | `appServerUrl` | `ws://127.0.0.1:27890` | Degraded fallback endpoint. Useful, not the happy path. |
 | `statePath` | `state/state.json` | Bridge runtime state file. |
+| `bridgeLogPath` | `logs/bridge.stderr.log` | Bridge event log used by `/health` for recent failures and delivery counters. |
 | `nativeHelperPath` | `scripts/send_via_app_control.js` | app-control helper path. |
 | `nativeFallbackHelperPath` | `scripts/send_via_app_server.js` | app-server fallback helper path. |
 | `projectIndexPath` | `state/bootstrap-result.json` | Project/group/topic index produced by bootstrap. |

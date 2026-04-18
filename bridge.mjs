@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import { sendNativeTurn } from "./lib/codex-native.mjs";
+import { readRecentBridgeEvents, summarizeBridgeEvents } from "./lib/bridge-events.mjs";
 import { normalizeInboundPrompt, normalizeText, parseCommand } from "./lib/message-routing.mjs";
 import {
   appendOutboundProgressItem,
@@ -73,6 +74,7 @@ const DEFAULT_STATE_PATH = path.join(PROJECT_ROOT, "state", "state.json");
 const DEFAULT_NATIVE_HELPER_PATH = path.join(PROJECT_ROOT, "scripts", "send_via_app_control.js");
 const DEFAULT_NATIVE_FALLBACK_HELPER_PATH = path.join(PROJECT_ROOT, "scripts", "send_via_app_server.js");
 const DEFAULT_PROJECT_INDEX_PATH = path.join(PROJECT_ROOT, "state", "bootstrap-result.json");
+const DEFAULT_BRIDGE_LOG_PATH = path.join(PROJECT_ROOT, "logs", "bridge.stderr.log");
 const DEFAULT_THREADS_DB_PATH = path.join(os.homedir(), ".codex", "state_5.sqlite");
 const DEFAULT_NATIVE_DEBUG_BASE_URL = process.env.CODEX_REMOTE_DEBUG_URL || "http://127.0.0.1:9222";
 const DEFAULT_APP_SERVER_URL = process.env.CODEX_APP_SERVER_URL || "ws://127.0.0.1:27890";
@@ -188,6 +190,7 @@ async function loadConfig(configPath) {
     nativeHelperPath: fromFile?.nativeHelperPath || DEFAULT_NATIVE_HELPER_PATH,
     nativeFallbackHelperPath: fromFile?.nativeFallbackHelperPath || DEFAULT_NATIVE_FALLBACK_HELPER_PATH,
     projectIndexPath: fromFile?.projectIndexPath || DEFAULT_PROJECT_INDEX_PATH,
+    bridgeLogPath: fromFile?.bridgeLogPath || DEFAULT_BRIDGE_LOG_PATH,
     threadsDbPath: fromFile?.threadsDbPath || DEFAULT_THREADS_DB_PATH,
     syncDefaultLimit: Number.isFinite(fromFile?.syncDefaultLimit) ? fromFile.syncDefaultLimit : 3,
   };
@@ -466,7 +469,7 @@ function isMissingStatusBarMessageError(error) {
 }
 
 function logBridgeEvent(type, payload = {}) {
-  process.stderr.write(`${JSON.stringify({ ts: new Date().toISOString(), type, ...payload }, null, 2)}\n`);
+  process.stderr.write(`${JSON.stringify({ ts: new Date().toISOString(), type, ...payload })}\n`);
 }
 
 function renderHelp(config) {
@@ -583,6 +586,13 @@ async function renderBindingStatus(config, bindingKey, binding) {
 }
 
 async function renderHealth(config, state, message, bindingKey, binding) {
+  const recentEvents = await readRecentBridgeEvents(config.bridgeLogPath).catch((error) => [
+    {
+      type: "health_event_log_error",
+      error: error instanceof Error ? error.message : String(error),
+    },
+  ]);
+  const eventSummary = summarizeBridgeEvents(recentEvents);
   const lines = [
     "**Bridge health**",
     `bot: ${config.botUsername ? `\`@${config.botUsername}\`` : "unknown username"}`,
@@ -593,6 +603,8 @@ async function renderHealth(config, state, message, bindingKey, binding) {
     `app server: \`${config.appServerUrl}\``,
     `outbound mirror: ${config.outboundSyncEnabled === false ? "off" : `on (${config.outboundPollIntervalMs}ms poll)`}`,
     `status bar: ${config.statusBarEnabled === false ? "off" : "on"}`,
+    `event log: \`${config.bridgeLogPath}\` (${eventSummary.total} sampled)`,
+    `delivery: app-control ${eventSummary.appControlSends}, app-server fallback ${eventSummary.appServerFallbackSends}, native errors ${eventSummary.nativeSendErrors}, ops dm fallbacks ${eventSummary.opsDmFallbacks}`,
   ];
 
   if (binding) {
@@ -603,8 +615,20 @@ async function renderHealth(config, state, message, bindingKey, binding) {
     if (binding.lastMirroredAt) {
       lines.push(`last mirrored: \`${binding.lastMirroredAt}\` (${binding.lastMirroredPhase || "assistant"})`);
     }
+    if (binding.lastInboundMessageId != null) {
+      lines.push(`last inbound message: \`${binding.lastInboundMessageId}\``);
+    }
+    if (Array.isArray(binding.lastOutboundMessageIds) && binding.lastOutboundMessageIds.length) {
+      lines.push(`last outbound messages: \`${binding.lastOutboundMessageIds.join(", ")}\``);
+    }
     if (binding.statusBarMessageId) {
       lines.push(`status bar message: \`${binding.statusBarMessageId}\``);
+    }
+    if (binding.statusBarUpdatedAt) {
+      lines.push(`status bar updated: \`${binding.statusBarUpdatedAt}\``);
+    }
+    if (binding.lastTransportPath) {
+      lines.push(`last transport path: \`${binding.lastTransportPath}\``);
     }
   } else {
     lines.push("binding: none");
@@ -643,6 +667,18 @@ async function renderHealth(config, state, message, bindingKey, binding) {
         ? `hint: if plain text in the topic does not reach the bot, check bot privacy mode or write @${config.botUsername} your request`
         : "hint: if plain text in the topic does not reach the bot, check bot privacy mode",
     );
+  }
+
+  if (eventSummary.recentFailures.length) {
+    lines.push("recent failures:");
+    for (const event of eventSummary.recentFailures) {
+      const at = event.ts ? ` ${event.ts}` : "";
+      const key = event.bindingKey ? ` ${event.bindingKey}` : "";
+      const detail = event.error ? ` - ${String(event.error).replace(/\s+/g, " ").slice(0, 180)}` : "";
+      lines.push(`- ${event.type}${at}${key}${detail}`);
+    }
+  } else {
+    lines.push("recent failures: none in sampled log");
   }
 
   return lines.join("\n");
@@ -942,7 +978,16 @@ async function handleCommand({ config, state, message, bindingKey, binding, pars
       return true;
 
     case "/health":
-      rememberOutbound(binding, await reply(config.botToken, message, await renderHealth(config, state, message, bindingKey, binding)));
+      rememberOutbound(
+        binding,
+        await sendCommandResponse({
+          config,
+          message,
+          text: await renderHealth(config, state, message, bindingKey, binding),
+          quietInTopic: true,
+          topicSummary: "I sent the health report to your direct chat with the bot to keep this topic clean.",
+        }),
+      );
       return true;
 
     case "/settings":
@@ -1307,6 +1352,12 @@ async function handlePlainText({ config, state, message, bindingKey, binding }) 
     });
     binding.updatedAt = new Date().toISOString();
     binding.lastTransportPath = result.transportPath || null;
+    logBridgeEvent("native_send_success", {
+      threadId: binding.threadId,
+      bindingKey,
+      transportPath: binding.lastTransportPath,
+      primaryError: result.primaryError || null,
+    });
     delete binding.currentTurn;
     state.bindings[bindingKey] = binding;
     await progressBubble.stop();

@@ -19,9 +19,8 @@
 
 1. Separate streaming mode on top of app-control if intermediate events can be extracted.
 2. Proper event/audit log instead of manual `bridge.stderr.log` tailing.
-3. Heavier `/health`: delivery clues, fallback counters and recent failures.
-4. Move clean history import defaults into config: how many recent messages/turns to import, which assistant phases to include, whether heartbeat/system-like user entries are included.
-5. Explicit offline/degraded UX for closed or crashed `Codex.app`: short Telegram status, retry clues and clear distinction between preferred `app-control` and fallback app-server.
+3. Move clean history import defaults into config: how many recent messages/turns to import, which assistant phases to include, whether heartbeat/system-like user entries are included.
+4. Explicit offline/degraded UX for closed or crashed `Codex.app`: short Telegram status, retry clues and clear distinction between preferred `app-control` and fallback app-server.
 
 ## P3 - Product Surface
 
@@ -37,3 +36,4 @@
 ## Done
 
 1. Read-only `/settings` and `/config` command for safe non-secret runtime settings; Telegram-side config editing stays intentionally out.
+2. Heavier `/health`: delivery clues, fallback counters and recent failures.

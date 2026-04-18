@@ -51,6 +51,7 @@ Docs should sound like a competent teammate at 2am: direct, practical, and a lit
 - Telegram HTML rendering for `**bold**`, `_italic_` / `*italic*`, quotes, lists, code, spoilers and links, with plain-text fallback
 - short human-facing errors in chat, technical details in logs
 - noisy ops commands can be routed to direct chat with the bot to keep work topics clean
+- `/health` includes delivery clues, recent failures and app-control vs fallback counters
 - mention-aware ingress (`@bot your request`) when group privacy blocks plain text
 - `sync-project dry-run` and CLI `--self-check`
 - npm scripts for running, self-checks, tests and guided onboarding

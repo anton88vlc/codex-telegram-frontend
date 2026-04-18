@@ -29,6 +29,7 @@ test("buildSettingsReport shows safe runtime settings without secrets", () => {
       syncDefaultLimit: 3,
       projectIndexPath: "state/bootstrap-result.json",
       statePath: "state/state.json",
+      bridgeLogPath: "logs/bridge.stderr.log",
       threadsDbPath: "/Users/test/.codex/state_5.sqlite",
     },
     state: {
