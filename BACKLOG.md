@@ -18,6 +18,7 @@
 1. Отдельный streaming mode поверх app-control, если получится забирать промежуточные события.
 2. Нормальный event/audit log вместо ручного tail `bridge.stderr.log`.
 3. Более жирный `/health`: delivery clues, fallback counters и recent failures.
+4. Вынести defaults для clean history import в config: сколько последних сообщений/turns грузить, какие assistant phases импортировать, включать ли heartbeat/system-like user entries.
 
 ## P3 — Product surface
 

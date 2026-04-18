@@ -27,7 +27,8 @@ Telegram как быстрый remote frontend для локального `Code
 - `sync-project dry-run` и CLI `--self-check` для ops
 - `/project-status` показывает желаемую thread column, active topics, parked sync topics и preview sync-плана
 - `/sync-project` больше не просто плодит темы: он rename/reopen/create/park для sync-managed topics под текущий working set
-- user-side history backfill из `rollout_path` в Telegram topic через `admin/telegram_user_admin.py backfill-thread`
+- user-side history backfill из `rollout_path` в Telegram topic через `admin/telegram_user_admin.py backfill-thread`: по умолчанию только user prompts + `final_answer`, без commentary, ограниченный хвост истории
+- safe cleanup для topic-мусора через `admin/telegram_user_admin.py cleanup-topic`: сначала dry-run, удаление только с `--delete`
 - retry на временных Telegram fetch errors
 - checkpoint на inbound updates, чтобы после рестарта не дублировать один и тот же turn
 - live outbound mirror: user-turn surrogate, commentary updates и final answers из Codex Desktop долетают обратно в привязанный Telegram topic/chat
@@ -112,6 +113,7 @@ node /Users/antonnaumov/code/codex-telegram-frontend/bridge.mjs \
 - token можно брать не только из env, но и из macOS Keychain service `codex-telegram-bridge-bot-token`
 - если `app-control` недоступен, bridge всё равно живёт через fallback `app-server`
 - outbound mirror читает `rollout_path` bound thread-а и по умолчанию опрашивает его часто, поэтому user/commentary/final messages из Codex Desktop появляются в Telegram без ручного backfill
+- clean history import не должен заливать весь бесконечный thread: `backfill-thread` по умолчанию берёт последние 40 clean messages и умеет `--max-history-messages`, `--max-user-prompts`, `--assistant-phase final_answer`
 - если в group topic обычный текст не долетает до бота, quickest fallback это `@cdxanton2026bot текст`; правильный фикс всё равно в privacy mode у бота
 - длинные ops-ответы вроде `/project-status` и `/sync-project` bridge по возможности скидывает в direct chat с ботом, оставляя в topic только короткий след
 - parked sync topics остаются отдельным классом: они не считаются активным working set и не мешают `/attach-latest` или следующему sync preview

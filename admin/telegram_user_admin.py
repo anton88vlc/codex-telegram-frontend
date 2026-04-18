@@ -30,7 +30,52 @@ DEFAULT_BRIDGE_STATE_PATH = PROJECT_ROOT / "state" / "state.json"
 DEFAULT_THREADS_DB_PATH = Path(os.environ.get("HOME", "/Users/antonnaumov")) / ".codex" / "state_5.sqlite"
 DEFAULT_BOT_TOKEN_KEYCHAIN_SERVICE = "codex-telegram-bridge-bot-token"
 DEFAULT_MESSAGE_DELAY_MS = 1100
+DEFAULT_BACKFILL_MAX_HISTORY_MESSAGES = 40
+DEFAULT_CLEANUP_SCAN_LIMIT = 300
 TELEGRAM_TEXT_LIMIT = 3500
+DEFAULT_BACKFILL_ASSISTANT_PHASES = ("final_answer",)
+DEFAULT_HISTORY_USER_NOISE_PREFIXES = (
+    "Reply with exactly this text",
+    "Тест",
+)
+DEFAULT_HISTORY_ASSISTANT_NOISE_PREFIXES = (
+    "TG_SYNC_",
+    "TG_TOPIC_",
+    "TG_ATTACH_",
+    "APP_CTRL_",
+    "THREAD_PING_",
+    "На месте.",
+)
+DEFAULT_CLEANUP_TEXT_PREFIXES = (
+    "/",
+    "Текущая привязка",
+    "Bridge health",
+    "Project status:",
+    "Dry-run:",
+    "Sync plan:",
+    "Working set",
+    "Синхронизировал",
+    "Привязал",
+    "Отвязал",
+    "Справку кинул",
+    "Preview `/sync-project`",
+    "OUTBOUND_",
+    "UX_",
+    "TG_SYNC_",
+    "TG_ATTACH_",
+    "Reply with exactly this text",
+    "v1 понимает только текстовые сообщения.",
+    "На месте.",
+    "Тест",
+    "Anton:\nReply with exactly this text",
+    "Anton:\nТест",
+    "Codex:\nTG_SYNC_",
+    "Codex:\nTG_TOPIC_",
+    "Codex:\nTG_ATTACH_",
+    "Codex:\nAPP_CTRL_",
+    "Codex:\nTHREAD_PING_",
+    "Codex:\nНа месте.",
+)
 
 
 @dataclass
@@ -430,7 +475,7 @@ def extract_text_parts(content):
     return "\n".join(parts).strip()
 
 
-def cleanup_user_text(text: str):
+def cleanup_user_text(text: str, include_heartbeats: bool = False):
     normalized = str(text or "").strip()
     if not normalized:
         return None
@@ -440,6 +485,8 @@ def cleanup_user_text(text: str):
         return None
 
     if normalized.startswith("<heartbeat>"):
+        if not include_heartbeats:
+            return None
         start = normalized.find("<instructions>")
         end = normalized.find("</instructions>")
         if start != -1 and end != -1 and end > start:
@@ -479,50 +526,220 @@ def cleanup_user_text(text: str):
     return normalized
 
 
-def load_thread_history(rollout_path: Path, stop_after_user_text: str | None = None):
+def is_history_noise(role: str, text: str) -> bool:
+    prefixes = (
+        DEFAULT_HISTORY_USER_NOISE_PREFIXES
+        if role == "user"
+        else DEFAULT_HISTORY_ASSISTANT_NOISE_PREFIXES
+    )
+    return any(str(text or "").strip().startswith(prefix) for prefix in prefixes)
+
+
+def limit_history_messages(messages, max_history_messages: int | None = DEFAULT_BACKFILL_MAX_HISTORY_MESSAGES, max_user_prompts: int | None = None):
+    limited = list(messages)
+    if max_user_prompts and max_user_prompts > 0:
+        tail = []
+        user_prompts = 0
+        for item in reversed(limited):
+            if item.get("role") == "user":
+                if user_prompts >= max_user_prompts:
+                    break
+                user_prompts += 1
+            tail.append(item)
+        limited = list(reversed(tail))
+
+    if max_history_messages and max_history_messages > 0:
+        limited = limited[-max_history_messages:]
+        for index, item in enumerate(limited):
+            if item.get("role") == "user":
+                limited = limited[index:]
+                break
+    return limited
+
+
+def load_thread_history(
+    rollout_path: Path,
+    stop_after_user_text: str | None = None,
+    assistant_phases=None,
+    include_heartbeats: bool = False,
+    max_history_messages: int | None = DEFAULT_BACKFILL_MAX_HISTORY_MESSAGES,
+    max_user_prompts: int | None = None,
+):
     messages = []
     stop_text = str(stop_after_user_text or "").strip() or None
-    for line in rollout_path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        obj = json.loads(line)
-        if obj.get("type") != "response_item":
-            continue
-        payload = obj.get("payload", {})
-        if payload.get("type") != "message":
-            continue
-        role = payload.get("role")
-        if role not in {"user", "assistant"}:
-            continue
-        raw_text = extract_text_parts(payload.get("content", []))
-        if not raw_text:
-            continue
-        if role == "user":
-            text = cleanup_user_text(raw_text)
-        else:
-            text = raw_text.strip()
-        if not text:
-            continue
-        messages.append(
-            {
-                "role": role,
-                "phase": payload.get("phase"),
-                "text": text,
-            }
-        )
-        if stop_text and role == "user" and text.strip() == stop_text:
-            break
-    return messages
+    allowed_assistant_phases = set(assistant_phases or DEFAULT_BACKFILL_ASSISTANT_PHASES)
+    with rollout_path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            if not line.strip():
+                continue
+            try:
+                obj = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if obj.get("type") != "response_item":
+                continue
+            payload = obj.get("payload", {})
+            if payload.get("type") != "message":
+                continue
+            role = payload.get("role")
+            if role not in {"user", "assistant"}:
+                continue
+            raw_text = extract_text_parts(payload.get("content", []))
+            if not raw_text:
+                continue
+            if role == "user":
+                text = cleanup_user_text(raw_text, include_heartbeats=include_heartbeats)
+            else:
+                if payload.get("phase") not in allowed_assistant_phases:
+                    continue
+                text = raw_text.strip()
+            if not text:
+                continue
+            if is_history_noise(role, text):
+                continue
+            messages.append(
+                {
+                    "role": role,
+                    "phase": payload.get("phase"),
+                    "text": text,
+                }
+            )
+            if stop_text and role == "user" and text.strip() == stop_text:
+                break
+    return limit_history_messages(
+        messages,
+        max_history_messages=max_history_messages,
+        max_user_prompts=max_user_prompts,
+    )
 
 
-async def topic_message_count(client: TelegramClient, chat_id: int, topic_id: int, limit: int = 500):
+async def topic_message_count(client: TelegramClient, chat_id: int, topic_id: int, limit: int = 500, ignore_message_ids=None):
     entity = await client.get_entity(chat_id)
+    ignored = set(ignore_message_ids or [])
     count = 0
     async for message in client.iter_messages(entity, limit=limit, reply_to=topic_id):
+        if message.id in ignored:
+            continue
         if getattr(message, "action", None) is not None:
             continue
         count += 1
     return count
+
+
+def normalize_resume_text(text: str) -> str:
+    return str(text or "").replace("\r\n", "\n").strip()
+
+
+async def topic_visible_texts(client: TelegramClient, chat_id: int, topic_id: int, limit: int = 500, ignore_message_ids=None):
+    entity = await client.get_entity(chat_id)
+    ignored = set(ignore_message_ids or [])
+    texts = []
+    async for message in client.iter_messages(entity, limit=limit, reply_to=topic_id):
+        if message.id in ignored:
+            continue
+        if getattr(message, "action", None) is not None:
+            continue
+        text = normalize_resume_text(message.message or "")
+        if text:
+            texts.append(text)
+    return list(reversed(texts))
+
+
+def find_transmission_resume_index(transmissions, existing_texts):
+    existing = set(normalize_resume_text(text) for text in existing_texts if normalize_resume_text(text))
+    index = 0
+    while index < len(transmissions) and normalize_resume_text(transmissions[index].get("text", "")) in existing:
+        index += 1
+    return index
+
+
+def filter_missing_transmissions(transmissions, existing_texts):
+    existing = set(normalize_resume_text(text) for text in existing_texts if normalize_resume_text(text))
+    return [
+        item
+        for item in transmissions
+        if normalize_resume_text(item.get("text", "")) not in existing
+    ]
+
+
+def binding_key_for_topic(chat_id: int, topic_id: int) -> str:
+    return f"group:{chat_id}:topic:{topic_id}"
+
+
+def load_keep_message_ids_from_bridge_state(bridge_state_path: Path, chat_id: int, topic_id: int):
+    state = load_json(bridge_state_path, {})
+    binding = state.get("bindings", {}).get(binding_key_for_topic(chat_id, topic_id), {})
+    keep_ids = {topic_id}
+    for key in ("statusBarMessageId",):
+        value = binding.get(key)
+        if isinstance(value, int):
+            keep_ids.add(value)
+    return keep_ids
+
+
+def preview_text(text: str, limit: int = 180) -> str:
+    normalized = " ".join(str(text or "").split())
+    if len(normalized) <= limit:
+        return normalized
+    return normalized[: limit - 1] + "…"
+
+
+def cleanup_candidate_reason(message, prefixes, contains, keep_message_ids):
+    if message.id in keep_message_ids:
+        return None
+    if getattr(message, "action", None) is not None:
+        return "service-action"
+
+    text = str(message.message or "").strip()
+    if not text:
+        return None
+    for prefix in prefixes:
+        if text.startswith(prefix):
+            return f"prefix:{prefix}"
+    for needle in contains:
+        if needle and needle in text:
+            return f"contains:{needle}"
+    return None
+
+
+async def collect_topic_cleanup_candidates(
+    client: TelegramClient,
+    chat_id: int,
+    topic_id: int,
+    *,
+    scan_limit: int,
+    prefixes,
+    contains,
+    keep_message_ids,
+):
+    entity = await client.get_entity(chat_id)
+    candidates = []
+    async for message in client.iter_messages(entity, limit=scan_limit, reply_to=topic_id):
+        reason = cleanup_candidate_reason(message, prefixes, contains, keep_message_ids)
+        if not reason:
+            continue
+        candidates.append(
+            {
+                "id": message.id,
+                "date": message.date.isoformat() if message.date else None,
+                "reason": reason,
+                "pinned": bool(getattr(message, "pinned", False)),
+                "textPreview": preview_text(message.message or f"<action {type(message.action).__name__}>"),
+            }
+        )
+    return candidates
+
+
+async def delete_topic_messages(client: TelegramClient, chat_id: int, message_ids):
+    entity = await client.get_entity(chat_id)
+    deleted = 0
+    ids = list(message_ids)
+    for index in range(0, len(ids), 100):
+        chunk = ids[index : index + 100]
+        if chunk:
+            await client.delete_messages(entity, chunk)
+            deleted += len(chunk)
+    return deleted
 
 
 async def send_user_chunks(client: TelegramClient, chat_id: int, topic_id: int, text: str):
@@ -651,7 +868,15 @@ async def command_backfill_thread(args):
     if not rollout_path.exists():
         raise SystemExit(f"rollout path not found: {rollout_path}")
 
-    messages = load_thread_history(rollout_path, stop_after_user_text=args.stop_after_user_text)
+    assistant_phases = args.assistant_phase or list(DEFAULT_BACKFILL_ASSISTANT_PHASES)
+    messages = load_thread_history(
+        rollout_path,
+        stop_after_user_text=args.stop_after_user_text,
+        assistant_phases=assistant_phases,
+        include_heartbeats=args.include_heartbeats,
+        max_history_messages=args.max_history_messages,
+        max_user_prompts=args.max_user_prompts,
+    )
     if not messages:
         raise SystemExit(f"no clean history messages found in {rollout_path}")
 
@@ -660,19 +885,64 @@ async def command_backfill_thread(args):
         if not await client.is_user_authorized():
             raise SystemExit("Session is not authorized. Run login-qr first.")
         transmissions = build_history_transmissions(messages, args.sender_mode)
-        existing_count = await topic_message_count(client, args.chat_id, args.topic_id, limit=len(transmissions) + 50)
-        start_index = min(existing_count, len(transmissions)) if not args.force else 0
-        if existing_count > len(transmissions) and not args.force:
-            raise SystemExit(
-                f"topic already has {existing_count} visible message(s), which is more than planned transmissions {len(transmissions)}"
+        ignored_existing_ids = set(args.ignore_message_id or [])
+        if args.ignore_live_state:
+            ignored_existing_ids.update(
+                load_keep_message_ids_from_bridge_state(args.bridge_state, args.chat_id, args.topic_id)
             )
+        existing_texts = await topic_visible_texts(
+            client,
+            args.chat_id,
+            args.topic_id,
+            limit=len(transmissions) + 100,
+            ignore_message_ids=ignored_existing_ids,
+        )
+        resume_index = 0 if args.force else find_transmission_resume_index(transmissions, existing_texts)
+        pending_transmissions = transmissions if args.force else filter_missing_transmissions(transmissions, existing_texts)
+        skipped_existing = len(transmissions) - len(pending_transmissions)
+        if args.dry_run:
+            print(
+                json.dumps(
+                    {
+                        "status": "dry-run",
+                        "threadId": args.thread_id,
+                        "chatId": args.chat_id,
+                        "topicId": args.topic_id,
+                        "rolloutPath": str(rollout_path),
+                        "historyMessages": len(messages),
+                        "transmissions": len(transmissions),
+                        "transmissionsToSend": len(pending_transmissions),
+                        "existingHistoryMessages": len(existing_texts),
+                        "resumedFrom": resume_index,
+                        "skippedExisting": skipped_existing,
+                        "ignoredExistingMessageIds": sorted(ignored_existing_ids),
+                        "userMessages": sum(1 for item in messages if item["role"] == "user"),
+                        "assistantMessages": sum(1 for item in messages if item["role"] == "assistant"),
+                        "assistantPhases": assistant_phases,
+                        "maxHistoryMessages": args.max_history_messages,
+                        "maxUserPrompts": args.max_user_prompts,
+                        "senderMode": args.sender_mode,
+                        "preview": [
+                            {
+                                "role": item["role"],
+                                "phase": item.get("phase"),
+                                "textPreview": preview_text(item.get("text", "")),
+                            }
+                            for item in messages[: min(8, len(messages))]
+                        ],
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
+            return
 
-        sent_messages = start_index
+        sent_messages = 0
         user_messages = sum(1 for item in messages if item["role"] == "user")
         assistant_messages = sum(1 for item in messages if item["role"] == "assistant")
         entity = await client.get_entity(args.chat_id)
 
-        for transmission in transmissions[start_index:]:
+        for transmission in pending_transmissions:
             if transmission["sender"] == "user":
                 await client.send_message(entity, transmission["text"], reply_to=args.topic_id, link_preview=False)
             else:
@@ -698,11 +968,64 @@ async def command_backfill_thread(args):
                 "rolloutPath": str(rollout_path),
                 "historyMessages": len(messages),
                 "transmissions": len(transmissions),
-                "resumedFrom": start_index,
+                "transmissionsToSend": len(pending_transmissions),
+                "resumedFrom": resume_index,
+                "skippedExisting": skipped_existing,
                 "userMessages": user_messages,
                 "assistantMessages": assistant_messages,
                 "telegramMessagesSent": sent_messages,
                 "senderMode": args.sender_mode,
+                "assistantPhases": assistant_phases,
+                "maxHistoryMessages": args.max_history_messages,
+                "maxUserPrompts": args.max_user_prompts,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
+
+async def command_cleanup_topic(args):
+    env = load_env(args.env_file)
+    client = make_client(args.session, env)
+    keep_message_ids = set(args.keep_message_id or [])
+    if args.keep_live_state:
+        keep_message_ids.update(load_keep_message_ids_from_bridge_state(args.bridge_state, args.chat_id, args.topic_id))
+
+    prefixes = list(DEFAULT_CLEANUP_TEXT_PREFIXES)
+    prefixes.extend(args.prefix or [])
+    contains = list(args.contains or [])
+
+    await client.connect()
+    try:
+        if not await client.is_user_authorized():
+            raise SystemExit("Session is not authorized. Run login-qr first.")
+        candidates = await collect_topic_cleanup_candidates(
+            client,
+            args.chat_id,
+            args.topic_id,
+            scan_limit=args.scan_limit,
+            prefixes=prefixes,
+            contains=contains,
+            keep_message_ids=keep_message_ids,
+        )
+        deleted = 0
+        if args.delete and candidates:
+            deleted = await delete_topic_messages(client, args.chat_id, [item["id"] for item in candidates])
+    finally:
+        await client.disconnect()
+
+    print(
+        json.dumps(
+            {
+                "status": "deleted" if args.delete else "dry-run",
+                "chatId": args.chat_id,
+                "topicId": args.topic_id,
+                "scanLimit": args.scan_limit,
+                "candidateCount": len(candidates),
+                "deletedCount": deleted,
+                "keepMessageIds": sorted(keep_message_ids),
+                "candidates": candidates,
             },
             ensure_ascii=False,
             indent=2,
@@ -742,13 +1065,33 @@ def build_parser():
     backfill.add_argument("--topic-id", type=int, required=True)
     backfill.add_argument("--threads-db", type=Path, default=DEFAULT_THREADS_DB_PATH)
     backfill.add_argument("--rollout-path", type=Path, default=None)
+    backfill.add_argument("--bridge-state", type=Path, default=DEFAULT_BRIDGE_STATE_PATH)
     backfill.add_argument("--bot-token-env", default="CODEX_TELEGRAM_BOT_TOKEN")
     backfill.add_argument("--bot-token-keychain-service", default=DEFAULT_BOT_TOKEN_KEYCHAIN_SERVICE)
     backfill.add_argument("--message-delay-ms", type=int, default=DEFAULT_MESSAGE_DELAY_MS)
     backfill.add_argument("--stop-after-user-text", default=None)
+    backfill.add_argument("--assistant-phase", action="append", default=None)
+    backfill.add_argument("--max-history-messages", type=int, default=DEFAULT_BACKFILL_MAX_HISTORY_MESSAGES)
+    backfill.add_argument("--max-user-prompts", type=int, default=None)
+    backfill.add_argument("--include-heartbeats", action="store_true")
+    backfill.add_argument("--ignore-message-id", action="append", type=int, default=None)
+    backfill.add_argument("--no-ignore-live-state", dest="ignore_live_state", action="store_false")
+    backfill.add_argument("--dry-run", action="store_true")
     backfill.add_argument("--sender-mode", choices=["labeled-bot", "mixed"], default="labeled-bot")
     backfill.add_argument("--force", action="store_true")
-    backfill.set_defaults(handler=command_backfill_thread)
+    backfill.set_defaults(handler=command_backfill_thread, ignore_live_state=True)
+
+    cleanup = subparsers.add_parser("cleanup-topic")
+    cleanup.add_argument("--chat-id", type=int, required=True)
+    cleanup.add_argument("--topic-id", type=int, required=True)
+    cleanup.add_argument("--bridge-state", type=Path, default=DEFAULT_BRIDGE_STATE_PATH)
+    cleanup.add_argument("--scan-limit", type=int, default=DEFAULT_CLEANUP_SCAN_LIMIT)
+    cleanup.add_argument("--prefix", action="append", default=None)
+    cleanup.add_argument("--contains", action="append", default=None)
+    cleanup.add_argument("--keep-message-id", action="append", type=int, default=None)
+    cleanup.add_argument("--no-keep-live-state", dest="keep_live_state", action="store_false")
+    cleanup.add_argument("--delete", action="store_true")
+    cleanup.set_defaults(handler=command_cleanup_topic, keep_live_state=True)
 
     return parser
 
