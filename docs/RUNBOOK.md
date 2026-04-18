@@ -186,6 +186,8 @@ Bot username is read from `config.local.json -> botUsername`, `CODEX_TELEGRAM_BO
 - `/project-status [count]` - desired thread column, active topics, parked sync topics and sync preview
 - `/sync-project [count] dry-run` - safe preview before rename/reopen/create/park
 
+Full config map lives in [CONFIGURATION.md](CONFIGURATION.md). Short version: persistent app config is `config.local.json`/env/Keychain; Telegram commands mostly mutate bindings and topic sync state, not global settings.
+
 ## History Backfill
 
 Preview clean history import:

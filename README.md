@@ -86,6 +86,7 @@ Docs should sound like a competent teammate at 2am: direct, practical, and a lit
 - [scripts/onboard.mjs](scripts/onboard.mjs) - onboarding scan/plan/wizard generator from the local Codex DB
 - [admin/telegram_user_admin.py](admin/telegram_user_admin.py) - user-side bootstrap/admin helper for Telegram groups and topics
 - [AGENTS.md](AGENTS.md) - local notes for future Codex agents working in this repo
+- [docs/CONFIGURATION.md](docs/CONFIGURATION.md) - config keys, secret sources and Telegram command boundaries
 - [docs/ONBOARDING.md](docs/ONBOARDING.md) - recommended setup flow for a new user
 - [docs/RUNBOOK.md](docs/RUNBOOK.md) - ops runbook
 - [BACKLOG.md](BACKLOG.md) - product and UX backlog
