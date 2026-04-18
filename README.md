@@ -20,7 +20,7 @@ Telegram как быстрый remote frontend для локального `Code
 - native send через renderer-aware `app-control -> threads.send_message`, с fallback на local `app-server`, если Codex запущен без debug-port
 - in-place progress bubble в Telegram: receipt живёт в одном сообщении и обновляется, пока Codex думает
 - reply-style ответы на входящее сообщение
-- HTML rendering layer для `**bold**`, `` `code` ``, lists и `[links](https://...)` с fallback в plain text, если Telegram parse_mode закапризничал
+- HTML rendering layer для `**bold**`, `_italic_` / `*italic*`, quotes, lists, code, spoilers и links с fallback в plain text, если Telegram parse_mode закапризничал
 - короткий human error UX в чат, техподробности в лог
 - шумные ops-команды можно уводить в direct chat с ботом, чтобы не пачкать рабочие topics
 - mention-aware ingress (`@bot текст`) как fallback, если group privacy мешает plain text

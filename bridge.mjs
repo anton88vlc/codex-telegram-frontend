@@ -373,6 +373,21 @@ function isFinalAssistantMirrorMessage(message) {
   return message?.role === "assistant" && (normalizeText(message?.phase) || "final_answer") === "final_answer";
 }
 
+function formatOutboundAssistantMirrorText(message) {
+  const text = normalizeText(message?.text);
+  if (!text || message?.role !== "assistant") {
+    return text;
+  }
+  if ((normalizeText(message?.phase) || "final_answer") !== "commentary") {
+    return text;
+  }
+  return text
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((line) => (line.trim() ? `> ${line}` : ">"))
+    .join("\n");
+}
+
 function makePromptPreview(text) {
   const normalized = normalizeText(text).replace(/\s+/g, " ");
   if (normalized.length <= 160) {
@@ -1387,7 +1402,7 @@ async function syncOutboundMirrors({ config, state }) {
         const sent =
           message.role === "user"
             ? await sendTextChunks(config.botToken, target, formatOutboundUserMirrorText(message.text, config))
-            : await sendRichTextChunks(config.botToken, target, message.text, replyTargetMessageId);
+            : await sendRichTextChunks(config.botToken, target, formatOutboundAssistantMirrorText(message), replyTargetMessageId);
         rememberOutbound(binding, sent);
         binding.updatedAt = new Date().toISOString();
         binding.lastMirroredAt = message.timestamp || binding.updatedAt;

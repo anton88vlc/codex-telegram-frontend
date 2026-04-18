@@ -12,9 +12,36 @@ test("renderTelegramChunks formats bold, code and links into HTML", () => {
   assert.equal(chunk.plain, "Жирно и code, плюс ссылка (https://example.com)");
 });
 
+test("renderTelegramChunks formats lists, quotes and extra inline styles", () => {
+  const [chunk] = renderTelegramChunks(`## Итог
+
+- **готово**
+- [x] проверить _курсив_ и *ещё курсив*
+1. ссылка https://example.com/docs.
+
+> Важная цитата с ~~мусором~~ и ||секретом||`);
+
+  assert.match(chunk.html, /<b>Итог<\/b>/);
+  assert.match(chunk.html, /• <b>готово<\/b>/);
+  assert.match(chunk.html, /☑ проверить <i>курсив<\/i> и <i>ещё курсив<\/i>/);
+  assert.match(chunk.html, /<b>1\.<\/b> ссылка <a href="https:\/\/example.com\/docs">https:\/\/example.com\/docs<\/a>\./);
+  assert.match(chunk.html, /<blockquote>Важная цитата с <s>мусором<\/s> и <tg-spoiler>секретом<\/tg-spoiler><\/blockquote>/);
+  assert.equal(
+    chunk.plain,
+    "Итог\n\n• готово\n☑ проверить курсив и ещё курсив\n1. ссылка https://example.com/docs.\n\n> Важная цитата с мусором и секретом",
+  );
+});
+
 test("renderTelegramChunks keeps code fences as pre blocks", () => {
   const [chunk] = renderTelegramChunks("```js\nconst x = 1;\n```");
 
-  assert.match(chunk.html, /<pre>const x = 1;<\/pre>/);
+  assert.match(chunk.html, /<pre><code class="language-js">const x = 1;<\/code><\/pre>/);
   assert.equal(chunk.plain, "const x = 1;");
+});
+
+test("renderTelegramChunks leaves unmatched markdown markers literal", () => {
+  const [chunk] = renderTelegramChunks("snake_case and **open bold and [bad link");
+
+  assert.equal(chunk.html, "snake_case and **open bold and [bad link");
+  assert.equal(chunk.plain, "snake_case and **open bold and [bad link");
 });

@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 
 import {
+  cleanupMirrorAssistantText,
   cleanupMirrorUserText,
   makeOutboundMirrorSignature,
   parseAssistantMirrorChunk,
@@ -73,6 +74,17 @@ test("cleanupMirrorUserText strips file/image wrapper noise", () => {
 </image>`);
 
   assert.equal(cleaned, "[files]\n- image.png\n\n[attached images omitted: 1]\n\nНужен ответ");
+});
+
+test("cleanupMirrorAssistantText strips Codex app directives", () => {
+  const cleaned = cleanupMirrorAssistantText(`Сделано.
+
+::git-stage{cwd="/repo"}
+::git-commit{cwd="/repo"}
+
+Финал.`);
+
+  assert.equal(cleaned, "Сделано.\n\nФинал.");
 });
 
 test("parseThreadMirrorChunk keeps user mirrors and assistant final answers in order", () => {
