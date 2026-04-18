@@ -90,8 +90,36 @@ test("buildStatusBarText stays compact and shows remaining rate limits", () => {
       "gpt-5.4 | xhigh",
       "context: 179k / 258k (69%)",
       "5h: 88% left, reset 23:58 (2h 58m); week: 82% left, reset 18:55 (6d 21h)",
-      "status: pinned, running, mirror on",
+      "status: pinned, running 21:00, mirror on",
     ].join("\n"),
   );
   assert.equal(makeStatusBarHash(text).length, 40);
+});
+
+test("buildStatusBarText shows latest progress activity time", () => {
+  const text = buildStatusBarText({
+    binding: {
+      statusBarMessageId: 123,
+      currentTurn: {
+        startedAt: "2026-04-18T19:00:00.000Z",
+        progressItems: [
+          {
+            text: "Inspecting",
+            timestamp: "2026-04-18T19:07:00.000Z",
+          },
+        ],
+      },
+      lastMirroredAt: "2026-04-18T19:08:00.000Z",
+    },
+    thread: {
+      model: "gpt-5.4",
+      reasoning_effort: "xhigh",
+    },
+    runtime: null,
+    config: {
+      outboundSyncEnabled: true,
+    },
+  });
+
+  assert.match(text, /status: pinned, running 21:07, mirror on/);
 });
