@@ -31,6 +31,7 @@ Telegram как быстрый remote frontend для локального `Code
 - retry на временных Telegram fetch errors
 - checkpoint на inbound updates, чтобы после рестарта не дублировать один и тот же turn
 - live outbound mirror: финальные ответы, появившиеся прямо в Codex thread, долетают обратно в привязанный Telegram topic/chat
+- для Codex-originated turn bridge сначала зеркалит безопасный user-turn surrogate (`Anton via Codex Desktop`), а уже assistant final answer приходит reply на него
 - persisted outbound checkpoint и suppression-слой, чтобы live mirror не дублировал ответы, которые bridge уже сам отдал в Telegram
 - user-side Telegram admin helper на Telethon для bootstrap групп, topics и bot-admin прав
 

@@ -5,8 +5,10 @@ import os from "node:os";
 import path from "node:path";
 
 import {
+  cleanupMirrorUserText,
   makeOutboundMirrorSignature,
   parseAssistantMirrorChunk,
+  parseThreadMirrorChunk,
   readThreadMirrorDelta,
 } from "../lib/thread-rollout.mjs";
 
@@ -40,6 +42,44 @@ test("parseAssistantMirrorChunk keeps only assistant final answers", () => {
   assert.equal(parsed.messages.length, 1);
   assert.equal(parsed.messages[0].phase, "final_answer");
   assert.equal(parsed.messages[0].text, "Финальный ответ");
+});
+
+test("cleanupMirrorUserText strips file/image wrapper noise", () => {
+  const cleaned = cleanupMirrorUserText(`# Files mentioned by the user:
+
+## image.png:
+/tmp/image.png
+
+## My request for Codex:
+Нужен ответ
+<image name=[Image #1]>
+</image>`);
+
+  assert.equal(cleaned, "[files]\n- image.png\n\n[attached images omitted: 1]\n\nНужен ответ");
+});
+
+test("parseThreadMirrorChunk keeps user mirrors and assistant final answers in order", () => {
+  const chunk = [
+    JSON.stringify({
+      type: "response_item",
+      timestamp: "2026-04-18T20:10:00.000Z",
+      payload: {
+        type: "message",
+        role: "user",
+        content: [{ type: "input_text", text: "Привет из Codex Desktop" }],
+      },
+    }),
+    makeAssistantLine({ text: "Финал после user turn", timestamp: "2026-04-18T20:10:05.000Z" }),
+  ].join("\n");
+
+  const parsed = parseThreadMirrorChunk(`${chunk}\n`);
+
+  assert.equal(parsed.messages.length, 2);
+  assert.equal(parsed.messages[0].role, "user");
+  assert.equal(parsed.messages[0].text, "Привет из Codex Desktop");
+  assert.equal(parsed.messages[0].signature, makeOutboundMirrorSignature({ role: "user", text: "Привет из Codex Desktop" }));
+  assert.equal(parsed.messages[1].role, "assistant");
+  assert.equal(parsed.messages[1].text, "Финал после user turn");
 });
 
 test("readThreadMirrorDelta bootstraps to tail and then emits only appended final answers", async () => {

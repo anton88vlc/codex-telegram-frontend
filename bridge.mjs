@@ -302,12 +302,13 @@ function rememberOutbound(binding, sentMessages) {
     .filter((value) => Number.isInteger(value));
 }
 
-function rememberOutboundMirrorSuppression(state, bindingKey, text, { phase = "final_answer" } = {}) {
+function rememberOutboundMirrorSuppression(state, bindingKey, text, { role = "assistant", phase = "final_answer" } = {}) {
   const normalizedText = normalizeText(text);
   if (!normalizedText) {
     return null;
   }
   const signature = makeOutboundMirrorSignature({
+    role,
     phase,
     text: normalizedText,
   });
@@ -329,6 +330,14 @@ function isOutboundMirrorBindingEligible(binding) {
     return false;
   }
   return true;
+}
+
+function formatOutboundUserMirrorText(text) {
+  const normalized = normalizeText(text);
+  if (!normalized) {
+    return "";
+  }
+  return `Anton via Codex Desktop\n\n${normalized}`;
 }
 
 function logBridgeEvent(type, payload = {}) {
@@ -1105,6 +1114,10 @@ async function handlePlainText({ config, state, message, bindingKey, binding }) 
   binding.lastInboundMessageId = message.message_id ?? null;
   binding.updatedAt = new Date().toISOString();
   state.bindings[bindingKey] = binding;
+  rememberOutboundMirrorSuppression(state, bindingKey, prompt, {
+    role: "user",
+    phase: null,
+  });
 
   if (config.sendTyping) {
     await sendTyping(config.botToken, buildTargetFromMessage(message)).catch(() => null);
@@ -1147,7 +1160,10 @@ async function handlePlainText({ config, state, message, bindingKey, binding }) 
       ? await editThenSendRichTextChunks(config.botToken, target, receiptMessageId, replyText)
       : await reply(config.botToken, message, replyText);
     rememberOutbound(binding, sent);
-    rememberOutboundMirrorSuppression(state, bindingKey, replyText);
+    rememberOutboundMirrorSuppression(state, bindingKey, replyText, {
+      role: "assistant",
+      phase: "final_answer",
+    });
   } catch (error) {
     await progressBubble.stop();
     logBridgeEvent("native_send_error", {
@@ -1272,34 +1288,49 @@ async function syncOutboundMirrors({ config, state }) {
     const queuedMessages = [...carryPending, ...delta.messages];
     let pendingMessages = [];
     let lastSignature = normalizeText(delta.mirror.lastSignature) || null;
+    let replyTargetMessageId = Number.isInteger(previousMirror?.replyTargetMessageId)
+      ? previousMirror.replyTargetMessageId
+      : null;
 
     for (let index = 0; index < queuedMessages.length; index += 1) {
       const message = queuedMessages[index];
-      if (!message?.text || !message?.signature) {
+      if (!message?.text || !message?.signature || !message?.role) {
         continue;
       }
 
       if (consumeOutboundSuppression(state, bindingKey, message.signature)) {
         lastSignature = message.signature;
+        if (message.role === "user") {
+          replyTargetMessageId = null;
+        } else if (message.role === "assistant") {
+          replyTargetMessageId = null;
+        }
         suppressed += 1;
         changed = true;
         continue;
       }
 
       try {
-        const sent = await sendRichTextChunks(
-          config.botToken,
-          {
-            chatId: binding.chatId,
-            messageThreadId: binding.messageThreadId ?? null,
-          },
-          message.text,
-        );
+        const target = {
+          chatId: binding.chatId,
+          messageThreadId: binding.messageThreadId ?? null,
+        };
+        const sent =
+          message.role === "user"
+            ? await sendTextChunks(config.botToken, target, formatOutboundUserMirrorText(message.text))
+            : await sendRichTextChunks(config.botToken, target, message.text, replyTargetMessageId);
         rememberOutbound(binding, sent);
         binding.updatedAt = new Date().toISOString();
         binding.lastMirroredAt = message.timestamp || binding.updatedAt;
-        binding.lastMirroredPhase = message.phase;
+        binding.lastMirroredPhase = message.phase || message.role;
+        binding.lastMirroredRole = message.role;
         state.bindings[bindingKey] = binding;
+        if (message.role === "user") {
+          replyTargetMessageId = sent[0]?.message_id ?? replyTargetMessageId;
+          binding.lastMirroredUserMessageId = replyTargetMessageId;
+        } else {
+          replyTargetMessageId = null;
+        }
         lastSignature = message.signature;
         delivered += 1;
         changed = true;
@@ -1325,6 +1356,7 @@ async function syncOutboundMirrors({ config, state }) {
       rolloutPath: thread.rollout_path,
       lastSignature,
       pendingMessages,
+      replyTargetMessageId,
       suppressions: nextSuppressions,
     };
     if (JSON.stringify(previousMirror ?? null) !== JSON.stringify(nextMirror)) {

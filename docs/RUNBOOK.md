@@ -111,6 +111,7 @@ Notes:
 - user-facing ответы рендерятся через Telegram HTML parse mode с fallback в plain text, если parse_mode ломается
 - progress bubble нарочно честный: это не настоящий streaming из Codex, а аккуратный in-place status update, чтобы в Telegram не было немой паузы
 - outbound mirror сейчас сознательно зеркалит только `final_answer`; commentary/event stream пока не льётся в topic, чтобы не устроить ботоспам
+- если turn пришёл из самого Codex Desktop, bridge сначала кладёт в topic bot-side surrogate user message (`Anton via Codex Desktop`), а потом шлёт assistant reply именно на него, чтобы UX не лип к корню topic
 - transport/raw exceptions не вываливаются пользователю в чат целиком; детали ищи в `logs/bridge.stderr.log`
 - parked sync topics считаются припаркованными слепками старого working set: они не участвуют в `attach-latest` и не должны восприниматься как активные рабочие thread-ы
 
