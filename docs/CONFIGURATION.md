@@ -22,6 +22,7 @@ Use this for things that should survive restarts and should not be changed from 
 | `outboundPollIntervalMs` | `2000` | Poll interval for outbound Codex thread mirror. |
 | `outboundMirrorPhases` | `["commentary", "final_answer"]` | Which assistant phases are mirrored live. |
 | `outboundProgressMode` | `updates` | `updates` keeps recent progress in one bubble; `generic` hides details; `verbatim` mirrors raw commentary. |
+| `outboundProgressCompleteMode` | `delete` | What happens to the progress bubble after the final answer: `delete` removes the temporary bubble; `done` keeps a completed marker for debugging. |
 | `codexUserDisplayName` | `Codex Desktop user` | Label for bot-side surrogate user messages mirrored from Codex Desktop. |
 | `statusBarEnabled` | `true` | Enables compact pinned topic status bar. |
 | `statusBarPin` | `true` | Pins the status bar message when Telegram allows it. |

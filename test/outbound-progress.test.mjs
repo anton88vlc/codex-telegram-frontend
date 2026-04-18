@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   appendOutboundProgressItem,
   formatOutboundProgressMirrorText,
+  normalizeOutboundProgressCompleteMode,
   normalizeOutboundProgressMode,
 } from "../lib/outbound-progress.mjs";
 
@@ -11,6 +12,12 @@ test("normalizeOutboundProgressMode defaults to visible updates", () => {
   assert.equal(normalizeOutboundProgressMode(undefined), "updates");
   assert.equal(normalizeOutboundProgressMode("generic"), "generic");
   assert.equal(normalizeOutboundProgressMode("verbatim"), "verbatim");
+});
+
+test("normalizeOutboundProgressCompleteMode deletes completed bubbles by default", () => {
+  assert.equal(normalizeOutboundProgressCompleteMode(undefined), "delete");
+  assert.equal(normalizeOutboundProgressCompleteMode("done"), "done");
+  assert.equal(normalizeOutboundProgressCompleteMode("wat"), "delete");
 });
 
 test("formatOutboundProgressMirrorText keeps recent commentary in one progress bubble", () => {
