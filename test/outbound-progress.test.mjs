@@ -29,10 +29,11 @@ test("formatOutboundProgressMirrorText keeps recent commentary in one progress b
     config: {},
   });
 
-  assert.match(text, /^\*\*Progress\*\*/);
+  assert.match(text, /^> Inspecting current Telegram state/);
   assert.match(text, /last activity: 21:31/);
   assert.match(text, /> Inspecting current Telegram state/);
   assert.match(text, /> Running smoke checks/);
+  assert.match(text, /\n\n\*\*Progress\*\*\nlast activity: 21:31$/);
 });
 
 test("formatOutboundProgressMirrorText generic mode hides commentary details", () => {
@@ -65,5 +66,6 @@ test("formatOutboundProgressMirrorText preserves updates when completed", () => 
   });
 
   assert.match(text, /Done\. Final answer below\./);
-  assert.match(text, /> Committed docs/);
+  assert.match(text, /^> Committed docs/);
+  assert.match(text, /\n\n\*\*Progress\*\*\nDone\. Final answer below\.$/);
 });
