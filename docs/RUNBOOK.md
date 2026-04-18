@@ -64,6 +64,25 @@ launchctl kickstart -k gui/$(id -u)/com.antonnaumov.codex.telegram-bridge
 - plan: `/Users/antonnaumov/code/codex-telegram-frontend/admin/bootstrap-plan.json`
 - current bootstrap result: `/Users/antonnaumov/code/codex-telegram-frontend/state/bootstrap-result.json`
 - user session: `/Users/antonnaumov/code/codex-telegram-frontend/state/anton_user.session`
+- onboarding flow: `/Users/antonnaumov/code/codex-telegram-frontend/docs/ONBOARDING.md`
+
+Generate plan preview from Codex DB:
+
+```bash
+node /Users/antonnaumov/code/codex-telegram-frontend/scripts/onboard.mjs scan \
+  --project-limit 12 \
+  --threads-per-project 5
+```
+
+Write plan after selecting projects:
+
+```bash
+node /Users/antonnaumov/code/codex-telegram-frontend/scripts/onboard.mjs plan \
+  --project /Users/antonnaumov/code/codex-telegram-frontend \
+  --threads-per-project 3 \
+  --history-max-messages 40 \
+  --write
+```
 
 ## Полезные команды
 

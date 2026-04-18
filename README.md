@@ -51,7 +51,9 @@ Telegram как быстрый remote frontend для локального `Code
 - [lib/codex-native.mjs](/Users/antonnaumov/code/codex-telegram-frontend/lib/codex-native.mjs) — запуск native helper
 - [scripts/send_via_app_control.js](/Users/antonnaumov/code/codex-telegram-frontend/scripts/send_via_app_control.js) — renderer-aware send через Codex app-control
 - [scripts/send_via_app_server.js](/Users/antonnaumov/code/codex-telegram-frontend/scripts/send_via_app_server.js) — fallback transport через local Codex app-server
+- [scripts/onboard.mjs](/Users/antonnaumov/code/codex-telegram-frontend/scripts/onboard.mjs) — onboarding scan/plan generator из локальной Codex DB
 - [admin/telegram_user_admin.py](/Users/antonnaumov/code/codex-telegram-frontend/admin/telegram_user_admin.py) — user-side bootstrap для Telegram groups/topics
+- [docs/ONBOARDING.md](/Users/antonnaumov/code/codex-telegram-frontend/docs/ONBOARDING.md) — recommended setup flow для нового пользователя
 - [docs/RUNBOOK.md](/Users/antonnaumov/code/codex-telegram-frontend/docs/RUNBOOK.md) — ops/runbook
 - [BACKLOG.md](/Users/antonnaumov/code/codex-telegram-frontend/BACKLOG.md) — ближайшие продуктовые и UX долги
 
@@ -107,6 +109,26 @@ node /Users/antonnaumov/code/codex-telegram-frontend/bridge.mjs \
 - direct chat с ботом — projectless / global / ops surface, но таких чатов должно быть немного
 
 Это и есть правильный v1. Не надо зеркалить весь sidebar подряд, иначе всё быстро превращается в мусорку.
+
+## Onboarding preview
+
+Посмотреть проекты и свежие threads из локального Codex DB:
+
+```bash
+node /Users/antonnaumov/code/codex-telegram-frontend/scripts/onboard.mjs scan \
+  --project-limit 12 \
+  --threads-per-project 5
+```
+
+Собрать preview bootstrap-plan по выбранным проектам:
+
+```bash
+node /Users/antonnaumov/code/codex-telegram-frontend/scripts/onboard.mjs plan \
+  --project /Users/antonnaumov/code/codex-telegram-frontend \
+  --threads-per-project 3
+```
+
+Запись в `admin/bootstrap-plan.json` только с `--write`. Полный flow: [docs/ONBOARDING.md](/Users/antonnaumov/code/codex-telegram-frontend/docs/ONBOARDING.md).
 
 ## Ops notes
 

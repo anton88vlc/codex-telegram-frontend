@@ -12,6 +12,7 @@
 1. Настоящий streaming/commentary transport вместо таймерного progress bubble.
 2. Чище развести ops/admin quiet path и рабочие ответы, возможно с отдельным ops topic или configurable routing.
 3. Богаче rendering: blockquotes, tables, более аккуратные локальные file links.
+4. Onboarding wizard поверх `scripts/onboard.mjs`: interactive project/thread selection, BotFather/token checklist, bootstrap, clean history backfill и smoke в одном guided flow.
 
 ## P2 — Transport и наблюдаемость
 
