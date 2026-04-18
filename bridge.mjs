@@ -84,6 +84,7 @@ const DEFAULT_OUTBOUND_POLL_INTERVAL_MS = 2_000;
 const DEFAULT_OUTBOUND_MIRROR_PHASES = ["commentary", "final_answer"];
 const DEFAULT_STATUS_BAR_TAIL_BYTES = 512 * 1024;
 const DEFAULT_BOT_TOKEN_KEYCHAIN_SERVICE = "codex-telegram-bridge-bot-token";
+const DEFAULT_APP_CONTROL_COOLDOWN_MS = 5 * 60 * 1000;
 const execFileAsync = promisify(execFile);
 
 const TELEGRAM_SERVICE_MESSAGE_KEYS = [
@@ -173,6 +174,12 @@ async function loadConfig(configPath) {
     nativePollIntervalMs: Number.isFinite(fromFile?.nativePollIntervalMs)
       ? fromFile.nativePollIntervalMs
       : DEFAULT_NATIVE_POLL_INTERVAL_MS,
+    nativeIngressTransport: ["app-control", "app-server", "auto"].includes(normalizeText(fromFile?.nativeIngressTransport))
+      ? normalizeText(fromFile.nativeIngressTransport)
+      : "app-control",
+    appControlCooldownMs: Number.isFinite(fromFile?.appControlCooldownMs)
+      ? fromFile.appControlCooldownMs
+      : DEFAULT_APP_CONTROL_COOLDOWN_MS,
     nativeDebugBaseUrl: fromFile?.nativeDebugBaseUrl || DEFAULT_NATIVE_DEBUG_BASE_URL,
     appServerUrl: fromFile?.appServerUrl || DEFAULT_APP_SERVER_URL,
     outboundSyncEnabled: fromFile?.outboundSyncEnabled !== false,
@@ -232,6 +239,43 @@ function buildTargetFromMessage(message) {
 
 function isTelegramServiceMessage(message) {
   return TELEGRAM_SERVICE_MESSAGE_KEYS.some((key) => key in (message || {}));
+}
+
+function parseTimestampMs(value) {
+  const parsed = Date.parse(String(value || ""));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function appControlCooldownUntilMs(binding) {
+  return parseTimestampMs(binding?.appControlCooldownUntil);
+}
+
+function shouldPreferAppServer(binding, config, nowMs = Date.now()) {
+  if (!config.nativeFallbackHelperPath) {
+    return false;
+  }
+  if (config.nativeIngressTransport === "app-server") {
+    return true;
+  }
+  return Boolean(appControlCooldownUntilMs(binding) > nowMs);
+}
+
+function markAppControlCooldown(binding, config, error, nowMs = Date.now()) {
+  const cooldownMs = Math.max(0, Number(config.appControlCooldownMs) || 0);
+  if (!cooldownMs) {
+    return null;
+  }
+  const kind = normalizeText(error?.kind) || "send_failed";
+  const until = new Date(nowMs + cooldownMs).toISOString();
+  binding.appControlCooldownUntil = until;
+  binding.lastTransportErrorAt = new Date(nowMs).toISOString();
+  binding.lastTransportErrorKind = kind;
+  return until;
+}
+
+function markTransportError(binding, error, nowMs = Date.now()) {
+  binding.lastTransportErrorAt = new Date(nowMs).toISOString();
+  binding.lastTransportErrorKind = normalizeText(error?.kind) || "send_failed";
 }
 
 function formatThreadBullet(thread) {
@@ -619,6 +663,9 @@ async function renderHealth(config, state, message, bindingKey, binding) {
     }
     if (binding.lastTransportPath) {
       lines.push(`last transport path: \`${binding.lastTransportPath}\``);
+    }
+    if (binding.appControlCooldownUntil && appControlCooldownUntilMs(binding) > Date.now()) {
+      lines.push(`app-control cooldown until: \`${binding.appControlCooldownUntil}\``);
     }
     if (binding.lastTransportErrorAt) {
       lines.push(
@@ -1335,6 +1382,15 @@ async function handlePlainText({ config, state, message, bindingKey, binding }) 
   });
 
   try {
+    const preferAppServer = shouldPreferAppServer(binding, config);
+    if (preferAppServer) {
+      logBridgeEvent("native_send_circuit_breaker", {
+        threadId: binding.threadId,
+        bindingKey,
+        mode: config.nativeIngressTransport === "app-server" ? "app-server-first" : "cooldown",
+        appControlCooldownUntil: binding.appControlCooldownUntil,
+      });
+    }
     const result = await sendNativeTurn({
       helperPath: config.nativeHelperPath,
       fallbackHelperPath: config.nativeFallbackHelperPath,
@@ -1344,18 +1400,30 @@ async function handlePlainText({ config, state, message, bindingKey, binding }) 
       debugBaseUrl: config.nativeDebugBaseUrl,
       appServerUrl: config.appServerUrl,
       pollIntervalMs: config.nativePollIntervalMs,
+      preferAppServer,
+      appControlSkipReason: preferAppServer
+        ? config.nativeIngressTransport === "app-server"
+          ? "configured app-server-first ingress"
+          : `app-control cooldown active until ${binding.appControlCooldownUntil}`
+        : null,
     });
     binding.updatedAt = new Date().toISOString();
     binding.lastTransportPath = result.transportPath || null;
-    delete binding.lastTransportErrorAt;
-    delete binding.lastTransportErrorKind;
+    if (result.transportPath === "app-control") {
+      binding.currentTurn = null;
+      delete binding.lastTransportErrorAt;
+      delete binding.lastTransportErrorKind;
+      delete binding.appControlCooldownUntil;
+    } else if (result.primaryError && !preferAppServer) {
+      markAppControlCooldown(binding, config, { kind: "app_control_unavailable" });
+    }
     logBridgeEvent("native_send_success", {
       threadId: binding.threadId,
       bindingKey,
       transportPath: binding.lastTransportPath,
       primaryError: result.primaryError || null,
     });
-    delete binding.currentTurn;
+    binding.currentTurn = null;
     state.bindings[bindingKey] = binding;
     await progressBubble.stop();
     const replyText = normalizeText(result?.reply?.text) || "(empty reply)";
@@ -1370,15 +1438,18 @@ async function handlePlainText({ config, state, message, bindingKey, binding }) 
     });
   } catch (error) {
     await progressBubble.stop();
-    delete binding.currentTurn;
+    binding.currentTurn = null;
     binding.updatedAt = new Date().toISOString();
-    binding.lastTransportErrorAt = new Date().toISOString();
-    binding.lastTransportErrorKind = normalizeText(error?.kind) || "send_failed";
+    const appControlCooldownUntil = preferAppServer ? null : markAppControlCooldown(binding, config, error);
+    if (!appControlCooldownUntil) {
+      markTransportError(binding, error);
+    }
     state.bindings[bindingKey] = binding;
     logBridgeEvent("native_send_error", {
       threadId: binding.threadId,
       bindingKey,
       kind: binding.lastTransportErrorKind,
+      appControlCooldownUntil,
       attempts: Array.isArray(error?.attempts) ? error.attempts : undefined,
       error: error instanceof Error ? error.message : String(error),
     });
@@ -1517,7 +1588,7 @@ async function syncOutboundMirrors({ config, state }) {
         } else if (message.role === "assistant") {
           if (isFinalAssistantMirrorMessage(message)) {
             replyTargetMessageId = null;
-            delete binding.currentTurn;
+            binding.currentTurn = null;
           }
         }
         suppressed += 1;
@@ -1565,7 +1636,7 @@ async function syncOutboundMirrors({ config, state }) {
           };
         } else if (isFinalAssistant) {
           replyTargetMessageId = null;
-          delete binding.currentTurn;
+          binding.currentTurn = null;
         }
         lastSignature = message.signature;
         delivered += 1;

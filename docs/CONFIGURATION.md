@@ -28,6 +28,8 @@ Use this for things that should survive restarts and should not be changed from 
 | `statusBarTailBytes` | `524288` | How much rollout tail is sampled for status data. |
 | `nativeTimeoutMs` | `120000` | Timeout for one native Codex send. |
 | `nativePollIntervalMs` | `1000` | Poll interval while waiting for native Codex reply. |
+| `nativeIngressTransport` | `app-control` | Telegram-originated send path: `app-control`, `app-server`, or `auto`. Use `app-server` if renderer app-control crashes the desktop app. |
+| `appControlCooldownMs` | `300000` | How long to avoid app-control after an app-control send error before trying it again. |
 | `nativeDebugBaseUrl` | `http://127.0.0.1:9222` | Preferred Codex Desktop app-control endpoint. |
 | `appServerUrl` | `ws://127.0.0.1:27890` | Degraded fallback endpoint. Useful, not the happy path. |
 | `statePath` | `state/state.json` | Bridge runtime state file. |

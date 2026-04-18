@@ -102,6 +102,8 @@ If `self-check` says `app-control: fetch failed`, but `app-server: reachable`, t
 It means the bridge is using fallback transport and some UI-aware behavior may be weaker.
 Successful fallback replies include a short transport note in Telegram, so the user knows the request did not use the happy path.
 If both paths fail, Telegram shows a short recovery hint: open `Codex.app`, preferably with `--remote-debugging-port=9222`, then retry.
+If phone-originated Telegram prompts crash the desktop renderer, set `nativeIngressTransport` to `app-server` in `config.local.json`.
+That keeps Telegram ingress off the renderer while outbound mirroring can still read the Codex thread state.
 
 ## UX Smoke
 

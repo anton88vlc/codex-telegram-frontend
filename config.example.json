@@ -16,6 +16,8 @@
   "statusBarTailBytes": 524288,
   "nativeTimeoutMs": 120000,
   "nativePollIntervalMs": 1000,
+  "nativeIngressTransport": "app-control",
+  "appControlCooldownMs": 300000,
   "nativeDebugBaseUrl": "http://127.0.0.1:9222",
   "appServerUrl": "ws://127.0.0.1:27890",
   "bridgeLogPath": "logs/bridge.stderr.log",

@@ -47,6 +47,7 @@ Docs should sound like a competent teammate at 2am: direct, practical, and a lit
 - `/attach`, `/attach-latest`, `/detach`, `/status`, `/health`, `/settings`, `/project-status`, `/sync-project`, `/mode native`
 - native send through renderer-aware `app-control -> threads.send_message`, with local `app-server` fallback when Codex is not launched with a debug port
 - clear degraded/offline UX when `Codex.app` is closed, app-control is down, fallback is used, or both transports fail
+- configurable Telegram ingress transport: use `nativeIngressTransport: "app-server"` if app-control destabilizes the desktop renderer
 - in-place progress bubble in Telegram: one receipt message is edited while Codex works
 - reply-style answers to the triggering Telegram message
 - Telegram HTML rendering for `**bold**`, `_italic_` / `*italic*`, quotes, lists, code, spoilers and links, with plain-text fallback

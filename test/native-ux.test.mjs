@@ -25,6 +25,23 @@ test("renderNativeSendError explains failed app-control and failed fallback", ()
   assert.match(text, /--remote-debugging-port=9222/);
 });
 
+test("renderNativeSendError explains app-server-first failure", () => {
+  const error = new Error("app-server ingress failed: app server down");
+  error.kind = "app_server_failed";
+  error.attempts = [
+    {
+      path: "app-server-fallback",
+      error: "app server down",
+    },
+  ];
+
+  const text = renderNativeSendError(error);
+
+  assert.match(text, /Codex app-server is not reachable/);
+  assert.match(text, /did not touch app-control/);
+  assert.match(text, /app server down/);
+});
+
 test("renderNativeSendError warns that timeout may still be running", () => {
   const error = new Error("timed out waiting for final reply via threads.read");
   error.kind = "reply_timeout";

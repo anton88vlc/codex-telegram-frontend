@@ -19,6 +19,8 @@ test("buildSettingsReport shows safe runtime settings without secrets", () => {
       appServerUrl: "ws://127.0.0.1:27890",
       nativeTimeoutMs: 120000,
       nativePollIntervalMs: 1000,
+      nativeIngressTransport: "app-server",
+      appControlCooldownMs: 300000,
       outboundSyncEnabled: true,
       outboundMirrorPhases: ["commentary", "final_answer"],
       outboundProgressMode: "updates",
@@ -47,6 +49,8 @@ test("buildSettingsReport shows safe runtime settings without secrets", () => {
 
   assert.match(text, /\*\*Bridge settings\*\*/);
   assert.match(text, /bot: @cdxbot; token: Keychain codex-telegram-bridge-bot-token/);
+  assert.match(text, /transport: native; ingress app-server; app-control `http:\/\/127\.0\.0\.1:9222`; fallback `ws:\/\/127\.0\.0\.1:27890`/);
+  assert.match(text, /app-control cooldown 300s/);
   assert.match(text, /mirror: on; phases commentary, final_answer; progress updates; poll 2s/);
   assert.match(text, /current binding: `group:-100:topic:3`; thread `thread-1`; status bar `5`/);
   assert.doesNotMatch(text, /123456:secret-token/);

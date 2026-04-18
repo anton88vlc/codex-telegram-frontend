@@ -89,6 +89,41 @@ test("setBinding clears a tombstone after a fresh attach", () => {
   assert.equal(state.bindingTombstones["group:-1001:topic:3"], undefined);
 });
 
+test("mergeState lets current binding explicitly clear currentTurn", () => {
+  const bridgeState = {
+    version: 1,
+    lastUpdateId: 0,
+    bindings: {
+      "group:-1001:topic:3": {
+        threadId: "thread-1",
+        currentTurn: null,
+      },
+    },
+    bindingTombstones: {},
+    processedMessageKeys: [],
+    outboundMirrors: {},
+  };
+  const persistedState = {
+    version: 1,
+    lastUpdateId: 0,
+    bindings: {
+      "group:-1001:topic:3": {
+        threadId: "thread-1",
+        currentTurn: {
+          source: "telegram",
+          startedAt: "2026-04-18T22:48:44.349Z",
+        },
+      },
+    },
+    processedMessageKeys: [],
+    outboundMirrors: {},
+  };
+
+  mergeState(bridgeState, persistedState);
+
+  assert.equal(bridgeState.bindings["group:-1001:topic:3"].currentTurn, null);
+});
+
 test("removeBinding records a tombstone", () => {
   const state = {
     bindings: {

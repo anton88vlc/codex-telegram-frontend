@@ -68,3 +68,65 @@ test("sendNativeTurn throws classified error when app-control and fallback both 
     },
   );
 });
+
+test("sendNativeTurn can skip app-control and use app-server first", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-native-"));
+  const primary = await writeHelper(
+    dir,
+    "primary.js",
+    "throw new Error('primary helper should not run');\n",
+  );
+  const fallback = await writeHelper(
+    dir,
+    "fallback.js",
+    'console.log(JSON.stringify({ ok: true, reply: { text: "Fallback-first reply" } }));\n',
+  );
+
+  const result = await sendNativeTurn({
+    helperPath: primary,
+    fallbackHelperPath: fallback,
+    threadId: "thread-1",
+    prompt: "hello",
+    timeoutMs: 1000,
+    preferAppServer: true,
+    appControlSkipReason: "configured app-server-first ingress",
+  });
+
+  assert.equal(result.transportPath, "app-server-fallback");
+  assert.equal(result.reply.text, "Fallback-first reply");
+  assert.equal(result.primaryError, "configured app-server-first ingress");
+});
+
+test("sendNativeTurn reports app-server-first failure without app-control attempt", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-native-"));
+  const primary = await writeHelper(
+    dir,
+    "primary.js",
+    "throw new Error('primary helper should not run');\n",
+  );
+  const fallback = await writeHelper(
+    dir,
+    "fallback.js",
+    "throw new Error('app server down');\n",
+  );
+
+  await assert.rejects(
+    sendNativeTurn({
+      helperPath: primary,
+      fallbackHelperPath: fallback,
+      threadId: "thread-1",
+      prompt: "hello",
+      timeoutMs: 1000,
+      preferAppServer: true,
+      appControlSkipReason: "configured app-server-first ingress",
+    }),
+    (error) => {
+      assert.ok(error instanceof NativeTransportError);
+      assert.equal(error.kind, "app_server_failed");
+      assert.equal(error.attempts.length, 1);
+      assert.equal(error.attempts[0].path, "app-server-fallback");
+      assert.match(error.message, /app-server ingress failed/);
+      return true;
+    },
+  );
+});
