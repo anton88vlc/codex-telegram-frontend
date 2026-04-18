@@ -100,6 +100,12 @@ One-shot self-check:
 npm run self-check
 ```
 
+Локальные проверки перед коммитом:
+
+```bash
+npm run check
+```
+
 ## launchd
 
 Установка/обновление launchd:
