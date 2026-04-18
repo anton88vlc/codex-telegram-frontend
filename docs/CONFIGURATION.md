@@ -66,6 +66,7 @@ Working commands today:
 - `/detach` - removes the current binding.
 - `/status` - shows current binding status.
 - `/health` - checks current chat/topic, project mapping and transport endpoints.
+- `/settings` or `/config` - shows safe read-only runtime settings without secrets.
 - `/project-status [count]` - previews desired project thread working set.
 - `/sync-project [count] dry-run` - safe preview for topic rename/reopen/create/park.
 - `/sync-project [count]` - applies that working-set sync.
@@ -87,8 +88,6 @@ What commands do not mutate:
 
 That split is intentional. Telegram is the working surface, not a remote control panel for every sharp knob.
 
-## Missing But Wanted
-
-Eventually we probably want a small `/settings` or `/config` read-only command that shows safe, non-secret config: mirror mode, status bar mode, transport endpoint health and sync default limit.
+## Still Not Wanted
 
 Editing config from Telegram should wait. If we add it too early, we will invent an admin panel in the middle of the work chat. Nobody needs that little swamp.

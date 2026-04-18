@@ -44,7 +44,7 @@ Docs should sound like a competent teammate at 2am: direct, practical, and a lit
 
 - Telegram Bot API long polling
 - direct chats and forum topics
-- `/attach`, `/attach-latest`, `/detach`, `/status`, `/health`, `/project-status`, `/sync-project`, `/mode native`
+- `/attach`, `/attach-latest`, `/detach`, `/status`, `/health`, `/settings`, `/project-status`, `/sync-project`, `/mode native`
 - native send through renderer-aware `app-control -> threads.send_message`, with local `app-server` fallback when Codex is not launched with a debug port
 - in-place progress bubble in Telegram: one receipt message is edited while Codex works
 - reply-style answers to the triggering Telegram message

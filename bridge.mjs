@@ -30,6 +30,7 @@ import {
   SYNC_PROJECT_CREATOR,
 } from "./lib/project-sync.mjs";
 import { buildSelfCheckReport, formatSelfCheckReport } from "./lib/runtime-health.mjs";
+import { buildSettingsReport } from "./lib/settings-report.mjs";
 import { buildStatusBarText, makeStatusBarHash, readRolloutRuntimeStatus } from "./lib/status-bar.mjs";
 import {
   getBinding,
@@ -142,11 +143,11 @@ async function loadConfig(configPath) {
   const fromFile = await readJsonIfExists(configPath, {});
   const botTokenEnv = fromFile?.botTokenEnv || "CODEX_TELEGRAM_BOT_TOKEN";
   const botTokenKeychainService = fromFile?.botTokenKeychainService || DEFAULT_BOT_TOKEN_KEYCHAIN_SERVICE;
-  const botToken =
-    process.env[botTokenEnv] ||
-    fromFile?.botToken ||
-    (await readKeychainSecret(botTokenKeychainService)) ||
-    null;
+  const envBotToken = process.env[botTokenEnv] || null;
+  const configBotToken = fromFile?.botToken || null;
+  const keychainBotToken = envBotToken || configBotToken ? null : await readKeychainSecret(botTokenKeychainService);
+  const botToken = envBotToken || configBotToken || keychainBotToken || null;
+  const botTokenSource = envBotToken ? "env" : configBotToken ? "config" : keychainBotToken ? "keychain" : "missing";
   if (!botToken) {
     fail(`missing Telegram bot token; set ${botTokenEnv}, botToken, or Keychain item ${botTokenKeychainService}`, {
       configPath,
@@ -155,6 +156,7 @@ async function loadConfig(configPath) {
 
   return {
     botToken,
+    botTokenSource,
     botTokenEnv,
     botTokenKeychainService,
     botUsername: normalizeText(fromFile?.botUsername).replace(/^@+/, "") || null,
@@ -478,6 +480,7 @@ function renderHelp(config) {
     "`/detach` - remove the binding",
     "`/status` - show the current binding and thread",
     "`/health` - show bridge health for this chat/topic and transport paths",
+    "`/settings` - show safe read-only runtime settings",
     "`/project-status [count]` - show desired thread column, active topics and sync preview",
     "`/sync-project [count] [dry-run]` - sync managed topics to the current project working set",
     "`/mode native` - explicitly use native transport",
@@ -940,6 +943,20 @@ async function handleCommand({ config, state, message, bindingKey, binding, pars
 
     case "/health":
       rememberOutbound(binding, await reply(config.botToken, message, await renderHealth(config, state, message, bindingKey, binding)));
+      return true;
+
+    case "/settings":
+    case "/config":
+      rememberOutbound(
+        binding,
+        await sendCommandResponse({
+          config,
+          message,
+          text: buildSettingsReport({ config, state, bindingKey, binding }),
+          quietInTopic: true,
+          topicSummary: "I sent the runtime settings to your direct chat with the bot to keep this topic clean.",
+        }),
+      );
       return true;
 
     case "/project-status": {

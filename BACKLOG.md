@@ -22,7 +22,6 @@
 3. Heavier `/health`: delivery clues, fallback counters and recent failures.
 4. Move clean history import defaults into config: how many recent messages/turns to import, which assistant phases to include, whether heartbeat/system-like user entries are included.
 5. Explicit offline/degraded UX for closed or crashed `Codex.app`: short Telegram status, retry clues and clear distinction between preferred `app-control` and fallback app-server.
-6. Read-only `/settings` or `/config` command for safe non-secret runtime settings; no Telegram-side config editing until validation and rollback exist.
 
 ## P3 - Product Surface
 
@@ -34,3 +33,7 @@
 ## P4 - UX Modes
 
 1. Split Telegram UX into two modes: `chat-like` for normal work and `ops-like` for service commands, so the system does not look like an admin panel after P1.
+
+## Done
+
+1. Read-only `/settings` and `/config` command for safe non-secret runtime settings; Telegram-side config editing stays intentionally out.
