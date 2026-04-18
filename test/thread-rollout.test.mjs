@@ -87,6 +87,21 @@ test("cleanupMirrorAssistantText strips Codex app directives", () => {
   assert.equal(cleaned, "Сделано.\n\nФинал.");
 });
 
+test("cleanupMirrorAssistantText strips memory citation blocks", () => {
+  const cleaned = cleanupMirrorAssistantText(`Ответ для Telegram.
+
+<oai-mem-citation>
+<citation_entries>
+MEMORY.md:1-2|note=[internal]
+</citation_entries>
+<rollout_ids>
+019d0000-0000-7000-8000-000000000000
+</rollout_ids>
+</oai-mem-citation>`);
+
+  assert.equal(cleaned, "Ответ для Telegram.");
+});
+
 test("parseThreadMirrorChunk keeps user mirrors and assistant final answers in order", () => {
   const chunk = [
     JSON.stringify({
