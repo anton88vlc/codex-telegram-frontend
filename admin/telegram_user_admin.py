@@ -398,6 +398,108 @@ async def ensure_bot_member_and_admin(client: TelegramClient, channel, bot_usern
         pass
 
 
+def dialog_filter_title(dialog_filter) -> str:
+    title = getattr(dialog_filter, "title", None)
+    return str(getattr(title, "text", title) or "")
+
+
+def input_peer_key(peer):
+    for attr in ("channel_id", "chat_id", "user_id"):
+        value = getattr(peer, attr, None)
+        if value is not None:
+            return (peer.__class__.__name__, value)
+    return (peer.__class__.__name__, repr(peer))
+
+
+def next_dialog_filter_id(filters):
+    used = {getattr(item, "id", None) for item in filters}
+    for candidate in range(2, 256):
+        if candidate not in used:
+            return candidate
+    raise RuntimeError("No free Telegram dialog filter id available")
+
+
+def clone_dialog_filter_with_peers(dialog_filter, include_peers):
+    return types.DialogFilter(
+        id=dialog_filter.id,
+        title=dialog_filter.title,
+        pinned_peers=list(getattr(dialog_filter, "pinned_peers", None) or []),
+        include_peers=include_peers,
+        exclude_peers=list(getattr(dialog_filter, "exclude_peers", None) or []),
+        contacts=getattr(dialog_filter, "contacts", None),
+        non_contacts=getattr(dialog_filter, "non_contacts", None),
+        groups=getattr(dialog_filter, "groups", None),
+        broadcasts=getattr(dialog_filter, "broadcasts", None),
+        bots=getattr(dialog_filter, "bots", None),
+        exclude_muted=getattr(dialog_filter, "exclude_muted", None),
+        exclude_read=getattr(dialog_filter, "exclude_read", None),
+        exclude_archived=getattr(dialog_filter, "exclude_archived", None),
+        title_noanimate=getattr(dialog_filter, "title_noanimate", None),
+        emoticon=getattr(dialog_filter, "emoticon", None),
+        color=getattr(dialog_filter, "color", None),
+    )
+
+
+async def ensure_dialog_folder(client: TelegramClient, title: str, channels):
+    normalized_title = str(title or "").strip()
+    if not normalized_title:
+        return None
+
+    response = await client(functions.messages.GetDialogFiltersRequest())
+    filters = list(getattr(response, "filters", []) or [])
+    existing = next(
+        (
+            item
+            for item in filters
+            if item.__class__.__name__ == "DialogFilter"
+            and dialog_filter_title(item) == normalized_title
+        ),
+        None,
+    )
+    input_peers = [await client.get_input_entity(channel) for channel in channels]
+    input_by_key = {input_peer_key(peer): peer for peer in input_peers}
+
+    if existing:
+        current_peers = list(getattr(existing, "include_peers", None) or [])
+        current_keys = {input_peer_key(peer) for peer in current_peers}
+        added_peers = [peer for key, peer in input_by_key.items() if key not in current_keys]
+        if added_peers:
+            next_filter = clone_dialog_filter_with_peers(existing, current_peers + added_peers)
+            await client(functions.messages.UpdateDialogFilterRequest(id=existing.id, filter=next_filter))
+        return {
+            "title": normalized_title,
+            "id": existing.id,
+            "created": False,
+            "addedPeers": len(added_peers),
+            "totalPeers": len(current_peers) + len(added_peers),
+        }
+
+    filter_id = next_dialog_filter_id(filters)
+    dialog_filter = types.DialogFilter(
+        id=filter_id,
+        title=types.TextWithEntities(normalized_title, []),
+        pinned_peers=[],
+        include_peers=input_peers,
+        exclude_peers=[],
+        groups=False,
+        broadcasts=False,
+        bots=False,
+        contacts=False,
+        non_contacts=False,
+        exclude_muted=False,
+        exclude_read=False,
+        exclude_archived=False,
+    )
+    await client(functions.messages.UpdateDialogFilterRequest(id=filter_id, filter=dialog_filter))
+    return {
+        "title": normalized_title,
+        "id": filter_id,
+        "created": True,
+        "addedPeers": len(input_peers),
+        "totalPeers": len(input_peers),
+    }
+
+
 async def get_forum_topics(client: TelegramClient, channel):
     topics = []
     peer = await client.get_input_entity(channel)
@@ -808,7 +910,9 @@ async def command_bootstrap(args):
         summary = {
             "me": me_payload(me),
             "groups": [],
+            "folder": None,
         }
+        folder_channels = []
 
         for project in plan.get("projects", []):
             group, created_group = await ensure_forum_group(
@@ -816,6 +920,7 @@ async def command_bootstrap(args):
                 title=project["groupTitle"],
                 about=project.get("about", ""),
             )
+            folder_channels.append(group)
             await ensure_bot_member_and_admin(client, group, args.bot_username)
             chat_id = bot_api_chat_id(group.id)
 
@@ -847,6 +952,9 @@ async def command_bootstrap(args):
                 )
 
             summary["groups"].append(group_summary)
+
+        if not args.skip_folder and folder_channels:
+            summary["folder"] = await ensure_dialog_folder(client, args.folder_title, folder_channels)
     finally:
         await client.disconnect()
 
@@ -1057,6 +1165,8 @@ def build_parser():
     bootstrap.add_argument("--result-path", type=Path, default=DEFAULT_RESULT_PATH)
     bootstrap.add_argument("--bridge-state", type=Path, default=DEFAULT_BRIDGE_STATE_PATH)
     bootstrap.add_argument("--bot-username", default="cdxanton2026bot")
+    bootstrap.add_argument("--folder-title", default="codex")
+    bootstrap.add_argument("--skip-folder", action="store_true")
     bootstrap.set_defaults(handler=command_bootstrap)
 
     backfill = subparsers.add_parser("backfill-thread")

@@ -77,6 +77,8 @@ admin/.venv/bin/python admin/telegram_user_admin.py bootstrap \
 ```
 
 This creates or reuses groups/topics from the plan and writes bridge bindings.
+By default it also creates or updates the Telegram folder `codex` and puts the project groups there.
+Use `--skip-folder` only when debugging Telegram folder behavior.
 
 ## Step 4: Clean History Backfill
 

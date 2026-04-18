@@ -84,6 +84,9 @@ node /Users/antonnaumov/code/codex-telegram-frontend/scripts/onboard.mjs plan \
   --write
 ```
 
+`bootstrap` creates or updates the Telegram folder `codex` by default and puts project groups there.
+Use `--skip-folder` only when debugging folder automation.
+
 ## Полезные команды
 
 Авторизация user-side Telegram helper:
