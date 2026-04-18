@@ -1,75 +1,93 @@
 # Runbook
 
-## Текущее состояние
+Команды ниже предполагают запуск из repo root.
 
-- launchd label: `com.antonnaumov.codex.telegram-bridge`
-- repo root: `/Users/antonnaumov/code/codex-telegram-frontend`
-- config: `/Users/antonnaumov/code/codex-telegram-frontend/config.local.json`
-- state: `/Users/antonnaumov/code/codex-telegram-frontend/state/state.json`
-- logs:
-  - `/Users/antonnaumov/code/codex-telegram-frontend/logs/bridge.stdout.log`
-  - `/Users/antonnaumov/code/codex-telegram-frontend/logs/bridge.stderr.log`
+## Runtime Files
 
-## Bot
+- config: `config.local.json`
+- state: `state/state.json`
+- project index: `state/bootstrap-result.json`
+- user session: `state/anton_user.session`
+- logs: `logs/bridge.stdout.log`, `logs/bridge.stderr.log`
+- launchd label: `com.codex.telegram-frontend.bridge` by default
+- token Keychain service: `codex-telegram-bridge-bot-token` by default
 
-- username: `@cdxanton2026bot`
-- token service in macOS Keychain: `codex-telegram-bridge-bot-token`
-
-## Статус / рестарт
-
-Проверить:
+Useful launchd overrides:
 
 ```bash
-launchctl print gui/$(id -u)/com.antonnaumov.codex.telegram-bridge | rg 'state =|pid =|last exit code'
+CODEX_TELEGRAM_LAUNCHD_LABEL=com.example.codex-telegram \
+CODEX_TELEGRAM_KEYCHAIN_SERVICE=codex-telegram-bridge-bot-token \
+CODEX_TELEGRAM_CONFIG="$PWD/config.local.json" \
+./ops/install-launchd.sh
 ```
 
-Сделать self-check без запуска polling loop:
+## Status / Restart
+
+Self-check without starting the polling loop:
 
 ```bash
-node /Users/antonnaumov/code/codex-telegram-frontend/bridge.mjs \
-  --config /Users/antonnaumov/code/codex-telegram-frontend/config.local.json \
-  --self-check
+npm run self-check
 ```
 
-Перезапустить:
+Install or refresh launchd:
 
 ```bash
-launchctl kickstart -k gui/$(id -u)/com.antonnaumov.codex.telegram-bridge
+./ops/install-launchd.sh
 ```
 
-## Если что-то сломалось
-
-1. Убедись, что `Codex.app` открыт и запущен с `--remote-debugging-port=9222`.
-   Если нет, bridge всё равно попробует fallback через local app-server, просто UX будет беднее.
-2. Проверь `launchctl print ...`.
-3. Прогони `--self-check`, чтобы быстро увидеть bot auth, state, index, threads DB и transport paths.
-4. Посмотри `logs/bridge.stderr.log`.
-5. Посмотри, двигается ли `state/state.json -> lastUpdateId`.
-6. Если bridge жив, но тупит, сделай `launchctl kickstart -k ...`.
-
-Если `self-check` пишет `app-control: fetch failed`, но `app-server: reachable`, это не авария.
-Просто bridge сейчас работает через fallback transport.
-
-Если хочешь проверить именно UX-слой, а не только живость процесса:
-
-1. Напиши в topic обычный текст и проверь, что сначала появляется один status bubble, а не тишина.
-2. Убедись, что bubble редактируется на месте, если ответ идёт дольше пары секунд.
-3. Для `/project-status` или `/sync-project dry-run` проверь, что topic получает короткий след, а детали уходят в direct chat с ботом.
-4. Для `/sync-project` проверь, что stale sync-topics паркуются, а не продолжают висеть как будто они всё ещё часть рабочего набора.
-5. Сделай любой короткий turn прямо из Codex Desktop в уже привязанном thread и проверь, что surrogate user message, commentary updates и финальный текст сами прилетают в связанный Telegram topic без ручного backfill.
-6. Проверь, что в active topic есть pinned compact status message. Он должен показывать `model | reasoning`, context load, remaining rate limits with reset countdown и короткий status.
-
-## Bootstrap / Telegram admin
-
-- plan: `/Users/antonnaumov/code/codex-telegram-frontend/admin/bootstrap-plan.json`
-- current bootstrap result: `/Users/antonnaumov/code/codex-telegram-frontend/state/bootstrap-result.json`
-- user session: `/Users/antonnaumov/code/codex-telegram-frontend/state/anton_user.session`
-- onboarding flow: `/Users/antonnaumov/code/codex-telegram-frontend/docs/ONBOARDING.md`
-
-Generate plan preview from Codex DB:
+Preview generated plist without loading it:
 
 ```bash
-node /Users/antonnaumov/code/codex-telegram-frontend/scripts/onboard.mjs scan \
+./ops/install-launchd.sh --dry-run > /tmp/codex-telegram-bridge.plist
+```
+
+Check launchd:
+
+```bash
+LABEL="${CODEX_TELEGRAM_LAUNCHD_LABEL:-com.codex.telegram-frontend.bridge}"
+launchctl print "gui/$(id -u)/$LABEL" | rg 'state =|pid =|last exit code'
+```
+
+Restart launchd:
+
+```bash
+LABEL="${CODEX_TELEGRAM_LAUNCHD_LABEL:-com.codex.telegram-frontend.bridge}"
+launchctl kickstart -k "gui/$(id -u)/$LABEL"
+```
+
+One-shot bridge poll:
+
+```bash
+npm run once
+```
+
+## If Something Breaks
+
+1. Make sure `Codex.app` is open.
+2. Prefer launching it with `--remote-debugging-port=9222`; otherwise bridge can still try the local app-server fallback.
+3. Run `npm run self-check`.
+4. Check `logs/bridge.stderr.log`.
+5. Check whether `state/state.json -> lastUpdateId` moves.
+6. If launchd is alive but stuck, use `launchctl kickstart -k ...`.
+
+If `self-check` says `app-control: fetch failed`, but `app-server: reachable`, that is not fatal.
+It means bridge is using fallback transport and some UI-aware behavior may be weaker.
+
+## UX Smoke
+
+1. Send normal text in a bound topic and confirm one progress bubble appears.
+2. Confirm the bubble edits in place for longer replies.
+3. Confirm the final answer is a reply to the triggering user/surrogate message.
+4. Run `/project-status` or `/sync-project dry-run` and confirm long details go to direct chat when possible.
+5. Send a short turn directly from Codex Desktop and confirm Telegram receives the surrogate user message plus assistant updates.
+6. Confirm each active topic has one pinned compact status bar.
+
+## Bootstrap / Telegram Admin
+
+Generate plan preview from the local Codex DB:
+
+```bash
+npm run onboard:scan -- \
   --project-limit 12 \
   --threads-per-project 5
 ```
@@ -77,101 +95,93 @@ node /Users/antonnaumov/code/codex-telegram-frontend/scripts/onboard.mjs scan \
 Write plan after selecting projects:
 
 ```bash
-node /Users/antonnaumov/code/codex-telegram-frontend/scripts/onboard.mjs plan \
-  --project /Users/antonnaumov/code/codex-telegram-frontend \
+npm run onboard:plan -- \
+  --project /path/to/codex-project \
   --threads-per-project 3 \
   --history-max-messages 40 \
   --write
 ```
 
+Create or reuse Telegram groups/topics and write bridge bindings:
+
+```bash
+admin/.venv/bin/python admin/telegram_user_admin.py bootstrap \
+  --plan admin/bootstrap-plan.json
+```
+
 `bootstrap` creates or updates the Telegram folder `codex` by default and puts project groups there.
 Use `--skip-folder` only when debugging folder automation.
 
-## Полезные команды
+## Telegram Ops Commands
 
-Авторизация user-side Telegram helper:
+- `/health` — quick health for the current chat/topic: binding, project mapping, transport endpoints
+- `/project-status [count]` — desired thread column, active topics, parked sync topics and sync preview
+- `/sync-project [count] dry-run` — safe preview before rename/reopen/create/park
 
-```bash
-cd /Users/antonnaumov/code/codex-telegram-frontend/admin
-source .venv/bin/activate
-python telegram_user_admin.py whoami
-```
+## History Backfill
 
-One-shot bridge poll:
+Preview clean history import:
 
 ```bash
-node /Users/antonnaumov/code/codex-telegram-frontend/bridge.mjs \
-  --config /Users/antonnaumov/code/codex-telegram-frontend/config.local.json \
-  --once
-```
-
-## Telegram ops команды
-
-- `/health` — быстрый health текущего чата/topic: binding, project mapping, transport endpoints
-- `/project-status [count]` — желаемая thread column, active topics, parked sync topics и sync preview
-- `/sync-project [count] dry-run` — безопасный preview sync-managed topics перед rename/reopen/create/park
-
-## History backfill
-
-Для заливки clean history из текущего Codex thread в Telegram topic:
-
-```bash
-cd /Users/antonnaumov/code/codex-telegram-frontend
 admin/.venv/bin/python admin/telegram_user_admin.py backfill-thread \
-  --thread-id 019da196-14ae-78d0-a7b1-5b493dd26b4c \
-  --chat-id -1003836615652 \
-  --topic-id 3 \
+  --thread-id <codex-thread-id> \
+  --chat-id <telegram-chat-id> \
+  --topic-id <telegram-topic-id> \
   --max-history-messages 40 \
   --assistant-phase final_answer \
-  --sender-mode labeled-bot
+  --sender-mode labeled-bot \
+  --dry-run
 ```
 
+Run without `--dry-run` after checking the preview.
+
 Notes:
-- `labeled-bot` безопаснее live bridge: импорт идёт сообщениями `Anton:` / `Codex:` от бота и не зацикливается обратно в Codex thread.
-- по умолчанию backfill берёт только clean tail: user prompts + assistant `final_answer`, без commentary/heartbeat шума и без полного бесконечного хвоста thread-а.
-- перед реальной заливкой используй `--dry-run`; для более короткого контекста есть `--max-history-messages` и `--max-user-prompts`.
-- backfill по умолчанию игнорирует live ids из `state/state.json` при resume/count: topic root, pinned status bar, последний mirrored user и последние outbound messages.
-- команда пропускает уже залитые labeled messages по тексту, а не по тупому count: status bar, live mirror и cleanup gaps не сбивают импорт.
-- отправка уважает Telegram `retry_after`, так что после partial 429 её можно просто запустить ещё раз.
 
-## Topic cleanup
+- `labeled-bot` is safer for imports: messages are sent as `Anton:` / `Codex:` by the bot and do not loop back as fresh user turns.
+- default backfill imports only clean tail: user prompts plus assistant `final_answer`
+- commentary, heartbeat/system-like entries and smoke noise are skipped by default
+- topic root, pinned status bar and recent live mirror ids from `state/state.json` are protected
+- Telegram `retry_after` is respected, so a partial 429 can usually be resumed by rerunning the command
 
-Безопасный preview мусора в topic:
+## Topic Cleanup
+
+Safe preview:
 
 ```bash
-cd /Users/antonnaumov/code/codex-telegram-frontend
 admin/.venv/bin/python admin/telegram_user_admin.py cleanup-topic \
-  --chat-id -1003836615652 \
-  --topic-id 3 \
+  --chat-id <telegram-chat-id> \
+  --topic-id <telegram-topic-id> \
   --scan-limit 120
 ```
 
-Удаление тех же кандидатов:
+Delete the same candidates:
 
 ```bash
 admin/.venv/bin/python admin/telegram_user_admin.py cleanup-topic \
-  --chat-id -1003836615652 \
-  --topic-id 3 \
+  --chat-id <telegram-chat-id> \
+  --topic-id <telegram-topic-id> \
   --scan-limit 120 \
   --delete
 ```
 
 Notes:
-- helper сам сохраняет базовые live ids из `state/state.json`: topic root и pinned status bar; дополнительные сообщения можно защитить через `--keep-message-id`.
-- default cleanup ловит service-actions от pin/topic ops и явный ops-шум вроде `/health`, `/project-status`, `/sync-project`, `OUTBOUND_*`, `UX_*`, но рабочую историю не трогает.
 
-## UX notes
+- cleanup protects topic root and pinned status bar automatically
+- add `--keep-message-id` for extra protected messages
+- defaults target service-actions and explicit ops/smoke noise, not real working history
 
-- user-facing ответы рендерятся через Telegram HTML parse mode с fallback в plain text, если parse_mode ломается
-- progress bubble нарочно честный: это не настоящий streaming из Codex, а аккуратный in-place status update, чтобы в Telegram не было немой паузы
-- outbound mirror зеркалит human-visible `commentary` и `final_answer`; raw event stream и token streaming пока не льются в topic, чтобы не устроить ботоспам
-- если turn пришёл из самого Codex Desktop, bridge сначала кладёт в topic bot-side surrogate user message (`User via Codex Desktop`, имя задаётся в config), а потом шлёт assistant replies именно на него, чтобы UX не лип к корню topic
-- status bar живёт как отдельное pinned message в каждом active topic; bridge редактирует его only-on-change, а не спамит новый status на каждый poll
-- transport/raw exceptions не вываливаются пользователю в чат целиком; детали ищи в `logs/bridge.stderr.log`
-- parked sync topics считаются припаркованными слепками старого working set: они не участвуют в `attach-latest` и не должны восприниматься как активные рабочие thread-ы
+## UX Notes
 
-Если privacy mode у бота мешает plain-text ingress в group topics, быстрый fallback:
+- user-facing replies render through Telegram HTML parse mode with plain-text fallback
+- progress bubble is an honest in-place status update, not true Codex token streaming yet
+- outbound mirror sends human-visible `commentary` and `final_answer`, not raw event streams
+- Codex Desktop-originated turns first create a bot-side surrogate user message, then assistant replies attach to it
+- status bar is one pinned message per active topic and edits only on change
+- transport/raw exceptions stay in logs; users get short human messages
+- parked sync topics are old working-set snapshots and should not count as active threads
+
+If privacy mode blocks plain-text ingress in group topics, quick fallback:
 
 ```text
-@cdxanton2026bot ваш текст
+@your_bot_username your text
 ```
