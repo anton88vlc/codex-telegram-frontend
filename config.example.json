@@ -1,0 +1,14 @@
+{
+  "botTokenEnv": "CODEX_TELEGRAM_BOT_TOKEN",
+  "allowedUserIds": [],
+  "allowedChatIds": [],
+  "pollTimeoutSeconds": 30,
+  "sendTyping": true,
+  "nativeTimeoutMs": 120000,
+  "statePath": "/Users/antonnaumov/code/codex-telegram-frontend/state/state.json",
+  "nativeHelperPath": "/Users/antonnaumov/code/codex-telegram-frontend/scripts/send_via_app_control.js",
+  "nativeFallbackHelperPath": "/Users/antonnaumov/code/codex-telegram-frontend/scripts/send_via_app_server.js",
+  "projectIndexPath": "/Users/antonnaumov/code/codex-telegram-frontend/state/bootstrap-result.json",
+  "threadsDbPath": "/Users/antonnaumov/.codex/state_5.sqlite",
+  "syncDefaultLimit": 3
+}
