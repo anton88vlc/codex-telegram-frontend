@@ -1,22 +1,22 @@
 # Onboarding
 
-Цель onboarding: собрать в Telegram clean working set, а не выгрузить весь Codex sidebar.
+The goal is to create a clean Telegram working set, not dump the entire Codex sidebar.
 
-Правильная модель:
+The intended model:
 
-- Telegram folder `codex` = внешний контейнер
+- Telegram folder `codex` = external container
 - Telegram group = Codex project
 - Telegram topic = Codex thread
-- bootstrap plan = явное решение, какие проекты и threads пользователь хочет видеть
-- history import = ограниченный clean tail, только user prompts + assistant `final_answer`
+- bootstrap plan = explicit choice of projects and threads the user wants in Telegram
+- history import = bounded clean tail, only user prompts plus assistant `final_answer`
 
 ## What The User Must Do
 
-Минимальный ручной кусок пока неизбежен:
+A small manual setup step is unavoidable for now:
 
-1. Создать Telegram bot через BotFather и положить token в env или macOS Keychain.
-2. Получить `API_ID` / `API_HASH` для user-side Telegram helper.
-3. Из repo root скопировать локальные конфиги и поставить admin deps:
+1. Create a Telegram bot through BotFather and put the token in env, config, or macOS Keychain.
+2. Get `API_ID` and `API_HASH` for the user-side Telegram helper.
+3. From the repo root, copy local config and install admin dependencies:
 
 ```bash
 cp config.example.json config.local.json
@@ -25,17 +25,17 @@ python3 -m venv admin/.venv
 admin/.venv/bin/pip install -r admin/requirements.txt
 ```
 
-4. Один раз авторизовать user session:
+4. Authorize the user session once:
 
 ```bash
 admin/.venv/bin/python admin/telegram_user_admin.py login-qr
 ```
 
-BotFather не даёт нормальный публичный API для полностью автоматического создания бота, поэтому этот шаг не надо притворяться автоматизируемым. Всё остальное должно быть максимально scripted.
+BotFather does not provide a proper public API for fully automated bot creation. Do not pretend this can be scripted cleanly. Everything after that should be as automated as possible.
 
 ## Step 1: Scan Codex Projects
 
-Read-only preview из локальной Codex DB:
+Read-only preview from the local Codex DB:
 
 ```bash
 npm run onboard:scan -- \
@@ -43,7 +43,7 @@ npm run onboard:scan -- \
   --threads-per-project 5
 ```
 
-JSON mode для будущего UI/wizard:
+JSON mode for a future UI/wizard:
 
 ```bash
 npm run onboard:scan -- \
@@ -52,7 +52,7 @@ npm run onboard:scan -- \
   --json
 ```
 
-Пользователь выбирает не всё подряд, а нужные project roots.
+The user should select the projects they actually want, not everything that ever existed.
 
 ## Step 2: Generate Bootstrap Plan
 
@@ -85,7 +85,7 @@ npm run onboard:rehearsal -- \
 ```
 
 Rehearsal defaults are intentionally small: 2 projects, 2 threads per project, last 20 clean history messages, group prefix `Codex Lab - `, folder `codex-lab`, output `admin/bootstrap-plan.rehearsal.json`.
-Use it before deleting or rebuilding the real `codex` surface.
+Use rehearsal before deleting or rebuilding the real `codex` surface.
 
 ## Step 3: Create Telegram Surface
 
@@ -161,5 +161,6 @@ Expected UX:
 - `assistant-phase`: `final_answer`
 - `sender-mode`: `labeled-bot`
 - auto-create new topics: off by default until rules are explicit
+- Telegram frontend copy: English-first; mirrored user prompts and final answers keep the original thread language
 
 This keeps Telegram feeling like a credible remote Codex surface, not a database dump wearing a chat costume.

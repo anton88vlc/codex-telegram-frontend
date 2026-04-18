@@ -1,68 +1,68 @@
 # Codex App Telegram Frontend
 
-Telegram как быстрый remote frontend для локального `Codex Desktop` на Mac.
+Telegram as a fast remote frontend for a local `Codex Desktop` app on macOS.
 
-Не “ещё один бот”, а аккуратный мост:
+This is not "one more bot". The intended shape is a clean bridge:
 
-- `Telegram folder codex = внешний контейнер / shell`
-- `Telegram group = Codex project`
-- `Telegram topic list inside group = мобильный аналог project thread column`
-- `Telegram topic = Codex thread`
-- несколько direct chats = projectless / global chats
-- `Codex Desktop` остаётся backend и source of truth
-- мост живёт отдельно от `~/.codex`, как нормальный проект
+- `Telegram folder codex` = external container / shell
+- `Telegram group` = Codex project
+- `Telegram topic list inside a group` = mobile version of the Codex project thread column
+- `Telegram topic` = Codex thread
+- a small number of direct chats = projectless / global / ops surface
+- `Codex Desktop` stays the backend and source of truth
+- the bridge lives outside `~/.codex` as a normal project
 
-## Что уже работает
+## What Works
 
-- long polling через Telegram Bot API
-- direct chat и forum topics
+- Telegram Bot API long polling
+- direct chats and forum topics
 - `/attach`, `/attach-latest`, `/detach`, `/status`, `/health`, `/project-status`, `/sync-project`, `/mode native`
-- native send через renderer-aware `app-control -> threads.send_message`, с fallback на local `app-server`, если Codex запущен без debug-port
-- in-place progress bubble в Telegram: receipt живёт в одном сообщении и обновляется, пока Codex думает
-- reply-style ответы на входящее сообщение
-- HTML rendering layer для `**bold**`, `_italic_` / `*italic*`, quotes, lists, code, spoilers и links с fallback в plain text, если Telegram parse_mode закапризничал
-- короткий human error UX в чат, техподробности в лог
-- шумные ops-команды можно уводить в direct chat с ботом, чтобы не пачкать рабочие topics
-- mention-aware ingress (`@bot текст`) как fallback, если group privacy мешает plain text
-- `sync-project dry-run` и CLI `--self-check` для ops
-- npm scripts для запуска, self-check, tests и onboarding preview
-- `/project-status` показывает желаемую thread column, active topics, parked sync topics и preview sync-плана
-- `/sync-project` больше не просто плодит темы: он rename/reopen/create/park для sync-managed topics под текущий working set
-- user-side history backfill из `rollout_path` в Telegram topic через `admin/telegram_user_admin.py backfill-thread`: по умолчанию только user prompts + `final_answer`, без commentary, ограниченный хвост истории
-- backfill использует тот же Markdown→Telegram HTML renderer, что и live bridge, чтобы импорт не выглядел как сырой `**markdown**`
-- safe cleanup для topic-мусора через `admin/telegram_user_admin.py cleanup-topic`: сначала dry-run, удаление только с `--delete`
-- bootstrap умеет создавать/обновлять Telegram folder `codex` и складывать туда проектные группы
-- retry на временных Telegram fetch errors
-- checkpoint на inbound updates, чтобы после рестарта не дублировать один и тот же turn
-- live outbound mirror: user-turn surrogate и final answers из Codex Desktop долетают обратно в привязанный Telegram topic/chat; commentary схлопывается в один редактируемый progress message
-- для Codex-originated turn bridge сначала зеркалит безопасный user-turn surrogate (`User via Codex Desktop`, имя задаётся в config), а уже assistant messages приходят reply на него
-- pinned compact status bar в active topics: bridge резервирует сообщение, пинит его и редактирует при изменении model/reasoning/context/rate-limit/activity данных
-- persisted outbound checkpoint и suppression-слой, чтобы live mirror не дублировал ответы, которые bridge уже сам отдал в Telegram
-- user-side Telegram admin helper на Telethon для bootstrap групп, topics и bot-admin прав
+- native send through renderer-aware `app-control -> threads.send_message`, with local `app-server` fallback when Codex is not launched with a debug port
+- in-place progress bubble in Telegram: one receipt message is edited while Codex works
+- reply-style answers to the triggering Telegram message
+- Telegram HTML rendering for `**bold**`, `_italic_` / `*italic*`, quotes, lists, code, spoilers and links, with plain-text fallback
+- short human-facing errors in chat, technical details in logs
+- noisy ops commands can be routed to direct chat with the bot to keep work topics clean
+- mention-aware ingress (`@bot your request`) when group privacy blocks plain text
+- `sync-project dry-run` and CLI `--self-check`
+- npm scripts for running, self-checks, tests and onboarding preview
+- `/project-status` shows desired thread column, active topics, parked sync topics and sync preview
+- `/sync-project` can rename/reopen/create/park sync-managed topics for the current working set
+- user-side history backfill from `rollout_path` into Telegram topics via `admin/telegram_user_admin.py backfill-thread`; defaults to user prompts plus assistant `final_answer`, with a bounded clean history tail
+- backfill uses the same Markdown-to-Telegram HTML renderer as the live bridge
+- safe topic cleanup via `admin/telegram_user_admin.py cleanup-topic`: dry-run first, deletion only with `--delete`
+- bootstrap can create/update a Telegram folder, create project groups and put them into that folder
+- retry on temporary Telegram fetch errors
+- inbound update checkpointing to avoid duplicate turns after restart
+- live outbound mirror: Codex Desktop user-turn surrogate and final answers are mirrored into the bound Telegram topic/chat
+- Codex-originated commentary is folded into one editable English progress message by default; `outboundProgressMode: "verbatim"` is available for raw commentary
+- pinned compact status bar in active topics with model/reasoning/context/rate/activity data
+- persisted outbound checkpoint and suppression layer to avoid duplicating bridge-originated replies
+- Telethon-based user-side Telegram admin helper for groups, topics and bot-admin permissions
 
-## Чего пока нет
+## Not Yet
 
-- настоящий token streaming из Codex UI; сейчас live mirror шлёт human-visible chat messages, а commentary держит как один редактируемый progress message
-- вложения, картинки, voice
-- auto-create topics по watcher-правилам
-- heartbeat transport как отдельный режим
+- true token streaming from Codex UI
+- attachments, images and voice/audio ingress
+- auto-create topic rules for new threads
+- heartbeat transport as a separate UI-visible mode
 
-## Структура
+## Files
 
-- [bridge.mjs](bridge.mjs) — основной polling bridge
-- [lib/telegram.mjs](lib/telegram.mjs) — Telegram transport
-- [lib/codex-native.mjs](lib/codex-native.mjs) — запуск native helper
-- [scripts/send_via_app_control.js](scripts/send_via_app_control.js) — renderer-aware send через Codex app-control
-- [scripts/send_via_app_server.js](scripts/send_via_app_server.js) — fallback transport через local Codex app-server
-- [scripts/onboard.mjs](scripts/onboard.mjs) — onboarding scan/plan generator из локальной Codex DB
-- [admin/telegram_user_admin.py](admin/telegram_user_admin.py) — user-side bootstrap для Telegram groups/topics
-- [docs/ONBOARDING.md](docs/ONBOARDING.md) — recommended setup flow для нового пользователя
-- [docs/RUNBOOK.md](docs/RUNBOOK.md) — ops/runbook
-- [BACKLOG.md](BACKLOG.md) — ближайшие продуктовые и UX долги
+- [bridge.mjs](bridge.mjs) - main polling bridge
+- [lib/telegram.mjs](lib/telegram.mjs) - Telegram transport
+- [lib/codex-native.mjs](lib/codex-native.mjs) - native Codex send wrapper
+- [scripts/send_via_app_control.js](scripts/send_via_app_control.js) - renderer-aware send through Codex app-control
+- [scripts/send_via_app_server.js](scripts/send_via_app_server.js) - fallback transport through local Codex app-server
+- [scripts/onboard.mjs](scripts/onboard.mjs) - onboarding scan/plan generator from the local Codex DB
+- [admin/telegram_user_admin.py](admin/telegram_user_admin.py) - user-side bootstrap/admin helper for Telegram groups and topics
+- [docs/ONBOARDING.md](docs/ONBOARDING.md) - recommended setup flow for a new user
+- [docs/RUNBOOK.md](docs/RUNBOOK.md) - ops runbook
+- [BACKLOG.md](BACKLOG.md) - product and UX backlog
 
-## Локальные runtime-файлы
+## Runtime Files
 
-Они живут в repo-local runtime, но в git не идут:
+These are repo-local runtime files and are ignored by git:
 
 - `config.local.json`
 - `state/state.json`
@@ -71,10 +71,11 @@ Telegram как быстрый remote frontend для локального `Code
 - `logs/*`
 - `admin/.env`
 - `admin/bootstrap-plan.json`
+- `admin/bootstrap-plan.rehearsal.json`
 
-## Запуск
+## Run
 
-Подготовка локальных конфигов:
+Prepare local config and admin dependencies:
 
 ```bash
 cp config.example.json config.local.json
@@ -83,13 +84,13 @@ python3 -m venv admin/.venv
 admin/.venv/bin/pip install -r admin/requirements.txt
 ```
 
-Сначала `Codex.app` в debug-режиме:
+Launch `Codex.app` with a debug port:
 
 ```bash
 /Applications/Codex.app/Contents/MacOS/Codex --remote-debugging-port=9222
 ```
 
-Потом bridge:
+Start the bridge:
 
 ```bash
 npm start
@@ -101,7 +102,7 @@ One-shot self-check:
 npm run self-check
 ```
 
-Локальные проверки перед коммитом:
+Local checks before committing:
 
 ```bash
 npm run check
@@ -109,26 +110,26 @@ npm run check
 
 ## launchd
 
-Установка/обновление launchd:
+Install or refresh the launchd agent:
 
 ```bash
 ./ops/install-launchd.sh
 ```
 
-## Telegram модель
+## Telegram Model
 
-- папка `codex` в Telegram — внешний контейнер всего remote frontend
-- одна Telegram group = один Codex project
-- внутри group включены topics, и их список должен ощущаться как колонка thread-ов этого проекта в Codex
-- один topic = один Codex thread
-- в идеале topics копируют рабочий set thread-ов проекта, а не случайный шум и не весь исторический мусор подряд
-- direct chat с ботом — projectless / global / ops surface, но таких чатов должно быть немного
+- Telegram folder `codex` is the external container for the remote frontend.
+- One Telegram group maps to one Codex project.
+- Forum topics are enabled inside each group, and the topic list should feel like the Codex project thread column.
+- One Telegram topic maps to one Codex thread.
+- Topics should represent a curated working set, not every historical thread.
+- Direct chat with the bot is for projectless/global/ops work, and should stay rare.
 
-Это и есть правильный v1. Не надо зеркалить весь sidebar подряд, иначе всё быстро превращается в мусорку.
+That is the right v1. Mirroring the whole sidebar blindly turns the product into a landfill with push notifications.
 
-## Onboarding preview
+## Onboarding Preview
 
-Посмотреть проекты и свежие threads из локального Codex DB:
+Inspect projects and recent threads from the local Codex DB:
 
 ```bash
 npm run onboard:scan -- \
@@ -136,7 +137,7 @@ npm run onboard:scan -- \
   --threads-per-project 5
 ```
 
-Собрать preview bootstrap-plan по выбранным проектам:
+Generate a bootstrap plan for selected projects:
 
 ```bash
 npm run onboard:plan -- \
@@ -144,26 +145,26 @@ npm run onboard:plan -- \
   --threads-per-project 3
 ```
 
-Песочница без сноса текущего Telegram:
+Create a disposable rehearsal surface:
 
 ```bash
 npm run onboard:rehearsal -- \
   --project /path/to/codex-project
 ```
 
-Запись в ignored runtime plan `admin/bootstrap-plan.json` только с `--write`.
-Для rehearsal запись идёт в ignored `admin/bootstrap-plan.rehearsal.json`.
-Новые и переиспользованные forum groups по дефолту переводятся в topic display `Tabs`.
-`bootstrap` merge-ит группы в `state/bootstrap-result.json`, чтобы rehearsal не затирал обычную `codex` поверхность.
-Структурный пример: [admin/bootstrap-plan.example.json](admin/bootstrap-plan.example.json).
-Полный flow: [docs/ONBOARDING.md](docs/ONBOARDING.md).
+Writing `admin/bootstrap-plan.json` requires `--write`.
+Rehearsal writes to ignored `admin/bootstrap-plan.rehearsal.json`.
+New and reused forum groups default to topic display `Tabs`.
+`bootstrap` merges groups into `state/bootstrap-result.json`, so rehearsal does not wipe the normal `codex` surface.
+See [admin/bootstrap-plan.example.json](admin/bootstrap-plan.example.json) for structure.
+See [docs/ONBOARDING.md](docs/ONBOARDING.md) for the full flow.
 
-## Ops notes
+## Ops Notes
 
-- token можно брать не только из env, но и из macOS Keychain service `codex-telegram-bridge-bot-token`
-- если `app-control` недоступен, bridge всё равно живёт через fallback `app-server`
-- outbound mirror читает `rollout_path` bound thread-а и по умолчанию опрашивает его часто, поэтому user/commentary/final messages из Codex Desktop появляются в Telegram без ручного backfill
-- clean history import не должен заливать весь бесконечный thread: `backfill-thread` по умолчанию берёт последние 40 clean messages и умеет `--max-history-messages`, `--max-user-prompts`, `--assistant-phase final_answer`
-- если в group topic обычный текст не долетает до бота, quickest fallback это `@your_bot_username текст`; правильный фикс всё равно в privacy mode у бота
-- длинные ops-ответы вроде `/project-status` и `/sync-project` bridge по возможности скидывает в direct chat с ботом, оставляя в topic только короткий след
-- parked sync topics остаются отдельным классом: они не считаются активным working set и не мешают `/attach-latest` или следующему sync preview
+- The bot token can come from env, config, or macOS Keychain service `codex-telegram-bridge-bot-token`.
+- If `app-control` is unavailable, the bridge can still use fallback `app-server`.
+- The outbound mirror reads the bound thread `rollout_path`; user surrogates, generic progress and final answers appear in Telegram without manual backfill.
+- Clean history import should not dump an infinite thread: `backfill-thread` defaults to the last 40 clean messages and supports `--max-history-messages`, `--max-user-prompts`, `--assistant-phase final_answer`.
+- If plain text in a group topic does not reach the bot, the quickest fallback is `@your_bot_username your request`; the real fix is usually BotFather privacy mode.
+- Long ops replies like `/project-status` and `/sync-project` are routed to direct chat when possible, leaving only a short trace in the working topic.
+- Parked sync topics are not active working-set topics and should not interfere with `/attach-latest` or the next sync preview.

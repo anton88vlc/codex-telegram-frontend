@@ -170,6 +170,7 @@ async function loadConfig(configPath) {
       ? fromFile.outboundPollIntervalMs
       : DEFAULT_OUTBOUND_POLL_INTERVAL_MS,
     outboundMirrorPhases: normalizeOutboundMirrorPhases(fromFile?.outboundMirrorPhases),
+    outboundProgressMode: normalizeOutboundProgressMode(fromFile?.outboundProgressMode),
     codexUserDisplayName: normalizeText(fromFile?.codexUserDisplayName) || "Codex Desktop user",
     statusBarEnabled: fromFile?.statusBarEnabled !== false,
     statusBarPin: fromFile?.statusBarPin !== false,
@@ -190,6 +191,11 @@ function normalizeOutboundMirrorPhases(value) {
   const raw = Array.isArray(value) ? value : DEFAULT_OUTBOUND_MIRROR_PHASES;
   const phases = Array.from(new Set(raw.map((item) => normalizeText(item)).filter((item) => allowed.has(item))));
   return phases.length ? phases : [...DEFAULT_OUTBOUND_MIRROR_PHASES];
+}
+
+function normalizeOutboundProgressMode(value) {
+  const normalized = normalizeText(value).toLowerCase();
+  return normalized === "verbatim" ? "verbatim" : "generic";
 }
 
 async function readKeychainSecret(serviceName) {
@@ -225,12 +231,12 @@ function isTelegramServiceMessage(message) {
 function renderNativeSendError(error) {
   const raw = error instanceof Error ? error.message : String(error);
   if (/timed out|timeout/i.test(raw)) {
-    return "Codex отвечает слишком долго. Мост жив, но этот запрос лучше повторить позже.";
+    return "Codex is taking too long. The bridge is alive, but this request is better retried later.";
   }
   if (/fetch failed|econnrefused|websocket closed|no page targets found|couldn't connect/i.test(raw)) {
-    return "Не смог сейчас достучаться до Codex. Мост жив, но transport споткнулся; попробуй ещё раз через пару секунд.";
+    return "I cannot reach Codex right now. The bridge is alive, but the transport stumbled; try again in a few seconds.";
   }
-  return "Не смог донести сообщение до Codex. Короткая версия: запрос не уехал, подробности уже в логе.";
+  return "I could not deliver this message to Codex. Short version: it was not sent; details are in the log.";
 }
 
 function formatThreadBullet(thread) {
@@ -275,9 +281,9 @@ function isTopicMessage(message) {
 }
 
 function buildOpsDmIntro(message) {
-  const chatTitle = normalizeText(message.chat.title || message.chat.username || message.chat.first_name || "чат");
+  const chatTitle = normalizeText(message.chat.title || message.chat.username || message.chat.first_name || "chat");
   const topic = message.message_thread_id != null ? `, topic ${message.message_thread_id}` : "";
-  return `**Ops-детали** из **${chatTitle}**${topic}\n\n`;
+  return `**Ops details** from **${chatTitle}**${topic}\n\n`;
 }
 
 async function sendCommandResponse({
@@ -300,7 +306,7 @@ async function sendCommandResponse({
       return reply(
         config.botToken,
         message,
-        topicSummary || "Готово. Подробности кинул в direct chat с ботом, чтобы не шуметь в topic.",
+        topicSummary || "Done. I sent the details to your direct chat with the bot to keep this topic clean.",
       );
     } catch (error) {
       logBridgeEvent("ops_direct_chat_fallback", {
@@ -400,16 +406,34 @@ function compactProgressMirrorText(text, { limit = 1200 } = {}) {
   return `${normalized.slice(0, limit - 1).trimEnd()}…`;
 }
 
-function formatOutboundProgressMirrorText(message) {
-  const text = compactProgressMirrorText(message?.text);
-  if (!text) {
+function formatProgressTimestamp(timestamp) {
+  const date = timestamp ? new Date(timestamp) : new Date();
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  return date.toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatOutboundProgressMirrorText(message, config = {}) {
+  const mode = normalizeText(config.outboundProgressMode).toLowerCase();
+  const rawText = compactProgressMirrorText(message?.text);
+  if (!rawText) {
     return "";
   }
-  return `**Progress**\n${text}`;
+  if (mode === "verbatim") {
+    return `**Progress**\n${rawText}`;
+  }
+  const timestamp = formatProgressTimestamp(message?.timestamp);
+  return ["**Progress**", "Codex is working...", timestamp ? `last activity: ${timestamp}` : null]
+    .filter(Boolean)
+    .join("\n");
 }
 
 async function upsertOutboundProgressMessage({ config, binding, target, replyToMessageId, message }) {
-  const text = formatOutboundProgressMirrorText(message);
+  const text = formatOutboundProgressMirrorText(message, config);
   if (!text) {
     return [];
   }
@@ -441,7 +465,7 @@ async function completeOutboundProgressMessage({ config, binding, target }) {
     config.botToken,
     target,
     messageId,
-    "**Progress**\nГотово, финальный ответ ниже.",
+    "**Progress**\nDone. Final answer below.",
   );
   return edited.length ? edited : [{ message_id: messageId }];
 }
@@ -465,24 +489,24 @@ function logBridgeEvent(type, payload = {}) {
 
 function renderHelp(config) {
   const mentionHint = config.botUsername
-    ? `Если group privacy всё ещё мешает, пиши с mention: \`@${config.botUsername} текст\`.`
-    : "Если group privacy всё ещё мешает, временно используй mention к боту.";
+    ? `If group privacy still blocks plain text, mention the bot: \`@${config.botUsername} your request\`.`
+    : "If group privacy still blocks plain text, temporarily mention the bot in your message.";
   return [
-    "**Команды**",
-    "`/attach <thread-id>` - привязать текущий чат или topic к Codex thread",
-    "`/attach-latest` - привязать текущий topic к самому свежему непривязанному thread этого проекта",
-    "`/detach` - снять привязку",
-    "`/status` - показать текущую привязку и thread",
-    "`/health` - показать health этого чата/topic и transport paths",
-    "`/project-status [count]` - показать желаемую thread column, текущие topics и preview sync-плана",
-    "`/sync-project [count] [dry-run]` - синхронизировать sync-managed topics под текущий working set проекта",
-    "`/mode native` - явно зафиксировать native transport",
-    "`/help` - показать это сообщение",
+    "**Commands**",
+    "`/attach <thread-id>` - bind this chat or topic to a Codex thread",
+    "`/attach-latest` - bind this topic to the newest unbound thread in this project",
+    "`/detach` - remove the binding",
+    "`/status` - show the current binding and thread",
+    "`/health` - show bridge health for this chat/topic and transport paths",
+    "`/project-status [count]` - show desired thread column, active topics and sync preview",
+    "`/sync-project [count] [dry-run]` - sync managed topics to the current project working set",
+    "`/mode native` - explicitly use native transport",
+    "`/help` - show this message",
     "",
-    "После `/attach` обычный текст из этого чата уходит в привязанный Codex thread.",
+    "After `/attach`, normal text from this chat goes to the bound Codex thread.",
     mentionHint,
-    "v1 честный: только **native transport**. Heartbeat/UI-visible путь оставлен на phase 2.",
-    "Final answers из самого Codex thread теперь тоже зеркалятся обратно в привязанный Telegram chat/topic.",
+    "v1 is intentionally narrow: **native transport** only. Heartbeat/UI-visible transport is phase 2.",
+    "Final answers from the Codex thread are mirrored back into the bound Telegram chat/topic.",
   ].join("\n");
 }
 
@@ -538,7 +562,7 @@ async function collectChatBindingDiagnostics(config, state, chatId) {
 
 async function renderBindingStatus(config, bindingKey, binding) {
   const lines = [
-    "**Текущая привязка**",
+    "**Current binding**",
     `thread: \`${binding.threadId}\``,
     `transport: \`${binding.transport || "native"}\``,
     `key: \`${bindingKey}\``,
@@ -562,7 +586,7 @@ async function renderBindingStatus(config, bindingKey, binding) {
   try {
     const thread = await getThreadById(config.threadsDbPath, binding.threadId);
     if (!thread) {
-      lines.push("warning: thread не найден в локальном threads DB");
+      lines.push("warning: thread not found in the local threads DB");
     } else {
       lines.push(`thread cwd: \`${thread.cwd}\``);
       lines.push(`thread archived: ${Number(thread.archived) !== 0 ? "yes" : "no"}`);
@@ -633,8 +657,8 @@ async function renderHealth(config, state, message, bindingKey, binding) {
   if (message.chat.type === "supergroup" || message.chat.type === "group") {
     lines.push(
       config.botUsername
-        ? `hint: если обычный текст в topic не долетает, проверь privacy mode у бота или пиши как @${config.botUsername} текст`
-        : "hint: если обычный текст в topic не долетает, проверь privacy mode у бота",
+        ? `hint: if plain text in the topic does not reach the bot, check bot privacy mode or write @${config.botUsername} your request`
+        : "hint: if plain text in the topic does not reach the bot, check bot privacy mode",
     );
   }
 
@@ -747,7 +771,7 @@ function renderSyncPreview(plan) {
 async function renderProjectStatus(config, state, message, requestedLimit) {
   const { projectGroup, diagnostics, plan } = await buildSyncContext(config, state, message, requestedLimit);
   if (!projectGroup || !diagnostics || !plan) {
-    return "Для этой группы я не нашёл project mapping. Значит bootstrap ещё не дотянут или chat id другой.";
+    return "I cannot find a project mapping for this group. Bootstrap is incomplete, or this chat id is different.";
   }
 
   const lines = [
@@ -802,7 +826,7 @@ async function validateBindingForSend(config, binding) {
   if (isClosedSyncBinding(binding)) {
     return {
       ok: false,
-      message: "Этот sync-topic сейчас припаркован и не должен жить как рабочий чат. Запусти `/sync-project`, чтобы вернуть его в active set.",
+      message: "This sync-managed topic is parked and should not be used as an active work chat. Run `/sync-project` to bring it back into the active set.",
     };
   }
   try {
@@ -810,13 +834,13 @@ async function validateBindingForSend(config, binding) {
     if (!thread) {
       return {
         ok: false,
-        message: `Эта привязка смотрит в thread ${binding.threadId}, которого уже нет в локальном Codex DB. Лучше /detach и привязать заново.`,
+        message: `This binding points to thread ${binding.threadId}, which is no longer in the local Codex DB. Use /detach and bind it again.`,
       };
     }
     if (Number(thread.archived) !== 0) {
       return {
         ok: false,
-        message: `Эта привязка смотрит в архивированный thread ${binding.threadId}. Лучше /detach и выбрать живой thread.`,
+        message: `This binding points to archived thread ${binding.threadId}. Use /detach and pick an active thread.`,
       };
     }
     return { ok: true, thread };
@@ -838,14 +862,14 @@ async function handleCommand({ config, state, message, bindingKey, binding, pars
         message,
         text: renderHelp(config),
         quietInTopic: true,
-        topicSummary: "Справку кинул в direct chat с ботом, чтобы не раздувать topic.",
+        topicSummary: "I sent the help text to your direct chat with the bot to keep this topic clean.",
       });
       return true;
 
     case "/attach": {
       const threadId = parsed.args[0];
       if (!threadId) {
-        await reply(config.botToken, message, "Нужен thread id: /attach <thread-id>");
+        await reply(config.botToken, message, "Missing thread id: /attach <thread-id>");
         return true;
       }
       removeOutboundMirror(state, bindingKey);
@@ -859,21 +883,21 @@ async function handleCommand({ config, state, message, bindingKey, binding, pars
         updatedAt: new Date().toISOString(),
       });
       const nextBinding = getBinding(state, bindingKey);
-      const sent = await reply(config.botToken, message, `Привязал этот чат к thread ${threadId} через native transport.`);
+      const sent = await reply(config.botToken, message, `Bound this chat to thread ${threadId} via native transport.`);
       rememberOutbound(nextBinding, sent);
       return true;
     }
 
     case "/attach-latest": {
       if (message.message_thread_id == null) {
-        await reply(config.botToken, message, "Эта команда имеет смысл только внутри forum topic.");
+        await reply(config.botToken, message, "This command only makes sense inside a forum topic.");
         return true;
       }
       if (binding) {
         await reply(
           config.botToken,
           message,
-          `Этот topic уже привязан к ${binding.threadId}. Если хочешь перекинуть его, сначала /detach.`,
+          `This topic is already bound to ${binding.threadId}. If you want to move it, run /detach first.`,
         );
         return true;
       }
@@ -883,7 +907,7 @@ async function handleCommand({ config, state, message, bindingKey, binding, pars
         await reply(
           config.botToken,
           message,
-          "Для этой группы я не нашёл project mapping. Сначала нужен bootstrap или ручная привязка.",
+          "I cannot find a project mapping for this group. Run bootstrap first, or bind manually.",
         );
         return true;
       }
@@ -893,7 +917,7 @@ async function handleCommand({ config, state, message, bindingKey, binding, pars
       const nextThread = candidates.find((thread) => !boundThreadIds.has(String(thread.id)));
 
       if (!nextThread) {
-        await reply(config.botToken, message, "Свежих непривязанных thread тут сейчас не вижу.");
+        await reply(config.botToken, message, "I do not see any fresh unbound threads here right now.");
         return true;
       }
 
@@ -910,7 +934,7 @@ async function handleCommand({ config, state, message, bindingKey, binding, pars
       const sent = await reply(
         config.botToken,
         message,
-        `Привязал этот topic к свежему thread.\nthread: ${nextThread.id}\ntitle: ${sanitizeTopicTitle(nextThread.title, nextThread.id)}`,
+        `Bound this topic to a fresh thread.\nthread: ${nextThread.id}\ntitle: ${sanitizeTopicTitle(nextThread.title, nextThread.id)}`,
       );
       rememberOutbound(nextBinding, sent);
       return true;
@@ -918,17 +942,17 @@ async function handleCommand({ config, state, message, bindingKey, binding, pars
 
     case "/detach":
       if (!binding) {
-        await reply(config.botToken, message, "Тут и так нет привязки.");
+        await reply(config.botToken, message, "There is no binding here already.");
         return true;
       }
       removeBinding(state, bindingKey);
       removeOutboundMirror(state, bindingKey);
-      await reply(config.botToken, message, `Отвязал thread ${binding.threadId}.`);
+      await reply(config.botToken, message, `Detached thread ${binding.threadId}.`);
       return true;
 
     case "/status":
       if (!binding) {
-        await reply(config.botToken, message, "Привязки нет. Используй /attach <thread-id>.");
+        await reply(config.botToken, message, "No binding here. Use /attach <thread-id>.");
         return true;
       }
       rememberOutbound(binding, await reply(config.botToken, message, await renderBindingStatus(config, bindingKey, binding)));
@@ -947,7 +971,7 @@ async function handleCommand({ config, state, message, bindingKey, binding, pars
           message,
           text: await renderProjectStatus(config, state, message, requestedLimit),
           quietInTopic: true,
-          topicSummary: "Сводку по проекту кинул в direct chat с ботом, чтобы не засирать topic.",
+          topicSummary: "I sent the project summary to your direct chat with the bot to keep this topic clean.",
         }),
       );
       return true;
@@ -960,7 +984,7 @@ async function handleCommand({ config, state, message, bindingKey, binding, pars
         await reply(
           config.botToken,
           message,
-          "Для этой группы я не нашёл project mapping. Значит bootstrap ещё не дотянут или chat id другой.",
+          "I cannot find a project mapping for this group. Bootstrap is incomplete, or this chat id is different.",
         );
         return true;
       }
@@ -977,7 +1001,7 @@ async function handleCommand({ config, state, message, bindingKey, binding, pars
           message,
           text: previewText,
           quietInTopic: true,
-          topicSummary: "Preview `/sync-project` кинул в direct chat с ботом, чтобы не раздувать topic.",
+          topicSummary: "I sent the `/sync-project` preview to your direct chat with the bot to keep this topic clean.",
         });
         return true;
       }
@@ -1107,7 +1131,7 @@ async function handleCommand({ config, state, message, bindingKey, binding, pars
       }
 
       const lines = [
-        `Синхронизировал working set для ${projectGroup.groupTitle}.`,
+        `Synced the working set for ${projectGroup.groupTitle}.`,
         `rename ${changed.renamed.length}, reopen ${changed.reopened.length}, create ${changed.created.length}, park ${plan.park.length}`,
       ];
       if (changed.renamed.length) {
@@ -1141,7 +1165,7 @@ async function handleCommand({ config, state, message, bindingKey, binding, pars
         changed.created.length === 0 &&
         plan.park.length === 0
       ) {
-        lines.push("", "Уже выровнено. Ничего трогать не пришлось.");
+        lines.push("", "Already aligned. Nothing had to change.");
       }
       await sendCommandResponse({
         config,
@@ -1150,8 +1174,8 @@ async function handleCommand({ config, state, message, bindingKey, binding, pars
         quietInTopic: true,
         topicSummary:
           plan.park.length > 0
-            ? "Working set синхронизировал; детали кинул в direct chat с ботом."
-            : "Working set уже в порядке; детали кинул в direct chat с ботом.",
+            ? "Working set synced; I sent the details to your direct chat with the bot."
+            : "Working set is already aligned; I sent the details to your direct chat with the bot.",
       });
 
       for (const item of parkAfterReply) {
@@ -1189,37 +1213,37 @@ async function handleCommand({ config, state, message, bindingKey, binding, pars
     case "/mode": {
       const mode = normalizeText(parsed.args[0] || "");
       if (!binding) {
-        await reply(config.botToken, message, "Сначала нужна привязка: /attach <thread-id>.");
+        await reply(config.botToken, message, "Bind a thread first: /attach <thread-id>.");
         return true;
       }
       if (mode !== "native") {
         await reply(
           config.botToken,
           message,
-          "В v1 включён только native. Heartbeat в standalone bridge я сознательно не подделывал: это phase 2.",
+          "v1 only supports native transport. Heartbeat transport is intentionally left for phase 2.",
         );
         return true;
       }
       binding.transport = "native";
       binding.updatedAt = new Date().toISOString();
-      rememberOutbound(binding, await reply(config.botToken, message, "Ок, transport = native."));
+      rememberOutbound(binding, await reply(config.botToken, message, "OK, transport = native."));
       return true;
     }
 
     default:
-      await reply(config.botToken, message, "Неизвестная команда. /help покажет доступные варианты.");
+      await reply(config.botToken, message, "Unknown command. /help shows the available options.");
       return true;
   }
 }
 
 async function handlePlainText({ config, state, message, bindingKey, binding }) {
   if (!binding) {
-    await reply(config.botToken, message, "Нет привязки. Используй /attach <thread-id>.");
+    await reply(config.botToken, message, "No binding here. Use /attach <thread-id>.");
     return;
   }
 
   if ((binding.transport || "native") !== "native") {
-    await reply(config.botToken, message, "Этот bridge v1 умеет только native transport.");
+    await reply(config.botToken, message, "This v1 bridge only supports native transport.");
     return;
   }
 
@@ -1227,7 +1251,7 @@ async function handlePlainText({ config, state, message, bindingKey, binding }) 
     botUsername: config.botUsername,
   });
   if (!prompt) {
-    await reply(config.botToken, message, "Текст пустой. Если пингуешь через mention, после него нужен сам запрос.");
+    await reply(config.botToken, message, "The text is empty. If you mention the bot, put the actual request after the mention.");
     return;
   }
 
@@ -1289,7 +1313,7 @@ async function handlePlainText({ config, state, message, bindingKey, binding }) 
     delete binding.currentTurn;
     state.bindings[bindingKey] = binding;
     await progressBubble.stop();
-    const replyText = normalizeText(result?.reply?.text) || "(пустой ответ)";
+    const replyText = normalizeText(result?.reply?.text) || "(empty reply)";
     const sent = receiptMessageId
       ? await editThenSendRichTextChunks(config.botToken, target, receiptMessageId, replyText)
       : await reply(config.botToken, message, replyText);
@@ -1336,7 +1360,7 @@ async function processMessage({ config, state, message }) {
     return false;
   }
   if (typeof message.text !== "string" || !message.text.trim()) {
-    await reply(config.botToken, message, "Пока понимаю только текст. Картинки и файлы подключим потом.");
+    await reply(config.botToken, message, "I only understand text for now. Images and files are coming later.");
     return true;
   }
 
@@ -1363,8 +1387,8 @@ async function processMessage({ config, state, message }) {
       config.botToken,
       message,
       parsed
-        ? "Не смог выполнить команду. Короткая версия уже здесь, а техподробности я сложил в лог."
-        : "Не смог обработать сообщение. Мост не умер, но этот конкретный запрос споткнулся; подробности уже в логе.",
+        ? "I could not run that command. Short version is here; technical details are in the log."
+        : "I could not process this message. The bridge is alive, but this request stumbled; details are in the log.",
     );
     return true;
   }

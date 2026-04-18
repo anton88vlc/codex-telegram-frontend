@@ -1,6 +1,6 @@
 # Runbook
 
-Команды ниже предполагают запуск из repo root.
+Commands below assume they are run from the repository root.
 
 ## Runtime Files
 
@@ -9,6 +9,7 @@
 - project index: `state/bootstrap-result.json`
 - user session: `state/anton_user.session`
 - bootstrap plan: `admin/bootstrap-plan.json` (ignored runtime file)
+- rehearsal plan: `admin/bootstrap-plan.rehearsal.json` (ignored runtime file)
 - logs: `logs/bridge.stdout.log`, `logs/bridge.stderr.log`
 - launchd label: `com.codex.telegram-frontend.bridge` by default
 - token Keychain service: `codex-telegram-bridge-bot-token` by default
@@ -65,14 +66,14 @@ npm run once
 ## If Something Breaks
 
 1. Make sure `Codex.app` is open.
-2. Prefer launching it with `--remote-debugging-port=9222`; otherwise bridge can still try the local app-server fallback.
+2. Prefer launching it with `--remote-debugging-port=9222`; otherwise the bridge can still try the local app-server fallback.
 3. Run `npm run self-check`.
 4. Check `logs/bridge.stderr.log`.
 5. Check whether `state/state.json -> lastUpdateId` moves.
 6. If launchd is alive but stuck, use `launchctl kickstart -k ...`.
 
 If `self-check` says `app-control: fetch failed`, but `app-server: reachable`, that is not fatal.
-It means bridge is using fallback transport and some UI-aware behavior may be weaker.
+It means the bridge is using fallback transport and some UI-aware behavior may be weaker.
 
 ## UX Smoke
 
@@ -93,7 +94,7 @@ npm run onboard:scan -- \
   --threads-per-project 5
 ```
 
-Write plan after selecting projects:
+Write a plan after selecting projects:
 
 ```bash
 npm run onboard:plan -- \
@@ -128,9 +129,9 @@ Bot username is read from `config.local.json -> botUsername`, `CODEX_TELEGRAM_BO
 
 ## Telegram Ops Commands
 
-- `/health` — quick health for the current chat/topic: binding, project mapping, transport endpoints
-- `/project-status [count]` — desired thread column, active topics, parked sync topics and sync preview
-- `/sync-project [count] dry-run` — safe preview before rename/reopen/create/park
+- `/health` - quick health for the current chat/topic: binding, project mapping, transport endpoints
+- `/project-status [count]` - desired thread column, active topics, parked sync topics and sync preview
+- `/sync-project [count] dry-run` - safe preview before rename/reopen/create/park
 
 ## History Backfill
 
@@ -192,17 +193,19 @@ Notes:
 
 - cleanup protects topic root and pinned status bar automatically
 - add `--keep-message-id` for extra protected messages
-- defaults target service-actions and explicit ops/smoke noise, not real working history
+- defaults target service actions and explicit ops/smoke noise, not real working history
 
 ## UX Notes
 
-- user-facing replies render through Telegram HTML parse mode with plain-text fallback
-- progress bubble is an honest in-place status update, not true Codex token streaming yet
-- outbound mirror sends user surrogate plus final answers; human-visible `commentary` is folded into one editable progress message per turn
-- Codex Desktop-originated turns first create a bot-side surrogate user message, then assistant replies attach to it
-- status bar is one pinned message per active topic and edits only on change
-- transport/raw exceptions stay in logs; users get short human messages
-- parked sync topics are old working-set snapshots and should not count as active threads
+- Telegram frontend copy is English-first.
+- Mirrored user prompts and final answers keep the original thread language.
+- User-facing replies render through Telegram HTML parse mode with plain-text fallback.
+- Progress bubbles are honest in-place status updates, not true Codex token streaming yet.
+- Codex-originated commentary is folded into one editable generic progress message by default; set `outboundProgressMode: "verbatim"` to mirror raw commentary.
+- Codex Desktop-originated turns first create a bot-side surrogate user message, then assistant replies attach to it.
+- Status bar is one pinned message per active topic and edits only on change.
+- Transport/raw exceptions stay in logs; users get short human messages.
+- Parked sync topics are old working-set snapshots and should not count as active threads.
 
 If privacy mode blocks plain-text ingress in group topics, quick fallback:
 

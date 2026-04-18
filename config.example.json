@@ -9,6 +9,7 @@
   "outboundSyncEnabled": true,
   "outboundPollIntervalMs": 2000,
   "outboundMirrorPhases": ["commentary", "final_answer"],
+  "outboundProgressMode": "generic",
   "codexUserDisplayName": "Codex Desktop user",
   "statusBarEnabled": true,
   "statusBarPin": true,
