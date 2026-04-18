@@ -10,6 +10,18 @@ The intended model:
 - bootstrap plan = explicit choice of projects and threads the user wants in Telegram
 - history import = bounded clean tail, only user prompts plus assistant `final_answer`
 
+## Runtime Requirement
+
+The Telegram bridge does not replace Codex Desktop. It gives Telegram a clean remote surface for the local Codex app.
+
+For live work and onboarding smoke tests, `Codex.app` should be open. The best path is launching it with:
+
+```bash
+/Applications/Codex.app/Contents/MacOS/Codex --remote-debugging-port=9222
+```
+
+That exposes `app-control` on `http://127.0.0.1:9222`. If it is unavailable, the bridge can fall back to the local app-server, but fallback is weaker and should be treated as degraded mode, not the normal product experience.
+
 ## What The User Must Do
 
 A small manual setup step is unavoidable for now:

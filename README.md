@@ -12,6 +12,15 @@ This is not "one more bot". The intended shape is a clean bridge:
 - `Codex Desktop` stays the backend and source of truth
 - the bridge lives outside `~/.codex` as a normal project
 
+## Runtime Boundary
+
+This project is a frontend, not a standalone Codex runtime.
+
+- For real work in v1, keep `Codex.app` open on the Mac.
+- Preferred transport is `app-control` at `http://127.0.0.1:9222`, started with `--remote-debugging-port=9222`.
+- If the debug port is unavailable, the bridge can use local `app-server` fallback, but that is a degraded path: useful for emergency sends, weaker for UI-aware mirroring, progress and diagnostics.
+- If `Codex.app` is closed or crashed, Telegram can still receive bot/admin commands, but real Codex turns cannot complete normally until the app is open again.
+
 ## What Works
 
 - Telegram Bot API long polling

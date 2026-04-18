@@ -14,6 +14,12 @@ Commands below assume they are run from the repository root.
 - launchd label: `com.codex.telegram-frontend.bridge` by default
 - token Keychain service: `codex-telegram-bridge-bot-token` by default
 
+## Runtime Boundary
+
+The bridge is only the Telegram frontend. `Codex.app` remains the engine and source of truth.
+
+Keep `Codex.app` open for real work. Prefer `app-control` on `http://127.0.0.1:9222`; the app-server fallback is allowed for resilience, but it is degraded and should not be sold as the primary path.
+
 Useful launchd overrides:
 
 ```bash
