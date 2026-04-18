@@ -286,17 +286,20 @@ function buildActionRunnerSource(payload) {
       }
 
       const previousPath = await ensureDebugRoute(navigator, payload.timeoutMs);
-      const beforeRead = await runDebugAction(
-        {
-          type: "threads.read",
-          threadId: payload.threadId,
-          limit: 1,
-          includeOutputs: false,
-          maxOutputChars: 2000,
-        },
-        payload.timeoutMs,
-      );
-      const previousTurnId = beforeRead?.turns?.[0]?.id ?? null;
+      let previousTurnId = null;
+      if (payload.waitForReply) {
+        const beforeRead = await runDebugAction(
+          {
+            type: "threads.read",
+            threadId: payload.threadId,
+            limit: 1,
+            includeOutputs: false,
+            maxOutputChars: 2000,
+          },
+          payload.timeoutMs,
+        );
+        previousTurnId = beforeRead?.turns?.[0]?.id ?? null;
+      }
 
       const sendResult = await runDebugAction(
         {

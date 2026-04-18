@@ -97,6 +97,34 @@ test("sendNativeTurn can skip app-control and use app-server first", async () =>
   assert.equal(result.primaryError, "configured app-server-first ingress");
 });
 
+test("sendNativeTurn can use app-control send-only without wait flag", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-native-"));
+  const argsPath = path.join(dir, "args.json");
+  const primary = await writeHelper(
+    dir,
+    "primary.js",
+    `const fs = require("node:fs");
+fs.writeFileSync(${JSON.stringify(argsPath)}, JSON.stringify(process.argv.slice(2)));
+console.log(JSON.stringify({ ok: true, mode: "app-control-send-only", reply: null }));
+`,
+  );
+
+  const result = await sendNativeTurn({
+    helperPath: primary,
+    threadId: "thread-1",
+    prompt: "hello",
+    timeoutMs: 1000,
+    waitForReply: false,
+    appControlShowThread: true,
+  });
+  const args = JSON.parse(await fs.readFile(argsPath, "utf8"));
+
+  assert.equal(result.transportPath, "app-control");
+  assert.equal(result.mode, "app-control-send-only");
+  assert.equal(args.includes("--wait-for-reply"), false);
+  assert.equal(args.includes("--show-thread"), true);
+});
+
 test("sendNativeTurn reports app-server-first failure without app-control attempt", async () => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-native-"));
   const primary = await writeHelper(

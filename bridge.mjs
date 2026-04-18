@@ -171,6 +171,7 @@ async function loadConfig(configPath) {
     pollTimeoutSeconds: Number.isFinite(fromFile?.pollTimeoutSeconds) ? fromFile.pollTimeoutSeconds : 30,
     sendTyping: fromFile?.sendTyping !== false,
     nativeTimeoutMs: Number.isFinite(fromFile?.nativeTimeoutMs) ? fromFile.nativeTimeoutMs : 120_000,
+    nativeWaitForReply: fromFile?.nativeWaitForReply !== false,
     nativePollIntervalMs: Number.isFinite(fromFile?.nativePollIntervalMs)
       ? fromFile.nativePollIntervalMs
       : DEFAULT_NATIVE_POLL_INTERVAL_MS,
@@ -180,6 +181,7 @@ async function loadConfig(configPath) {
     appControlCooldownMs: Number.isFinite(fromFile?.appControlCooldownMs)
       ? fromFile.appControlCooldownMs
       : DEFAULT_APP_CONTROL_COOLDOWN_MS,
+    appControlShowThread: fromFile?.appControlShowThread === true,
     nativeDebugBaseUrl: fromFile?.nativeDebugBaseUrl || DEFAULT_NATIVE_DEBUG_BASE_URL,
     appServerUrl: fromFile?.appServerUrl || DEFAULT_APP_SERVER_URL,
     outboundSyncEnabled: fromFile?.outboundSyncEnabled !== false,
@@ -1412,6 +1414,8 @@ async function handlePlainText({ config, state, message, bindingKey, binding }) 
       debugBaseUrl: config.nativeDebugBaseUrl,
       appServerUrl: config.appServerUrl,
       pollIntervalMs: config.nativePollIntervalMs,
+      waitForReply: config.nativeWaitForReply,
+      appControlShowThread: config.appControlShowThread,
       preferAppServer,
       appControlSkipReason: preferAppServer
         ? config.nativeIngressTransport === "app-server"
@@ -1434,7 +1438,29 @@ async function handlePlainText({ config, state, message, bindingKey, binding }) 
       bindingKey,
       transportPath: binding.lastTransportPath,
       primaryError: result.primaryError || null,
+      mode: result.mode || null,
     });
+    if (config.nativeWaitForReply === false) {
+      await progressBubble.stop();
+      binding.currentTurn = {
+        ...(binding.currentTurn || {
+          source: "telegram",
+          startedAt: new Date().toISOString(),
+          promptPreview: makePromptPreview(prompt),
+        }),
+        codexProgressMessageId: Number.isInteger(receiptMessageId) ? receiptMessageId : undefined,
+        sendOnly: true,
+        transportPath: result.transportPath || null,
+      };
+      state.bindings[bindingKey] = binding;
+      logBridgeEvent("native_send_deferred_reply", {
+        threadId: binding.threadId,
+        bindingKey,
+        transportPath: binding.lastTransportPath,
+        receiptMessageId,
+      });
+      return;
+    }
     binding.currentTurn = null;
     state.bindings[bindingKey] = binding;
     await progressBubble.stop();

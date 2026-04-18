@@ -103,6 +103,18 @@ It means the bridge is using fallback transport and some UI-aware behavior may b
 Successful fallback replies include a short transport note in Telegram, so the user knows the request did not use the happy path.
 If both paths fail, Telegram shows a short recovery hint: open `Codex.app`, preferably with `--remote-debugging-port=9222`, then retry.
 If phone-originated Telegram prompts crash the desktop renderer, set `nativeIngressTransport` to `app-server` in `config.local.json`.
+
+For a better Desktop-first experiment without the old heavy renderer polling, use:
+
+```json
+{
+  "nativeIngressTransport": "app-control",
+  "nativeWaitForReply": false,
+  "appControlShowThread": true
+}
+```
+
+This keeps `app-control` to a small `threads.send_message` action and lets Telegram receive progress/final from the rollout mirror. If the renderer still crashes, turn `appControlShowThread` off first; if it still crashes, go back to `nativeIngressTransport: "app-server"`.
 That keeps Telegram ingress off the renderer while outbound mirroring can still read the Codex thread state.
 
 ## UX Smoke
