@@ -195,7 +195,8 @@ Expected UX:
 
 - active topics have a pinned compact status bar
 - user prompts from Codex Desktop appear as bot-side surrogate messages
-- assistant replies attach to the surrogate user message
+- assistant progress appears as one editable message with recent visible updates
+- final assistant replies attach to the surrogate user message
 - Telegram-originated prompts get one editable progress bubble and a final reply
 - `/project-status` and `/sync-project dry-run` do not flood working topics with ops walls
 

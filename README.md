@@ -45,7 +45,7 @@ This project is a frontend, not a standalone Codex runtime.
 - retry on temporary Telegram fetch errors
 - inbound update checkpointing to avoid duplicate turns after restart
 - live outbound mirror: Codex Desktop user-turn surrogate and final answers are mirrored into the bound Telegram topic/chat
-- Codex-originated commentary is folded into one editable English progress message by default; `outboundProgressMode: "verbatim"` is available for raw commentary
+- Codex-originated commentary is folded into one editable progress message with recent visible updates; `outboundProgressMode: "generic"` hides details and `outboundProgressMode: "verbatim"` mirrors raw commentary
 - pinned compact status bar in active topics with model/reasoning/context/rate/activity data
 - persisted outbound checkpoint and suppression layer to avoid duplicating bridge-originated replies
 - Telethon-based user-side Telegram admin helper for groups, topics and bot-admin permissions
@@ -204,7 +204,7 @@ See [docs/ONBOARDING.md](docs/ONBOARDING.md) for the full flow.
 
 - The bot token can come from env, config, or macOS Keychain service `codex-telegram-bridge-bot-token`.
 - If `app-control` is unavailable, the bridge can still use fallback `app-server`.
-- The outbound mirror reads the bound thread `rollout_path`; user surrogates, generic progress and final answers appear in Telegram without manual backfill.
+- The outbound mirror reads the bound thread `rollout_path`; user surrogates, live progress updates and final answers appear in Telegram without manual backfill.
 - Clean history import should not dump an infinite thread: `backfill-thread` defaults to the last 40 clean messages and supports `--max-history-messages`, `--max-user-prompts`, `--assistant-phase final_answer`.
 - If plain text in a group topic does not reach the bot, the quickest fallback is `@your_bot_username your request`; the real fix is usually BotFather privacy mode.
 - Long ops replies like `/project-status` and `/sync-project` are routed to direct chat when possible, leaving only a short trace in the working topic.

@@ -9,6 +9,11 @@ import { promisify } from "node:util";
 
 import { sendNativeTurn } from "./lib/codex-native.mjs";
 import { normalizeInboundPrompt, normalizeText, parseCommand } from "./lib/message-routing.mjs";
+import {
+  appendOutboundProgressItem,
+  formatOutboundProgressMirrorText,
+  normalizeOutboundProgressMode,
+} from "./lib/outbound-progress.mjs";
 import { getInitialProgressText, startProgressBubble } from "./lib/progress-bubble.mjs";
 import {
   getBindingsForChat,
@@ -191,11 +196,6 @@ function normalizeOutboundMirrorPhases(value) {
   const raw = Array.isArray(value) ? value : DEFAULT_OUTBOUND_MIRROR_PHASES;
   const phases = Array.from(new Set(raw.map((item) => normalizeText(item)).filter((item) => allowed.has(item))));
   return phases.length ? phases : [...DEFAULT_OUTBOUND_MIRROR_PHASES];
-}
-
-function normalizeOutboundProgressMode(value) {
-  const normalized = normalizeText(value).toLowerCase();
-  return normalized === "verbatim" ? "verbatim" : "generic";
 }
 
 async function readKeychainSecret(serviceName) {
@@ -398,42 +398,20 @@ function formatOutboundAssistantMirrorText(message) {
     .join("\n");
 }
 
-function compactProgressMirrorText(text, { limit = 1200 } = {}) {
-  const normalized = normalizeText(text).replace(/\r\n/g, "\n");
-  if (normalized.length <= limit) {
-    return normalized;
-  }
-  return `${normalized.slice(0, limit - 1).trimEnd()}…`;
-}
-
-function formatProgressTimestamp(timestamp) {
-  const date = timestamp ? new Date(timestamp) : new Date();
-  if (Number.isNaN(date.getTime())) {
-    return null;
-  }
-  return date.toLocaleTimeString("en-GB", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function formatOutboundProgressMirrorText(message, config = {}) {
-  const mode = normalizeText(config.outboundProgressMode).toLowerCase();
-  const rawText = compactProgressMirrorText(message?.text);
-  if (!rawText) {
-    return "";
-  }
-  if (mode === "verbatim") {
-    return `**Progress**\n${rawText}`;
-  }
-  const timestamp = formatProgressTimestamp(message?.timestamp);
-  return ["**Progress**", "Codex is working...", timestamp ? `last activity: ${timestamp}` : null]
-    .filter(Boolean)
-    .join("\n");
-}
-
 async function upsertOutboundProgressMessage({ config, binding, target, replyToMessageId, message }) {
-  const text = formatOutboundProgressMirrorText(message, config);
+  const progressItems = appendOutboundProgressItem(binding.currentTurn, message);
+  binding.currentTurn = {
+    source: "codex",
+    startedAt: message.timestamp || binding.currentTurn?.startedAt || new Date().toISOString(),
+    promptPreview: binding.currentTurn?.promptPreview || "Codex progress",
+    ...(binding.currentTurn || {}),
+    progressItems,
+  };
+  const text = formatOutboundProgressMirrorText({
+    message,
+    currentTurn: binding.currentTurn,
+    config,
+  });
   if (!text) {
     return [];
   }
@@ -446,9 +424,6 @@ async function upsertOutboundProgressMessage({ config, binding, target, replyToM
   const progressMessageId = sent[0]?.message_id;
   if (Number.isInteger(progressMessageId)) {
     binding.currentTurn = {
-      source: "codex",
-      startedAt: message.timestamp || binding.currentTurn?.startedAt || new Date().toISOString(),
-      promptPreview: binding.currentTurn?.promptPreview || "Codex progress",
       ...(binding.currentTurn || {}),
       codexProgressMessageId: progressMessageId,
     };
@@ -461,11 +436,16 @@ async function completeOutboundProgressMessage({ config, binding, target }) {
   if (!Number.isInteger(messageId)) {
     return [];
   }
+  const text = formatOutboundProgressMirrorText({
+    currentTurn: binding.currentTurn,
+    config,
+    completed: true,
+  });
   const edited = await editThenSendRichTextChunks(
     config.botToken,
     target,
     messageId,
-    "**Progress**\nDone. Final answer below.",
+    text || "**Progress**\nDone. Final answer below.",
   );
   return edited.length ? edited : [{ message_id: messageId }];
 }
