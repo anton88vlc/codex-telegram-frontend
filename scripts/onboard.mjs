@@ -424,6 +424,137 @@ function hasRealEnvValue(values, key) {
   return Boolean(value) && !isPlaceholderValue(value);
 }
 
+function validateTelegramAdminEnv(values, envFileOk, envPath) {
+  if (!envFileOk) {
+    return {
+      ok: false,
+      detail: envPath,
+      action: "Run `npm run onboard:prepare` and paste Telegram API_ID/API_HASH from my.telegram.org when asked.",
+    };
+  }
+  if (!hasRealEnvValue(values, "API_ID") || !hasRealEnvValue(values, "API_HASH")) {
+    return {
+      ok: false,
+      detail: `${envPath} (API_ID/API_HASH required)`,
+      action: "Run `npm run onboard:prepare` and paste Telegram API_ID/API_HASH from my.telegram.org when asked.",
+    };
+  }
+  const apiId = String(values.API_ID).trim();
+  const apiHash = String(values.API_HASH).trim();
+  if (!/^\d+$/.test(apiId) || Number.parseInt(apiId, 10) <= 0) {
+    return {
+      ok: false,
+      detail: `${envPath} (API_ID must be a positive number)`,
+      action: "Run `npm run onboard:prepare` and paste a fresh numeric Telegram API_ID from my.telegram.org.",
+    };
+  }
+  if (!/^[a-f0-9]{32}$/i.test(apiHash)) {
+    return {
+      ok: false,
+      detail: `${envPath} (API_HASH should be a 32-character hex string)`,
+      action: "Run `npm run onboard:prepare` and paste a fresh Telegram API_HASH from my.telegram.org.",
+    };
+  }
+  return {
+    ok: true,
+    detail: `${envPath} (API_ID/API_HASH look valid)`,
+    action: "",
+  };
+}
+
+function isProbablyTelegramBotToken(token) {
+  return /^\d{5,}:[A-Za-z0-9_-]{20,}$/.test(String(token ?? "").trim());
+}
+
+async function inspectBridgeBotToken(args, config) {
+  const botTokenEnv = config.botTokenEnv || "CODEX_TELEGRAM_BOT_TOKEN";
+  const keychainService = config.botTokenKeychainService || DEFAULT_BOT_TOKEN_KEYCHAIN_SERVICE;
+  const envToken = process.env[botTokenEnv];
+  const configToken = config.botToken;
+  const tokenSource = envToken ? `env ${botTokenEnv}` : configToken ? args.configPath : "";
+  const token = envToken || configToken;
+  if (token) {
+    return {
+      ok: !isPlaceholderValue(token) && isProbablyTelegramBotToken(token),
+      detail:
+        !isPlaceholderValue(token) && isProbablyTelegramBotToken(token)
+          ? `${tokenSource} (token format looks valid)`
+          : `${tokenSource} (token format looks wrong)`,
+      action: "Create/reuse a bot with @BotFather, then let `npm run onboard:prepare` store the token locally.",
+    };
+  }
+  const hasKeychainToken = await keychainHasSecret(keychainService);
+  return {
+    ok: hasKeychainToken,
+    detail: hasKeychainToken ? `Keychain service ${keychainService}` : `${botTokenEnv}, config, or Keychain service ${keychainService}`,
+    action: "Create/reuse a bot with @BotFather, then let `npm run onboard:prepare` store the token locally.",
+  };
+}
+
+function compactErrorMessage(error) {
+  const stderr = String(error?.stderr ?? "").trim();
+  const stdout = String(error?.stdout ?? "").trim();
+  const message = String(error?.message ?? error ?? "").trim();
+  const raw = stderr || stdout || message || "unknown error";
+  return raw.replace(/\s+/g, " ").slice(0, 240);
+}
+
+function sessionRecoveryAction(errorText) {
+  const text = String(errorText ?? "").toLowerCase();
+  if (text.includes("api_id") || text.includes("api_hash") || text.includes("invalid")) {
+    return "Fix Telegram API_ID/API_HASH in `admin/.env`, then rerun `npm run onboard:doctor`.";
+  }
+  return "Run `npm run onboard:prepare -- --login-qr` and authorize the local Telegram user session.";
+}
+
+async function inspectAdminSession(args, { envOk, helperOk, adminPythonOk, sessionFileOk }) {
+  if (!sessionFileOk) {
+    return {
+      ok: false,
+      detail: args.adminSessionPath,
+      action: "Run `npm run onboard:prepare -- --login-qr` and authorize the local Telegram user session.",
+    };
+  }
+  if (!envOk || !helperOk || !adminPythonOk) {
+    return {
+      ok: false,
+      detail: `${args.adminSessionPath} (cannot verify until admin env/helper/python are ready)`,
+      action: "Fix the admin setup above, then rerun `npm run onboard:doctor`.",
+    };
+  }
+  try {
+    const python = await resolveAdminPython(args);
+    const { stdout } = await execFileAsync(python, [...adminBaseArgs(args), "whoami"], {
+      cwd: PROJECT_ROOT,
+      env: process.env,
+      timeout: 15_000,
+      maxBuffer: 1024 * 1024,
+    });
+    const payload = JSON.parse(stdout);
+    if (!payload.authorized) {
+      return {
+        ok: false,
+        detail: `${args.adminSessionPath} (session file exists but is not authorized)`,
+        action: "Run `npm run onboard:prepare -- --login-qr` and authorize the local Telegram user session.",
+      };
+    }
+    const me = payload.me ?? {};
+    const name = me.username ? `@${me.username}` : me.first_name || me.id || "Telegram user";
+    return {
+      ok: true,
+      detail: `${args.adminSessionPath} (authorized as ${name})`,
+      action: "",
+    };
+  } catch (error) {
+    const message = compactErrorMessage(error);
+    return {
+      ok: false,
+      detail: `${args.adminSessionPath} (${message})`,
+      action: sessionRecoveryAction(message),
+    };
+  }
+}
+
 function formatEnvValue(value) {
   const text = String(value ?? "");
   if (!text || /^[A-Za-z0-9_:@./-]+$/.test(text)) {
@@ -521,9 +652,7 @@ async function askSecretLine(question) {
 
 async function hasBridgeBotToken(args) {
   const config = await readJsonIfExists(args.configPath, {});
-  const botTokenEnv = config.botTokenEnv || "CODEX_TELEGRAM_BOT_TOKEN";
-  const keychainService = config.botTokenKeychainService || DEFAULT_BOT_TOKEN_KEYCHAIN_SERVICE;
-  return Boolean(process.env[botTokenEnv] || config.botToken || (await keychainHasSecret(keychainService)));
+  return (await inspectBridgeBotToken(args, config)).ok;
 }
 
 async function storeBotToken(args, token) {
@@ -697,14 +826,10 @@ function renderRecoveryPlan(checks) {
 async function buildOnboardingChecks(args) {
   const config = await readJsonIfExists(args.configPath, {});
   const envValues = await readEnvValues(args.adminEnvPath);
-  const botTokenEnv = config.botTokenEnv || "CODEX_TELEGRAM_BOT_TOKEN";
-  const keychainService = config.botTokenKeychainService || DEFAULT_BOT_TOKEN_KEYCHAIN_SERVICE;
   const nativeDebugBaseUrl = config.nativeDebugBaseUrl || DEFAULT_NATIVE_DEBUG_BASE_URL;
-  const configHasBotToken = Boolean(process.env[botTokenEnv] || config.botToken);
   const envFileOk = await pathExists(args.adminEnvPath);
-  const envOk = envFileOk && hasRealEnvValue(envValues, "API_ID") && hasRealEnvValue(envValues, "API_HASH");
-  const envDetail = envFileOk ? `${args.adminEnvPath} (API_ID/API_HASH required)` : args.adminEnvPath;
-  const [configOk, helperOk, adminPythonOk, sessionOk, threadsDbOk, codexAppOk, botTokenOk, appControl] =
+  const envCheck = validateTelegramAdminEnv(envValues, envFileOk, args.adminEnvPath);
+  const [configOk, helperOk, adminPythonOk, sessionFileOk, threadsDbOk, codexAppOk, botTokenCheck, appControl] =
     await Promise.all([
       pathExists(args.configPath),
       pathExists(args.adminHelperPath),
@@ -712,9 +837,15 @@ async function buildOnboardingChecks(args) {
       pathExists(args.adminSessionPath),
       pathExists(args.threadsDbPath),
       pathExists("/Applications/Codex.app/Contents/MacOS/Codex"),
-      configHasBotToken ? Promise.resolve(true) : keychainHasSecret(keychainService),
+      inspectBridgeBotToken(args, config),
       checkAppControl(nativeDebugBaseUrl),
     ]);
+  const sessionCheck = await inspectAdminSession(args, {
+    envOk: envCheck.ok,
+    helperOk,
+    adminPythonOk,
+    sessionFileOk,
+  });
   const appControlOk = appControl.ok;
   return [
     makeCheck("macOS host", process.platform === "darwin", process.platform, {
@@ -726,8 +857,8 @@ async function buildOnboardingChecks(args) {
     makeCheck("config.local.json", configOk, args.configPath, {
       action: "Run `npm run onboard:prepare`; it creates a safe local config from the example.",
     }),
-    makeCheck("admin .env with Telegram API_ID/API_HASH", envOk, envDetail, {
-      action: "Run `npm run onboard:prepare` and paste Telegram API_ID/API_HASH from my.telegram.org when asked.",
+    makeCheck("admin .env with Telegram API_ID/API_HASH", envCheck.ok, envCheck.detail, {
+      action: envCheck.action,
     }),
     makeCheck("Telethon helper", helperOk, args.adminHelperPath, {
       action: "Restore the repo files; admin/telegram_user_admin.py is required for folder/group/topic bootstrap.",
@@ -735,14 +866,14 @@ async function buildOnboardingChecks(args) {
     makeCheck("admin Python venv", adminPythonOk, args.adminPythonPath, {
       action: "Run `npm run onboard:prepare` without `--skip-admin-deps` to create the admin Python venv.",
     }),
-    makeCheck("authorized Telegram user session", sessionOk, args.adminSessionPath, {
-      action: "Run `npm run onboard:prepare -- --login-qr` and authorize the local Telegram user session.",
+    makeCheck("authorized Telegram user session", sessionCheck.ok, sessionCheck.detail, {
+      action: sessionCheck.action,
     }),
     makeCheck("local Codex threads DB", threadsDbOk, args.threadsDbPath, {
       action: "Open Codex Desktop locally at least once; the wizard needs the local Codex threads DB.",
     }),
-    makeCheck("Telegram bot token", botTokenOk, `${botTokenEnv}, config, or Keychain service ${keychainService}`, {
-      action: "Create/reuse a bot with @BotFather, then let `npm run onboard:prepare` store the token locally.",
+    makeCheck("Telegram bot token", botTokenCheck.ok, botTokenCheck.detail, {
+      action: botTokenCheck.action,
     }),
     makeCheck(
       "app-control debug port",
@@ -781,7 +912,7 @@ async function promptCredentialSetup(args, rl) {
   }
   const messages = [];
   const envValues = await readEnvValues(args.adminEnvPath);
-  const apiMissing = !envValues.API_ID || !envValues.API_HASH;
+  const apiMissing = !hasRealEnvValue(envValues, "API_ID") || !hasRealEnvValue(envValues, "API_HASH");
   if (apiMissing && (await askYesNo(rl, "Add Telegram API_ID/API_HASH to admin .env now?", true))) {
     const apiId = await askLine(rl, "Telegram API_ID");
     const apiHash = await askSecretLine("Telegram API_HASH (hidden)");

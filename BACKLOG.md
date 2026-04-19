@@ -37,7 +37,7 @@ These are the useful Telegram platform leads found during the April 2026 API pas
 8. ~~Onboarding polish base: safer reuse preview, clearer selectors and actionable recovery hints when setup is incomplete.~~
 9. ~~Agent-led install docs: public docs let a new user open Codex in this repo, paste one clear install prompt, and let Codex drive doctor/setup/wizard/bootstrap/backfill/smoke while asking only for unavoidable Telegram steps.~~
 10. ~~Agent-led onboarding automation hardening base: `onboard:prepare` creates local config/admin env files, can set up the admin Python venv, guides credential wiring and can run QR login before the wizard path.~~
-11. Onboarding recovery hardening for bad-but-present Telegram credentials/session errors, not only missing files.
+11. ~~Onboarding recovery hardening for bad-but-present Telegram credentials/session errors, not only missing files.~~
 
 ## P2 - Transport And Observability
 
@@ -120,3 +120,4 @@ These are the useful Telegram platform leads found during the April 2026 API pas
 46. Command handlers extracted: slash-command routing is now in `lib/command-handlers.mjs`, with tests for attach/status/sync/mode flows instead of another blob inside `bridge.mjs`.
 47. General/All rescue extracted: accidental unbound group messages now route through `lib/unbound-group-rescue.mjs`, keeping the mobile UX fix tested outside the polling loop.
 48. Inbound turn runner extracted: Telegram-originated prompts, voice transcript replies, attachment receipts, progress bubbles and native send/error handling now live in `lib/inbound-turn-runner.mjs` with focused tests. `bridge.mjs` is finally boring enough to read without a helmet.
+49. Onboarding doctor now checks bad-present setup, not just missing files: malformed Telegram API credentials are called out, stale Telegram user sessions are verified through `whoami`, bot token format is sanity-checked, and recovery output stays short enough for an agent to act on.

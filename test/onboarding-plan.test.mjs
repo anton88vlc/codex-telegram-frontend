@@ -210,6 +210,89 @@ test("onboard doctor treats placeholder admin env as incomplete", () => {
   assert.match(result.stdout, /API_ID\/API_HASH required/);
 });
 
+test("onboard doctor calls out malformed Telegram API credentials", () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codex-onboard-doctor-bad-env-"));
+  const adminDir = path.join(tmpDir, "admin");
+  fs.mkdirSync(adminDir, { recursive: true });
+  const adminEnvPath = path.join(adminDir, ".env");
+  fs.writeFileSync(adminEnvPath, "API_ID=not-a-number\nAPI_HASH=abc\n");
+
+  const result = spawnSync(
+    process.execPath,
+    [
+      "scripts/onboard.mjs",
+      "doctor",
+      "--config",
+      path.join(tmpDir, "config.local.json"),
+      "--admin-env",
+      adminEnvPath,
+      "--admin-python",
+      path.join(tmpDir, "admin", ".venv", "bin", "python"),
+      "--admin-session",
+      path.join(tmpDir, "state", "telegram_user.session"),
+      "--threads-db",
+      path.join(tmpDir, "state.sqlite"),
+    ],
+    {
+      cwd: PROJECT_ROOT,
+      encoding: "utf8",
+    },
+  );
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stdout, /API_ID must be a positive number/);
+  assert.match(result.stdout, /fresh numeric Telegram API_ID/);
+});
+
+test("onboard doctor detects stale Telegram user sessions", () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codex-onboard-doctor-stale-session-"));
+  const adminDir = path.join(tmpDir, "admin");
+  const stateDir = path.join(tmpDir, "state");
+  fs.mkdirSync(adminDir, { recursive: true });
+  fs.mkdirSync(stateDir, { recursive: true });
+
+  const adminEnvPath = path.join(adminDir, ".env");
+  const fakePythonPath = path.join(adminDir, "fake-python");
+  const fakeHelperPath = path.join(adminDir, "telegram_user_admin.py");
+  const sessionPath = path.join(stateDir, "telegram_user.session");
+  const threadsDbPath = path.join(tmpDir, "state.sqlite");
+
+  fs.writeFileSync(adminEnvPath, "API_ID=12345\nAPI_HASH=0123456789abcdef0123456789abcdef\n");
+  fs.writeFileSync(fakeHelperPath, "# fake helper for doctor test\n");
+  fs.writeFileSync(sessionPath, "stale session\n");
+  fs.writeFileSync(threadsDbPath, "");
+  fs.writeFileSync(fakePythonPath, "#!/bin/sh\nprintf '%s\\n' '{\"authorized\":false,\"me\":null}'\n");
+  fs.chmodSync(fakePythonPath, 0o755);
+
+  const result = spawnSync(
+    process.execPath,
+    [
+      "scripts/onboard.mjs",
+      "doctor",
+      "--config",
+      path.join(tmpDir, "config.local.json"),
+      "--admin-env",
+      adminEnvPath,
+      "--admin-python",
+      fakePythonPath,
+      "--admin-helper",
+      fakeHelperPath,
+      "--admin-session",
+      sessionPath,
+      "--threads-db",
+      threadsDbPath,
+    ],
+    {
+      cwd: PROJECT_ROOT,
+      encoding: "utf8",
+    },
+  );
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stdout, /session file exists but is not authorized/);
+  assert.match(result.stdout, /--login-qr/);
+});
+
 test("onboard wizard can write a non-interactive rehearsal plan", () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codex-onboard-"));
   const dbPath = path.join(tmpDir, "state.sqlite");
