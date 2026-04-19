@@ -18,6 +18,8 @@ Use this for things that should survive restarts and should not be changed from 
 | `allowedChatIds` | `[]` | Telegram chat allowlist. Empty means no chat-id gate. |
 | `pollTimeoutSeconds` | `30` | Bot API long-poll timeout. |
 | `sendTyping` | `true` | Sends Telegram typing action while Codex is working. |
+| `typingHeartbeatEnabled` | `true` | Keeps Telegram's ephemeral "bot is typing" indicator alive while a bound topic has an active Codex turn. |
+| `typingHeartbeatIntervalMs` | `4000` | How often to refresh the typing indicator. Telegram clients expire chat actions quickly, so keep this near 4s. |
 | `outboundSyncEnabled` | `true` | Mirrors Codex Desktop-originated turns back into Telegram. |
 | `outboundPollIntervalMs` | `2000` | Poll interval for outbound Codex thread mirror. |
 | `outboundMirrorPhases` | `["commentary", "final_answer"]` | Which assistant phases are mirrored live. |

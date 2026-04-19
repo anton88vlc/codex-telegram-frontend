@@ -15,6 +15,8 @@ test("buildSettingsReport shows safe runtime settings without secrets", () => {
       allowedChatIds: [],
       pollTimeoutSeconds: 30,
       sendTyping: true,
+      typingHeartbeatEnabled: true,
+      typingHeartbeatIntervalMs: 4000,
       nativeDebugBaseUrl: "http://127.0.0.1:9222",
       appServerUrl: "ws://127.0.0.1:27890",
       nativeTimeoutMs: 120000,
@@ -61,6 +63,7 @@ test("buildSettingsReport shows safe runtime settings without secrets", () => {
 
   assert.match(text, /\*\*Bridge settings\*\*/);
   assert.match(text, /bot: @cdxbot; token: Keychain codex-telegram-bridge-bot-token/);
+  assert.match(text, /ingress: poll 30s; typing on; typing heartbeat on \/ 4s/);
   assert.match(text, /transport: native; ingress app-server; app-control `http:\/\/127\.0\.0\.1:9222`; fallback `ws:\/\/127\.0\.0\.1:27890`/);
   assert.match(text, /wait reply off; native poll 1s; app-control cooldown 300s/);
   assert.match(text, /app-control: show thread on/);

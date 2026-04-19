@@ -79,6 +79,7 @@ Docs should sound like a competent teammate at 2am: direct, practical, and a lit
 - clear degraded/offline UX when `Codex.app` is closed, app-control is down, fallback is used, or both transports fail
 - configurable Telegram ingress transport: use `nativeIngressTransport: "app-server"` if app-control destabilizes the desktop renderer
 - in-place progress bubble in Telegram: one receipt message is edited while Codex works
+- Telegram typing heartbeat while a Codex turn is active, so the topic feels alive before the next progress edit lands
 - reply-style answers to the triggering Telegram message
 - Telegram HTML rendering for `**bold**`, `_italic_` / `*italic*`, quotes, lists, code, spoilers, links, Markdown tables and local file links, with plain-text fallback
 - short human-facing errors in chat, technical details in logs

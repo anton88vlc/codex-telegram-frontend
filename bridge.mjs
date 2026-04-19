@@ -55,6 +55,12 @@ import {
 } from "./lib/state.mjs";
 import { clamp, getThreadById, getThreadsByIds, listProjectThreads, parsePositiveInt } from "./lib/thread-db.mjs";
 import { makeOutboundMirrorSignature, readThreadMirrorDelta } from "./lib/thread-rollout.mjs";
+import {
+  DEFAULT_TYPING_HEARTBEAT_INTERVAL_MS,
+  normalizeTypingHeartbeatIntervalMs,
+  startTypingHeartbeat,
+  stopTypingHeartbeats,
+} from "./lib/typing-heartbeat.mjs";
 import { formatWorktreeSummary, readGitHead, readWorktreeSummary } from "./lib/worktree-summary.mjs";
 import {
   closeForumTopic,
@@ -185,6 +191,11 @@ async function loadConfig(configPath) {
     allowedChatIds: Array.isArray(fromFile?.allowedChatIds) ? fromFile.allowedChatIds.map(String) : [],
     pollTimeoutSeconds: Number.isFinite(fromFile?.pollTimeoutSeconds) ? fromFile.pollTimeoutSeconds : 30,
     sendTyping: fromFile?.sendTyping !== false,
+    typingHeartbeatEnabled: fromFile?.typingHeartbeatEnabled !== false,
+    typingHeartbeatIntervalMs: normalizeTypingHeartbeatIntervalMs(
+      fromFile?.typingHeartbeatIntervalMs,
+      DEFAULT_TYPING_HEARTBEAT_INTERVAL_MS,
+    ),
     nativeTimeoutMs: Number.isFinite(fromFile?.nativeTimeoutMs) ? fromFile.nativeTimeoutMs : 120_000,
     nativeWaitForReply:
       typeof fromFile?.nativeWaitForReply === "boolean"
@@ -283,6 +294,13 @@ function buildTargetFromMessage(message) {
   return {
     chatId: message.chat.id,
     messageThreadId: message.message_thread_id ?? null,
+  };
+}
+
+function buildTargetFromBinding(binding) {
+  return {
+    chatId: binding.chatId,
+    messageThreadId: binding.messageThreadId ?? null,
   };
 }
 
@@ -477,6 +495,93 @@ function isOutboundMirrorBindingEligible(binding) {
     return false;
   }
   return true;
+}
+
+function isTypingHeartbeatBindingEligible(config, binding) {
+  return (
+    config.sendTyping !== false &&
+    config.typingHeartbeatEnabled !== false &&
+    isOutboundMirrorBindingEligible(binding) &&
+    Boolean(binding?.currentTurn)
+  );
+}
+
+function syncTypingHeartbeats({ config, state, heartbeats, onlyBindingKey = null } = {}) {
+  if (!heartbeats) {
+    return { started: 0, stopped: 0, running: 0 };
+  }
+
+  if (config.sendTyping === false || config.typingHeartbeatEnabled === false) {
+    if (onlyBindingKey) {
+      const heartbeat = heartbeats.get(onlyBindingKey);
+      if (heartbeat) {
+        heartbeat.stop();
+        heartbeats.delete(onlyBindingKey);
+        logBridgeEvent("typing_heartbeat_stop", { bindingKey: onlyBindingKey, reason: "disabled" });
+        return { started: 0, stopped: 1, running: heartbeats.size };
+      }
+      return { started: 0, stopped: 0, running: heartbeats.size };
+    }
+    const stopped = stopTypingHeartbeats(heartbeats);
+    if (stopped) {
+      logBridgeEvent("typing_heartbeats_stop_all", { stopped, reason: "disabled" });
+    }
+    return { started: 0, stopped, running: 0 };
+  }
+
+  const eligibleKeys = new Set();
+  let started = 0;
+  let stopped = 0;
+  const bindingEntries = Object.entries(state.bindings ?? {}).filter(([bindingKey]) => {
+    return !onlyBindingKey || bindingKey === onlyBindingKey;
+  });
+
+  for (const [bindingKey, binding] of bindingEntries) {
+    if (!isTypingHeartbeatBindingEligible(config, binding)) {
+      continue;
+    }
+    eligibleKeys.add(bindingKey);
+    if (heartbeats.has(bindingKey)) {
+      continue;
+    }
+    const heartbeat = startTypingHeartbeat({
+      token: config.botToken,
+      target: buildTargetFromBinding(binding),
+      sendTyping,
+      intervalMs: config.typingHeartbeatIntervalMs,
+      onError(error) {
+        logBridgeEvent("typing_heartbeat_error", {
+          bindingKey,
+          threadId: binding.threadId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      },
+    });
+    if (heartbeat.active) {
+      heartbeats.set(bindingKey, heartbeat);
+      started += 1;
+      logBridgeEvent("typing_heartbeat_start", {
+        bindingKey,
+        threadId: binding.threadId,
+        intervalMs: config.typingHeartbeatIntervalMs,
+      });
+    }
+  }
+
+  for (const [bindingKey, heartbeat] of heartbeats.entries()) {
+    if (onlyBindingKey && bindingKey !== onlyBindingKey) {
+      continue;
+    }
+    if (eligibleKeys.has(bindingKey)) {
+      continue;
+    }
+    heartbeat.stop();
+    heartbeats.delete(bindingKey);
+    stopped += 1;
+    logBridgeEvent("typing_heartbeat_stop", { bindingKey, reason: "idle" });
+  }
+
+  return { started, stopped, running: heartbeats.size };
 }
 
 function isStatusBarBindingEligible(binding) {
@@ -1647,7 +1752,15 @@ async function handleCommand({ config, state, message, bindingKey, binding, pars
   }
 }
 
-async function handlePlainText({ config, state, message, bindingKey, binding, appServerStream = null }) {
+async function handlePlainText({
+  config,
+  state,
+  message,
+  bindingKey,
+  binding,
+  appServerStream = null,
+  typingHeartbeats = null,
+}) {
   if (!binding) {
     await reply(config.botToken, message, "No binding here. Use /attach <thread-id>.");
     return;
@@ -1688,7 +1801,9 @@ async function handlePlainText({ config, state, message, bindingKey, binding, ap
   await refreshStatusBars({ config, state, onlyBindingKey: bindingKey });
   await saveState(config.statePath, state);
 
-  if (config.sendTyping) {
+  if (config.sendTyping && config.typingHeartbeatEnabled !== false && typingHeartbeats) {
+    syncTypingHeartbeats({ config, state, heartbeats: typingHeartbeats, onlyBindingKey: bindingKey });
+  } else if (config.sendTyping) {
     await sendTyping(config.botToken, buildTargetFromMessage(message)).catch(() => null);
   }
   await subscribeAppServerStream({ config, stream: appServerStream, bindingKey, binding });
@@ -1710,8 +1825,9 @@ async function handlePlainText({ config, state, message, bindingKey, binding, ap
     },
   });
 
+  let preferAppServer = false;
   try {
-    const preferAppServer = shouldPreferAppServer(binding, config);
+    preferAppServer = shouldPreferAppServer(binding, config);
     if (preferAppServer) {
       logBridgeEvent("native_send_circuit_breaker", {
         threadId: binding.threadId,
@@ -1768,6 +1884,7 @@ async function handlePlainText({ config, state, message, bindingKey, binding, ap
         transportPath: result.transportPath || null,
       };
       state.bindings[bindingKey] = binding;
+      syncTypingHeartbeats({ config, state, heartbeats: typingHeartbeats, onlyBindingKey: bindingKey });
       logBridgeEvent("native_send_deferred_reply", {
         threadId: binding.threadId,
         bindingKey,
@@ -1778,6 +1895,7 @@ async function handlePlainText({ config, state, message, bindingKey, binding, ap
     }
     binding.currentTurn = null;
     state.bindings[bindingKey] = binding;
+    syncTypingHeartbeats({ config, state, heartbeats: typingHeartbeats, onlyBindingKey: bindingKey });
     await progressBubble.stop();
     const replyText = normalizeText(result?.reply?.text) || "(empty reply)";
     const deliveredReplyText = appendTransportNotice(replyText, result);
@@ -1798,6 +1916,7 @@ async function handlePlainText({ config, state, message, bindingKey, binding, ap
       markTransportError(binding, error);
     }
     state.bindings[bindingKey] = binding;
+    syncTypingHeartbeats({ config, state, heartbeats: typingHeartbeats, onlyBindingKey: bindingKey });
     logBridgeEvent("native_send_error", {
       threadId: binding.threadId,
       bindingKey,
@@ -1814,7 +1933,7 @@ async function handlePlainText({ config, state, message, bindingKey, binding, ap
   }
 }
 
-async function processMessage({ config, state, message, appServerStream = null }) {
+async function processMessage({ config, state, message, appServerStream = null, typingHeartbeats = null }) {
   if (!message?.chat?.id) {
     return false;
   }
@@ -1848,7 +1967,7 @@ async function processMessage({ config, state, message, appServerStream = null }
     if (parsed) {
       return await handleCommand({ config, state, message, bindingKey, binding, parsed });
     }
-    return await handlePlainText({ config, state, message, bindingKey, binding, appServerStream });
+    return await handlePlainText({ config, state, message, bindingKey, binding, appServerStream, typingHeartbeats });
   } catch (error) {
     logBridgeEvent("process_message_error", {
       chatId: message.chat.id,
@@ -2203,6 +2322,7 @@ async function main() {
   configureBridgeEventLog(config);
   const state = await loadState(config.statePath);
   const appServerStream = makeAppServerLiveStream(config);
+  const typingHeartbeats = new Map();
   const effectivePollTimeoutSeconds =
     config.outboundSyncEnabled === false
       ? config.pollTimeoutSeconds
@@ -2249,7 +2369,7 @@ async function main() {
         if (checkpoint.alreadyProcessed) {
           continue;
         }
-        await processMessage({ config, state, message: update.message, appServerStream });
+        await processMessage({ config, state, message: update.message, appServerStream, typingHeartbeats });
         await saveState(config.statePath, state);
       } else {
         state.lastUpdateId = Number.isInteger(update.update_id) ? update.update_id : state.lastUpdateId;
@@ -2285,11 +2405,20 @@ async function main() {
       });
     }
 
+    try {
+      syncTypingHeartbeats({ config, state, heartbeats: typingHeartbeats });
+    } catch (error) {
+      logBridgeEvent("typing_heartbeat_sync_error", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
     if (appServerStreamResult.changed || syncResult.changed || statusBarResult.changed) {
       await saveState(config.statePath, state);
     }
 
     if (args.once) {
+      stopTypingHeartbeats(typingHeartbeats);
       break;
     }
   }

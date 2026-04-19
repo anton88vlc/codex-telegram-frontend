@@ -77,3 +77,4 @@
 22. Telegram command replies now stay in the chat/topic where the command was sent; direct chat is no longer the surprise default for project/status/sync output.
 23. Bootstrap now includes the bot direct chat in the Telegram folder alongside project groups, with `--skip-bot-folder` as the escape hatch.
 24. Optional passive app-server stream in the live bridge: subscribes to active threads, coalesces noisy reasoning/Todo/diff/command/tool events into the existing Telegram progress bubble, and leaves app-control as the send-only happy path.
+25. Telegram typing heartbeat: while a bound topic has an active Codex turn, the bot keeps refreshing the native "typing" action instead of relying on one short-lived `sendChatAction`.

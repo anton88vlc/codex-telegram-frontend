@@ -6,6 +6,8 @@
   "allowedChatIds": [],
   "pollTimeoutSeconds": 30,
   "sendTyping": true,
+  "typingHeartbeatEnabled": true,
+  "typingHeartbeatIntervalMs": 4000,
   "outboundSyncEnabled": true,
   "outboundPollIntervalMs": 2000,
   "outboundMirrorPhases": ["commentary", "final_answer"],
