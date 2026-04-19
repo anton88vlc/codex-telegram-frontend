@@ -16,12 +16,7 @@ import {
   logBridgeEvent,
 } from "./lib/bridge-events.mjs";
 import { isAuthorized } from "./lib/bridge-bindings.mjs";
-import {
-  findFallbackTopicBindingForUnboundGroupMessage,
-  normalizeInboundPrompt,
-  normalizeText,
-  parseCommand,
-} from "./lib/message-routing.mjs";
+import { normalizeInboundPrompt, normalizeText, parseCommand } from "./lib/message-routing.mjs";
 import { appendTransportNotice, renderNativeSendError } from "./lib/native-ux.mjs";
 import {
   markAppControlCooldown,
@@ -57,14 +52,13 @@ import {
 } from "./lib/typing-heartbeat.mjs";
 import { syncTypingHeartbeats } from "./lib/typing-heartbeat-runner.mjs";
 import {
-  buildTargetFromBinding,
   buildTargetFromMessage,
-  formatUnboundGroupFallbackBubble,
   isPrivateTopicMessage,
   isTopicMessage,
   reply,
   replyPlain,
 } from "./lib/telegram-targets.mjs";
+import { rerouteUnboundGroupMessageToFallbackTopic } from "./lib/unbound-group-rescue.mjs";
 import {
   chooseVoiceTranscriptionProvider,
   collectTelegramVoiceRefs,
@@ -87,7 +81,6 @@ import {
   editThenSendRichTextChunks,
   getMe,
   getUpdates,
-  sendRichTextChunks,
   sendTyping,
 } from "./lib/telegram.mjs";
 
@@ -145,60 +138,6 @@ function parseArgs(argv) {
     }
   }
   return out;
-}
-
-async function rerouteUnboundGroupMessageToFallbackTopic({ config, state, message, promptText, attachmentRefs, voiceRefs }) {
-  if (config.unboundGroupFallbackEnabled === false) {
-    return null;
-  }
-  const fallback = findFallbackTopicBindingForUnboundGroupMessage(state, message, {
-    maxAgeMs: config.unboundGroupFallbackMaxAgeMs,
-  });
-  if (!fallback?.binding) {
-    return null;
-  }
-
-  const sent = await sendRichTextChunks(
-    config.botToken,
-    buildTargetFromBinding(fallback.binding),
-    formatUnboundGroupFallbackBubble({
-      message,
-      promptText,
-      attachmentRefs,
-      voiceRefs,
-    }),
-  );
-  const routedMessageId = sent[0]?.message_id;
-  const routedMessage = {
-    ...message,
-    message_id: Number.isInteger(routedMessageId) ? routedMessageId : message.message_id,
-    message_thread_id: fallback.binding.messageThreadId ?? message.message_thread_id ?? null,
-    routedFromMessage: {
-      chatId: String(message.chat.id),
-      messageThreadId: message.message_thread_id ?? null,
-      messageId: message.message_id ?? null,
-    },
-  };
-  fallback.binding.lastUnboundFallbackAt = new Date().toISOString();
-  fallback.binding.lastUnboundFallbackFrom = routedMessage.routedFromMessage;
-  fallback.binding.updatedAt = fallback.binding.lastUnboundFallbackAt;
-  state.bindings[fallback.bindingKey] = fallback.binding;
-  rememberOutbound(fallback.binding, sent);
-  logBridgeEvent("unbound_group_message_rerouted", {
-    chatId: message.chat.id,
-    fromMessageThreadId: message.message_thread_id ?? null,
-    fromMessageId: message.message_id ?? null,
-    toMessageThreadId: fallback.binding.messageThreadId ?? null,
-    toMessageId: Number.isInteger(routedMessageId) ? routedMessageId : null,
-    bindingKey: fallback.bindingKey,
-    threadId: fallback.binding.threadId,
-    activityMs: fallback.activityMs,
-  });
-  return {
-    bindingKey: fallback.bindingKey,
-    binding: fallback.binding,
-    message: routedMessage,
-  };
 }
 
 function isTelegramServiceMessage(message) {
@@ -695,6 +634,7 @@ async function processMessage({ config, state, message, appServerStream = null, 
           promptText,
           attachmentRefs,
           voiceRefs,
+          rememberOutboundFn: rememberOutbound,
         });
         if (rerouted) {
           effectiveMessage = rerouted.message;
