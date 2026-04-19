@@ -85,6 +85,7 @@ Docs should sound like a competent teammate at 2am: direct, practical, and a lit
 - mention-aware ingress (`@bot your request`) when group privacy blocks plain text
 - `sync-project dry-run` and CLI `--self-check`
 - npm scripts for running, self-checks, tests and guided onboarding
+- `onboard:prepare` creates missing local config/admin env files and can set up the admin Python venv before the wizard runs
 - onboarding wizard with interactive project/thread selection, checklist, plan write, optional bootstrap, clean backfill dry-run/send and Telegram smoke
 - `/project-status` shows desired thread column, active topics, parked sync topics and sync preview
 - `/sync-project` can rename/reopen/create/park sync-managed topics for the current working set
@@ -146,6 +147,7 @@ The recommended install path is the agent-led flow above. These commands are the
 Preflight:
 
 ```bash
+npm run onboard:prepare
 npm run onboard:doctor
 ```
 

@@ -16,8 +16,8 @@ Use Codex as the installer. Open this repo in Codex and paste the install prompt
 
 Codex should do the boring parts:
 
-1. Run `npm run onboard:doctor`.
-2. Prepare local config and admin dependencies from examples.
+1. Run `npm run onboard:prepare`.
+2. Run `npm run onboard:doctor`.
 3. Guide the few unavoidable Telegram steps.
 4. Scan local Codex projects and ask which projects/threads belong on the phone.
 5. Run the wizard with explicit side effects only after the plan looks sane.
@@ -41,6 +41,12 @@ npm run codex:launch
 Codex should handle where token/API values are stored locally. Do not make the user cosplay as a secrets manager unless the automatic path fails.
 
 ## Main Command
+
+Prepare is the setup preflight. It creates missing local config/admin env files, can create the admin Python venv and can guide credential/session setup.
+
+```bash
+npm run onboard:prepare
+```
 
 The wizard is the product path:
 

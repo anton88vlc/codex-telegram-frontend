@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import readline from "node:readline/promises";
+import { Writable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
@@ -32,7 +33,10 @@ const DEFAULT_REHEARSAL_OUTPUT_PATH = path.join(PROJECT_ROOT, "admin", "bootstra
 const DEFAULT_ADMIN_HELPER_PATH = path.join(PROJECT_ROOT, "admin", "telegram_user_admin.py");
 const DEFAULT_ADMIN_PYTHON_PATH = path.join(PROJECT_ROOT, "admin", ".venv", "bin", "python");
 const DEFAULT_CONFIG_PATH = path.join(PROJECT_ROOT, "config.local.json");
+const DEFAULT_CONFIG_EXAMPLE_PATH = path.join(PROJECT_ROOT, "config.example.json");
 const DEFAULT_ADMIN_ENV_PATH = path.join(PROJECT_ROOT, "admin", ".env");
+const DEFAULT_ADMIN_ENV_EXAMPLE_PATH = path.join(PROJECT_ROOT, "admin", ".env.example");
+const DEFAULT_ADMIN_REQUIREMENTS_PATH = path.join(PROJECT_ROOT, "admin", "requirements.txt");
 const DEFAULT_ADMIN_SESSION_PATH = path.join(PROJECT_ROOT, "state", "telegram_user.session");
 const DEFAULT_BRIDGE_STATE_PATH = path.join(PROJECT_ROOT, "state", "state.json");
 const DEFAULT_BOT_TOKEN_KEYCHAIN_SERVICE = "codex-telegram-bridge-bot-token";
@@ -81,6 +85,10 @@ function parseArgs(argv) {
     adminEnvPath: DEFAULT_ADMIN_ENV_PATH,
     adminSessionPath: DEFAULT_ADMIN_SESSION_PATH,
     bridgeStatePath: DEFAULT_BRIDGE_STATE_PATH,
+    prepare: false,
+    noPrepare: false,
+    skipAdminDeps: false,
+    loginQr: false,
     _projectLimitExplicit: false,
     _threadsPerProjectExplicit: false,
     _historyMaxMessagesExplicit: false,
@@ -211,6 +219,18 @@ function parseArgs(argv) {
       case "--bridge-state":
         args.bridgeStatePath = rest[++index];
         break;
+      case "--prepare":
+        args.prepare = true;
+        break;
+      case "--no-prepare":
+        args.noPrepare = true;
+        break;
+      case "--skip-admin-deps":
+        args.skipAdminDeps = true;
+        break;
+      case "--login-qr":
+        args.loginQr = true;
+        break;
       case "--help":
       case "-h":
         args.help = true;
@@ -235,6 +255,7 @@ function parseArgs(argv) {
 function renderHelp() {
   return [
     "Usage:",
+    "  node scripts/onboard.mjs prepare [--skip-admin-deps] [--login-qr]",
     "  node scripts/onboard.mjs doctor [--json]",
     "  node scripts/onboard.mjs scan [--project-limit 8] [--threads-per-project 3] [--json]",
     "  node scripts/onboard.mjs plan --project /path/to/repo [--project /path/to/other] [--threads-per-project 3] [--history-max-messages 40] [--history-assistant-phase final_answer] [--group-prefix 'Codex - '] [--folder-title codex] [--topic-display tabs|list] [--write]",
@@ -244,6 +265,7 @@ function renderHelp() {
     "",
     "Notes:",
     "  preferred public setup is agent-led: ask Codex to run doctor, prepare local config, then drive the wizard.",
+    "  prepare creates missing local config/admin env files, can create the admin venv, and can guide credential/session setup.",
     "  doctor checks local prerequisites before the wizard gets creative.",
     "  codex:launch starts Codex.app with the app-control debug port when it is not already open.",
     "  scan is read-only and shows candidate Codex projects/threads.",
@@ -271,6 +293,204 @@ async function readJsonIfExists(filePath, fallback = {}) {
   } catch {
     return fallback;
   }
+}
+
+async function writeJsonFile(filePath, value) {
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+}
+
+function isPlaceholderValue(value) {
+  return /^your_|^123456789$/.test(String(value ?? "").trim());
+}
+
+function cleanBotUsername(value) {
+  const text = String(value ?? "").trim().replace(/^@+/, "");
+  return text && !isPlaceholderValue(text) ? text : "";
+}
+
+function sanitizeConfigTemplate(config) {
+  const next = { ...config };
+  if (Array.isArray(next.allowedUserIds) && next.allowedUserIds.some((value) => isPlaceholderValue(value))) {
+    next.allowedUserIds = [];
+  }
+  if (isPlaceholderValue(next.botUsername)) {
+    next.botUsername = null;
+  }
+  return next;
+}
+
+async function ensureConfigFile(args) {
+  if (await pathExists(args.configPath)) {
+    return { changed: false, message: `config exists: ${args.configPath}` };
+  }
+  const template = sanitizeConfigTemplate(await readJsonIfExists(DEFAULT_CONFIG_EXAMPLE_PATH, {}));
+  await writeJsonFile(args.configPath, template);
+  return { changed: true, message: `created config: ${args.configPath}` };
+}
+
+async function ensureAdminEnvFile(args) {
+  if (await pathExists(args.adminEnvPath)) {
+    return { changed: false, message: `admin env exists: ${args.adminEnvPath}` };
+  }
+  await fs.mkdir(path.dirname(args.adminEnvPath), { recursive: true });
+  const template = await fs.readFile(DEFAULT_ADMIN_ENV_EXAMPLE_PATH, "utf8");
+  await fs.writeFile(args.adminEnvPath, template, "utf8");
+  return { changed: true, message: `created admin env: ${args.adminEnvPath}` };
+}
+
+async function ensureLocalDirs() {
+  await Promise.all([
+    fs.mkdir(path.join(PROJECT_ROOT, "admin"), { recursive: true }),
+    fs.mkdir(path.join(PROJECT_ROOT, "logs"), { recursive: true }),
+    fs.mkdir(path.join(PROJECT_ROOT, "state"), { recursive: true }),
+  ]);
+}
+
+function parseEnvText(text) {
+  const values = {};
+  for (const rawLine of String(text ?? "").split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) {
+      continue;
+    }
+    const match = line.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
+    if (!match) {
+      continue;
+    }
+    values[match[1]] = match[2].replace(/^"(.*)"$/, "$1").replace(/^'(.*)'$/, "$1").trim();
+  }
+  return values;
+}
+
+async function readEnvValues(filePath) {
+  try {
+    return parseEnvText(await fs.readFile(filePath, "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+function formatEnvValue(value) {
+  const text = String(value ?? "");
+  if (!text || /^[A-Za-z0-9_:@./-]+$/.test(text)) {
+    return text;
+  }
+  return JSON.stringify(text);
+}
+
+async function setEnvValues(filePath, updates) {
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  let text = "";
+  try {
+    text = await fs.readFile(filePath, "utf8");
+  } catch {
+    text = "";
+  }
+  const pending = new Map(
+    Object.entries(updates).filter(([, value]) => value !== undefined && value !== null && String(value).trim() !== ""),
+  );
+  const lines = text.split(/\r?\n/);
+  const nextLines = lines.map((line) => {
+    const match = line.match(/^([A-Za-z_][A-Za-z0-9_]*)=/);
+    if (!match || !pending.has(match[1])) {
+      return line;
+    }
+    const value = pending.get(match[1]);
+    pending.delete(match[1]);
+    return `${match[1]}=${formatEnvValue(value)}`;
+  });
+  for (const [key, value] of pending) {
+    nextLines.push(`${key}=${formatEnvValue(value)}`);
+  }
+  await fs.writeFile(filePath, `${nextLines.join("\n").replace(/\n*$/, "")}\n`, "utf8");
+}
+
+async function setConfigValues(filePath, updates) {
+  const config = await readJsonIfExists(filePath, {});
+  await writeJsonFile(filePath, { ...config, ...updates });
+}
+
+async function runPlainCommand(command, args, { cwd = PROJECT_ROOT } = {}) {
+  process.stdout.write(`\n$ ${[command, ...args].join(" ")}\n`);
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd,
+      stdio: "inherit",
+      env: process.env,
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      reject(new Error(`${command} failed with exit code ${code}`));
+    });
+  });
+}
+
+async function ensureAdminDeps(args) {
+  if (await pathExists(args.adminPythonPath)) {
+    return { changed: false, message: `admin Python exists: ${args.adminPythonPath}` };
+  }
+  const venvDir = path.dirname(path.dirname(args.adminPythonPath));
+  await runPlainCommand("python3", ["-m", "venv", venvDir]);
+  await runPlainCommand(args.adminPythonPath, ["-m", "pip", "install", "-r", DEFAULT_ADMIN_REQUIREMENTS_PATH]);
+  return { changed: true, message: `created admin Python venv: ${venvDir}` };
+}
+
+async function askSecretLine(question) {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    return "";
+  }
+  const output = new Writable({
+    write(chunk, encoding, callback) {
+      if (!output.muted) {
+        process.stdout.write(chunk, encoding);
+      }
+      callback();
+    },
+  });
+  output.muted = false;
+  const secretRl = readline.createInterface({
+    input: process.stdin,
+    output,
+    terminal: true,
+  });
+  const answerPromise = secretRl.question(`${question}: `);
+  output.muted = true;
+  const answer = await answerPromise;
+  process.stdout.write("\n");
+  secretRl.close();
+  return answer.trim();
+}
+
+async function hasBridgeBotToken(args) {
+  const config = await readJsonIfExists(args.configPath, {});
+  const botTokenEnv = config.botTokenEnv || "CODEX_TELEGRAM_BOT_TOKEN";
+  const keychainService = config.botTokenKeychainService || DEFAULT_BOT_TOKEN_KEYCHAIN_SERVICE;
+  return Boolean(process.env[botTokenEnv] || config.botToken || (await keychainHasSecret(keychainService)));
+}
+
+async function storeBotToken(args, token) {
+  const config = await readJsonIfExists(args.configPath, {});
+  const keychainService = config.botTokenKeychainService || DEFAULT_BOT_TOKEN_KEYCHAIN_SERVICE;
+  if (process.platform === "darwin") {
+    await execFileAsync("/usr/bin/security", [
+      "add-generic-password",
+      "-U",
+      "-s",
+      String(keychainService),
+      "-a",
+      "codex-telegram-frontend",
+      "-w",
+      token,
+    ]);
+    return `stored bot token in macOS Keychain service ${keychainService}`;
+  }
+  await setConfigValues(args.configPath, { botToken: token });
+  return `stored bot token in ${args.configPath}`;
 }
 
 function normalizeAssistantPhases(value, fallback = DEFAULT_HISTORY_ASSISTANT_PHASES) {
@@ -432,6 +652,111 @@ async function buildOnboardingChecks(args) {
 
 async function buildOnboardingChecklist(args) {
   return (await buildOnboardingChecks(args)).map(renderChecklistItem);
+}
+
+async function buildLocalSetupNeeds(args) {
+  const [configOk, envOk, adminPythonOk] = await Promise.all([
+    pathExists(args.configPath),
+    pathExists(args.adminEnvPath),
+    pathExists(args.adminPythonPath),
+  ]);
+  const needs = [];
+  if (!configOk) needs.push("config.local.json");
+  if (!envOk) needs.push("admin/.env");
+  if (!adminPythonOk) needs.push("admin Python venv");
+  return needs;
+}
+
+async function promptCredentialSetup(args, rl) {
+  if (!rl || args.noInput) {
+    return [];
+  }
+  const messages = [];
+  const envValues = await readEnvValues(args.adminEnvPath);
+  const apiMissing = !envValues.API_ID || !envValues.API_HASH;
+  if (apiMissing && (await askYesNo(rl, "Add Telegram API_ID/API_HASH to admin .env now?", true))) {
+    const apiId = await askLine(rl, "Telegram API_ID");
+    const apiHash = await askSecretLine("Telegram API_HASH (hidden)");
+    if (apiId && apiHash) {
+      await setEnvValues(args.adminEnvPath, { API_ID: apiId, API_HASH: apiHash });
+      messages.push(`updated Telegram API credentials in ${args.adminEnvPath}`);
+    }
+  }
+
+  const config = await readJsonIfExists(args.configPath, {});
+  const updatedEnvValues = await readEnvValues(args.adminEnvPath);
+  const existingBotUsername = cleanBotUsername(config.botUsername) || cleanBotUsername(updatedEnvValues.CODEX_TELEGRAM_BOT_USERNAME);
+  if (!existingBotUsername && (await askYesNo(rl, "Add Telegram bot username now?", true))) {
+    const botUsername = cleanBotUsername(await askLine(rl, "Bot username without @"));
+    if (botUsername) {
+      await setConfigValues(args.configPath, { botUsername });
+      await setEnvValues(args.adminEnvPath, { CODEX_TELEGRAM_BOT_USERNAME: botUsername });
+      messages.push(`stored bot username ${botUsername}`);
+    }
+  }
+
+  if (!(await hasBridgeBotToken(args)) && (await askYesNo(rl, "Store Telegram bot token locally now?", true))) {
+    const token = await askSecretLine("Telegram bot token (hidden)");
+    if (token) {
+      messages.push(await storeBotToken(args, token));
+    }
+  }
+  return messages;
+}
+
+async function maybeRunLoginQr(args, rl, python) {
+  if (await pathExists(args.adminSessionPath)) {
+    return null;
+  }
+  const shouldLogin = args.loginQr || (rl && !args.noInput && (await askYesNo(rl, "Authorize Telegram user session with QR login now?", false)));
+  if (!shouldLogin) {
+    return null;
+  }
+  await runPlainCommand(python, [...adminBaseArgs(args), "login-qr"], { cwd: PROJECT_ROOT });
+  return `authorized Telegram user session: ${args.adminSessionPath}`;
+}
+
+async function prepareLocalSetup(args, rl, { force = false } = {}) {
+  await ensureLocalDirs();
+  const messages = [];
+  messages.push((await ensureConfigFile(args)).message);
+  messages.push((await ensureAdminEnvFile(args)).message);
+
+  const shouldInstallDeps =
+    !args.skipAdminDeps &&
+    !(await pathExists(args.adminPythonPath)) &&
+    (force || (rl && !args.noInput && (await askYesNo(rl, "Create admin Python venv and install requirements now?", true))));
+  if (shouldInstallDeps) {
+    messages.push((await ensureAdminDeps(args)).message);
+  } else if (args.skipAdminDeps) {
+    messages.push("skipped admin Python dependency setup");
+  }
+
+  messages.push(...(await promptCredentialSetup(args, rl)));
+  const python = await resolveAdminPython(args);
+  const loginMessage = await maybeRunLoginQr(args, rl, python);
+  if (loginMessage) {
+    messages.push(loginMessage);
+  }
+  return messages.filter(Boolean);
+}
+
+async function maybePrepareForWizard(args, rl) {
+  if (args.noPrepare) {
+    return;
+  }
+  const needs = await buildLocalSetupNeeds(args);
+  if (!args.prepare && !needs.length) {
+    return;
+  }
+  const shouldPrepare =
+    args.prepare ||
+    (rl && !args.noInput && (await askYesNo(rl, `Prepare local setup now${needs.length ? ` (${needs.join(", ")})` : ""}?`, true)));
+  if (!shouldPrepare) {
+    return;
+  }
+  const messages = await prepareLocalSetup(args, rl);
+  process.stdout.write(`\nLocal setup prepare:\n${messages.map((message) => `- ${message}`).join("\n")}\n\n`);
 }
 
 function printProjectChoices(projects) {
@@ -683,6 +1008,20 @@ async function commandDoctor(args) {
   }
 }
 
+async function commandPrepare(args) {
+  const rl = args.noInput ? null : createPrompt();
+  try {
+    const messages = await prepareLocalSetup(args, rl, { force: true });
+    if (args.json) {
+      process.stdout.write(`${JSON.stringify({ status: "ok", messages }, null, 2)}\n`);
+      return;
+    }
+    process.stdout.write(`Local setup prepare:\n${messages.map((message) => `- ${message}`).join("\n")}\n`);
+  } finally {
+    rl?.close();
+  }
+}
+
 async function commandScan(args) {
   const projects = await loadProjectsWithThreads(args);
   if (args.json) {
@@ -778,6 +1117,8 @@ async function chooseThreadsForWizard(args, rl, project) {
 async function commandWizard(args) {
   const rl = args.noInput ? null : createPrompt();
   try {
+    await maybePrepareForWizard(args, rl);
+    await applyConfigDefaults(args);
     const checklist = await buildOnboardingChecklist(args);
     process.stdout.write("Onboarding checklist:\n");
     process.stdout.write(`${checklist.map((item) => `- ${item}`).join("\n")}\n\n`);
@@ -909,6 +1250,10 @@ async function main() {
     return;
   }
   await applyConfigDefaults(args);
+  if (args.command === "prepare") {
+    await commandPrepare(args);
+    return;
+  }
   if (args.command === "scan") {
     await commandScan(args);
     return;

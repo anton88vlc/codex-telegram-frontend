@@ -85,6 +85,44 @@ test("onboard CLI supports top-level help", () => {
   assert.match(result.stdout, /wizard/);
   assert.match(result.stdout, /--rehearsal/);
   assert.match(result.stdout, /--cleanup-dry-run/);
+  assert.match(result.stdout, /prepare/);
+});
+
+test("onboard prepare creates local config and admin env from safe templates", () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codex-onboard-prepare-"));
+  const configPath = path.join(tmpDir, "config.local.json");
+  const adminEnvPath = path.join(tmpDir, "admin", ".env");
+  const adminPythonPath = path.join(tmpDir, "admin", ".venv", "bin", "python");
+
+  const result = spawnSync(
+    process.execPath,
+    [
+      "scripts/onboard.mjs",
+      "prepare",
+      "--no-input",
+      "--skip-admin-deps",
+      "--config",
+      configPath,
+      "--admin-env",
+      adminEnvPath,
+      "--admin-python",
+      adminPythonPath,
+    ],
+    {
+      cwd: PROJECT_ROOT,
+      encoding: "utf8",
+    },
+  );
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /created config/);
+  assert.match(result.stdout, /created admin env/);
+  const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+  assert.deepEqual(config.allowedUserIds, []);
+  assert.equal(config.botUsername, null);
+  const envText = fs.readFileSync(adminEnvPath, "utf8");
+  assert.match(envText, /API_ID=/);
+  assert.match(envText, /API_HASH=/);
 });
 
 test("onboard wizard can write a non-interactive rehearsal plan", () => {
