@@ -70,7 +70,7 @@ Docs should sound like a competent teammate at 2am: direct, practical, and a lit
 - live outbound mirror: Codex Desktop user-turn surrogate and final answers are mirrored into the bound Telegram topic/chat
 - Codex-originated commentary is folded into one editable progress message with recent visible updates; `outboundProgressMode: "generic"` hides details and `outboundProgressMode: "verbatim"` mirrors raw commentary
 - Codex task plans are mirrored into the same progress bubble as a compact `Todo` block
-- live progress includes a compact `Changed files` block from the thread git worktree, so Telegram keeps the same “what changed?” signal as Codex Desktop
+- live progress includes a compact `Changed files` block from the thread git worktree: turn-baseline commits plus the current dirty worktree, so Telegram keeps the same “what changed?” signal as Codex Desktop
 - pinned compact status bar in active topics with model/reasoning/context/rate/activity data
 - persisted outbound checkpoint and suppression layer to avoid duplicating bridge-originated replies
 - Telethon-based user-side Telegram admin helper for groups, topics and bot-admin permissions

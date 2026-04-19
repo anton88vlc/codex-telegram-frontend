@@ -26,7 +26,7 @@ Use this for things that should survive restarts and should not be changed from 
 | `statusBarEnabled` | `true` | Enables compact pinned topic status bar. |
 | `statusBarPin` | `true` | Pins the status bar message when Telegram allows it. |
 | `statusBarTailBytes` | `524288` | How much rollout tail is sampled for status data. |
-| `worktreeSummaryEnabled` | `true` | Adds a compact `Changed files` block to live progress bubbles when the thread cwd is a git repo. |
+| `worktreeSummaryEnabled` | `true` | Adds a compact `Changed files` block to live progress bubbles when the thread cwd is a git repo. It uses the turn baseline commit plus the current dirty worktree. |
 | `worktreeSummaryMaxFiles` | `8` | Maximum changed files shown in the Telegram progress bubble before `... +N more`. |
 | `nativeTimeoutMs` | `120000` | Timeout for one native Codex send. |
 | `nativeWaitForReply` | `false` | Keep this off for the normal happy path. The transport returns as soon as Codex accepts the turn; Telegram gets progress/final through the outbound rollout mirror. Setting it to `true` uses the older renderer polling path and should be treated as a debugging fallback. |

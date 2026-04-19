@@ -52,7 +52,7 @@ import {
 } from "./lib/state.mjs";
 import { clamp, getThreadById, getThreadsByIds, listProjectThreads, parsePositiveInt } from "./lib/thread-db.mjs";
 import { makeOutboundMirrorSignature, readThreadMirrorDelta } from "./lib/thread-rollout.mjs";
-import { formatWorktreeSummary, readWorktreeSummary } from "./lib/worktree-summary.mjs";
+import { formatWorktreeSummary, readGitHead, readWorktreeSummary } from "./lib/worktree-summary.mjs";
 import {
   closeForumTopic,
   createForumTopic,
@@ -394,7 +394,12 @@ function rememberOutboundMirrorSuppression(state, bindingKey, text, { role = "as
   return signature;
 }
 
-async function loadChangedFilesTextForThread({ config, thread, cache }) {
+async function captureWorktreeBaseHead(thread) {
+  const cwd = normalizeText(thread?.cwd);
+  return cwd ? await readGitHead(cwd) : null;
+}
+
+async function loadChangedFilesTextForThread({ config, thread, binding, cache }) {
   if (config.worktreeSummaryEnabled === false) {
     return null;
   }
@@ -402,15 +407,23 @@ async function loadChangedFilesTextForThread({ config, thread, cache }) {
   if (!cwd) {
     return null;
   }
-  if (cache.has(cwd)) {
-    return cache.get(cwd);
+  let baseRef = normalizeText(binding?.currentTurn?.worktreeBaseHead);
+  if (!baseRef && binding?.currentTurn) {
+    baseRef = await captureWorktreeBaseHead(thread);
+    if (baseRef) {
+      binding.currentTurn.worktreeBaseHead = baseRef;
+    }
   }
-  const summary = await readWorktreeSummary(cwd);
+  const cacheKey = `${cwd}\0${baseRef || ""}`;
+  if (cache.has(cacheKey)) {
+    return cache.get(cacheKey) || binding?.currentTurn?.changedFilesText || null;
+  }
+  const summary = await readWorktreeSummary(cwd, { baseRef });
   const text = formatWorktreeSummary(summary, {
     maxFiles: config.worktreeSummaryMaxFiles,
   });
-  cache.set(cwd, text);
-  return text;
+  cache.set(cacheKey, text);
+  return text || binding?.currentTurn?.changedFilesText || null;
 }
 
 function isOutboundMirrorBindingEligible(binding) {
@@ -1410,6 +1423,7 @@ async function handlePlainText({ config, state, message, bindingKey, binding }) 
     source: "telegram",
     startedAt: new Date().toISOString(),
     promptPreview: makePromptPreview(prompt),
+    worktreeBaseHead: await captureWorktreeBaseHead(bindingValidation.thread),
   };
   binding.updatedAt = new Date().toISOString();
   state.bindings[bindingKey] = binding;
@@ -1694,6 +1708,7 @@ async function syncOutboundMirrors({ config, state }) {
             ? await loadChangedFilesTextForThread({
                 config,
                 thread,
+                binding,
                 cache: changedFilesCache,
               })
             : null;
@@ -1728,6 +1743,7 @@ async function syncOutboundMirrors({ config, state }) {
             source: "codex",
             startedAt: message.timestamp || new Date().toISOString(),
             promptPreview: makePromptPreview(message.text),
+            worktreeBaseHead: await captureWorktreeBaseHead(thread),
           };
         } else if (isFinalAssistant) {
           replyTargetMessageId = null;
