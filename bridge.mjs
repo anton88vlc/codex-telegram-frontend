@@ -34,7 +34,7 @@ import {
 } from "./lib/project-sync.mjs";
 import { buildSelfCheckReport, formatSelfCheckReport } from "./lib/runtime-health.mjs";
 import { buildSettingsReport } from "./lib/settings-report.mjs";
-import { buildStatusBarText, makeStatusBarHash, readRolloutRuntimeStatus } from "./lib/status-bar.mjs";
+import { buildStatusBarMessage, makeStatusBarHash, readRolloutRuntimeStatus } from "./lib/status-bar.mjs";
 import {
   getBinding,
   getOutboundMirror,
@@ -1839,11 +1839,12 @@ async function syncOutboundMirrors({ config, state }) {
   return { delivered, suppressed, changed };
 }
 
-async function reserveStatusBarMessage({ config, bindingKey, binding, text }) {
+async function reserveStatusBarMessage({ config, bindingKey, binding, message }) {
   const sent = await sendMessage(config.botToken, {
     chatId: binding.chatId,
     messageThreadId: binding.messageThreadId,
-    text,
+    text: message.text,
+    entities: message.entities,
   });
   const messageId = sent?.message_id;
   if (!Number.isInteger(messageId)) {
@@ -1916,33 +1917,34 @@ async function refreshStatusBars({ config, state, onlyBindingKey = null } = {}) 
       });
     }
 
-    const text = buildStatusBarText({
+    const message = buildStatusBarMessage({
       binding,
       thread,
       runtime,
       config,
     });
-    const hash = makeStatusBarHash(text);
+    const hash = makeStatusBarHash(JSON.stringify(message));
     if (binding.statusBarMessageId && binding.statusBarTextHash === hash) {
       continue;
     }
 
     try {
       if (!binding.statusBarMessageId) {
-        await reserveStatusBarMessage({ config, bindingKey, binding, text });
+        await reserveStatusBarMessage({ config, bindingKey, binding, message });
       } else {
         try {
           await editMessageText(config.botToken, {
             chatId: binding.chatId,
             messageId: binding.statusBarMessageId,
-            text,
+            text: message.text,
+            entities: message.entities,
           });
         } catch (error) {
           if (!isMissingStatusBarMessageError(error)) {
             throw error;
           }
           delete binding.statusBarMessageId;
-          await reserveStatusBarMessage({ config, bindingKey, binding, text });
+          await reserveStatusBarMessage({ config, bindingKey, binding, message });
         }
       }
       binding.statusBarTextHash = hash;

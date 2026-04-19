@@ -40,7 +40,7 @@
 4. Heartbeat transport as an alternative mode for UI-visible jobs.
 5. Managed-bot onboarding spike: Bot API 9.6 added managed bots and `t.me/newbot/...` links. Investigate whether a manager bot can make first install less BotFather-heavy without adding a creepy SaaS control plane.
 6. Native Telegram Checklist spike for Codex Todo blocks. Likely not default yet because Bot API checklist sending is business-account-shaped, but it is worth validating before we keep hand-rendering Todo forever.
-7. Telegram `date_time` entity spike for compact rate-limit resets in the pinned status bar.
+7. ~~Telegram `date_time` entity base for compact rate-limit resets in the pinned status bar.~~ Live visual polish can still tune the exact format after mobile review.
 8. ~~Bot profile/install polish base: default administrator rights, command menu, menu button and profile descriptions.~~ Cleaner topic/project icons still need a visual pass.
 
 ## P4 - UX Modes
@@ -71,3 +71,4 @@
 18. App-server stream probe base: CLI probe plus tested event normalization for assistant deltas, reasoning, Todo, diffs, token/rate updates and tool progress.
 19. Telegram Bot API helper base for cleanup batches, private-chat drafts, inline keyboard markup and bot profile/admin-rights polish.
 20. Bot install polish script: dry-run/apply flow for command menu, profile text, menu button and suggested admin rights, plus Telegram-menu-safe command aliases.
+21. Status bar reset times now use Telegram `date_time` entities while keeping the plain compact text readable.

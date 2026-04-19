@@ -69,6 +69,8 @@ The first Bot API helper layer now covers `deleteMessages`, private-chat `sendMe
 
 The first install polish path now exposes those profile/admin-rights helpers through `npm run bot:polish`. It also uses underscore command aliases (`/sync_project`, `/project_status`) because Telegram's command menu is not fond of our nicer-looking hyphen commands. Tiny detail, real UX.
 
+Pinned status bars now send reset times as Telegram `date_time` entities. The visible text stays compact (`reset 23:58`), while newer clients can attach the underlying Unix time and local formatting.
+
 ## Recommendation
 
 Next implementation step:

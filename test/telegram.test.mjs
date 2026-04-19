@@ -67,6 +67,22 @@ test("sendMessage can attach inline keyboard markup for ops actions", async () =
   });
 });
 
+test("sendMessage sends explicit entities instead of parse mode", async () => {
+  await withMockTelegramFetch(async (calls) => {
+    await sendMessage("token", {
+      chatId: 123,
+      text: "reset 23:58",
+      parseMode: "HTML",
+      entities: [{ type: "date_time", offset: 6, length: 5, unix_time: 1776549480, date_time_format: "t" }],
+    });
+
+    assert.equal(calls[0].body.parse_mode, undefined);
+    assert.deepEqual(calls[0].body.entities, [
+      { type: "date_time", offset: 6, length: 5, unix_time: 1776549480, date_time_format: "t" },
+    ]);
+  });
+});
+
 test("deleteMessages batches ids for Bot API cleanup", async () => {
   await withMockTelegramFetch(async (calls) => {
     const ids = Array.from({ length: 205 }, (_, index) => index + 1);

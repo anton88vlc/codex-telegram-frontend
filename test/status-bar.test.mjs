@@ -1,7 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildStatusBarText, extractLatestRuntimeStatus, makeStatusBarHash } from "../lib/status-bar.mjs";
+import {
+  buildStatusBarEntities,
+  buildStatusBarMessage,
+  buildStatusBarText,
+  extractLatestRuntimeStatus,
+  makeStatusBarHash,
+} from "../lib/status-bar.mjs";
 
 test("extractLatestRuntimeStatus reads the latest token_count event", () => {
   const first = JSON.stringify({
@@ -122,4 +128,52 @@ test("buildStatusBarText shows latest progress activity time", () => {
   });
 
   assert.match(text, /status: pinned, running 21:07, mirror on/);
+});
+
+test("buildStatusBarMessage marks reset times as Telegram date_time entities", () => {
+  const runtime = {
+    lastTokenUsage: { total_tokens: 179315 },
+    modelContextWindow: 258400,
+    rateLimits: {
+      primary: {
+        used_percent: 12,
+        resets_at: Date.parse("2026-04-18T21:58:00.000Z") / 1000,
+      },
+      secondary: {
+        used_percent: 18,
+        resets_at: Date.parse("2026-04-25T16:55:00.000Z") / 1000,
+      },
+    },
+  };
+  const message = buildStatusBarMessage({
+    binding: { statusBarMessageId: 123 },
+    thread: { model: "gpt-5.4", reasoning_effort: "xhigh" },
+    runtime,
+    config: {},
+    nowMs: Date.parse("2026-04-18T19:00:00.000Z"),
+  });
+
+  assert.deepEqual(
+    message.entities.map((entity) => ({
+      type: entity.type,
+      text: message.text.slice(entity.offset, entity.offset + entity.length),
+      unix_time: entity.unix_time,
+      date_time_format: entity.date_time_format,
+    })),
+    [
+      {
+        type: "date_time",
+        text: "23:58",
+        unix_time: Date.parse("2026-04-18T21:58:00.000Z") / 1000,
+        date_time_format: "t",
+      },
+      {
+        type: "date_time",
+        text: "18:55",
+        unix_time: Date.parse("2026-04-25T16:55:00.000Z") / 1000,
+        date_time_format: "t",
+      },
+    ],
+  );
+  assert.deepEqual(buildStatusBarEntities({ text: message.text, runtime: null }), []);
 });
