@@ -49,6 +49,9 @@ test("buildBootstrapPlan keeps onboarding defaults near the generated plan", () 
     generatedAt: "2026-04-18T20:00:00.000Z",
     threadsPerProject: 1,
     historyMaxMessages: 20,
+    historyMaxUserPrompts: 3,
+    historyAssistantPhases: ["final_answer", "commentary"],
+    historyIncludeHeartbeats: true,
     folderTitle: "codex-lab",
     groupPrefix: "Codex Lab - ",
     rehearsal: true,
@@ -61,9 +64,13 @@ test("buildBootstrapPlan keeps onboarding defaults near the generated plan", () 
   assert.equal(plan.onboarding.topicDisplay, "tabs");
   assert.equal(plan.onboarding.threadsPerProject, 1);
   assert.equal(plan.onboarding.historyMaxMessages, 20);
+  assert.equal(plan.onboarding.historyMaxUserPrompts, 3);
+  assert.deepEqual(plan.onboarding.historyAssistantPhases, ["final_answer", "commentary"]);
+  assert.equal(plan.onboarding.historyIncludeHeartbeats, true);
   assert.equal(plan.projects.length, 1);
   assert.match(formatBootstrapPlanSummary(plan), /folder codex-lab/);
   assert.match(formatBootstrapPlanSummary(plan), /display as tabs/);
+  assert.match(formatBootstrapPlanSummary(plan), /history user prompt cap: 3/);
   assert.match(formatBootstrapPlanSummary(plan), /Codex Lab - app/);
 });
 
@@ -138,4 +145,75 @@ test("onboard wizard can write a non-interactive rehearsal plan", () => {
     plan.projects[0].topics.map((topic) => topic.threadId),
     ["t1", "t2"],
   );
+});
+
+test("onboard wizard reads clean history defaults from config", () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codex-onboard-config-"));
+  const dbPath = path.join(tmpDir, "state.sqlite");
+  const outputPath = path.join(tmpDir, "bootstrap-plan.json");
+  const configPath = path.join(tmpDir, "config.local.json");
+  fs.writeFileSync(
+    configPath,
+    JSON.stringify(
+      {
+        historyMaxMessages: 12,
+        historyMaxUserPrompts: 4,
+        historyAssistantPhases: ["final_answer", "commentary"],
+        historyIncludeHeartbeats: true,
+      },
+      null,
+      2,
+    ),
+  );
+  const sql = `
+    create table threads (
+      id text,
+      title text,
+      cwd text,
+      archived integer,
+      updated_at integer,
+      updated_at_ms integer,
+      source text,
+      rollout_path text,
+      model_provider text,
+      model text,
+      reasoning_effort text,
+      tokens_used integer,
+      agent_nickname text,
+      agent_role text
+    );
+    insert into threads values ('t1', 'Setup thread', '/tmp/project-a', 0, 20, 20000, 'local', '/tmp/rollout-a.jsonl', '', 'gpt-5.4', 'high', 10, '', '');
+  `;
+  const sqlite = spawnSync("sqlite3", [dbPath, sql], {
+    cwd: PROJECT_ROOT,
+    encoding: "utf8",
+  });
+  assert.equal(sqlite.status, 0, sqlite.stderr);
+
+  const result = spawnSync(
+    process.execPath,
+    [
+      "scripts/onboard.mjs",
+      "wizard",
+      "--no-input",
+      "--write",
+      "--threads-db",
+      dbPath,
+      "--output",
+      outputPath,
+      "--config",
+      configPath,
+    ],
+    {
+      cwd: PROJECT_ROOT,
+      encoding: "utf8",
+    },
+  );
+
+  assert.equal(result.status, 0, result.stderr);
+  const plan = JSON.parse(fs.readFileSync(outputPath, "utf8"));
+  assert.equal(plan.onboarding.historyMaxMessages, 12);
+  assert.equal(plan.onboarding.historyMaxUserPrompts, 4);
+  assert.deepEqual(plan.onboarding.historyAssistantPhases, ["final_answer", "commentary"]);
+  assert.equal(plan.onboarding.historyIncludeHeartbeats, true);
 });

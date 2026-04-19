@@ -88,6 +88,8 @@ const DEFAULT_OUTBOUND_POLL_INTERVAL_MS = 2_000;
 const DEFAULT_OUTBOUND_MIRROR_PHASES = ["commentary", "final_answer"];
 const DEFAULT_STATUS_BAR_TAIL_BYTES = 512 * 1024;
 const DEFAULT_WORKTREE_SUMMARY_MAX_FILES = 8;
+const DEFAULT_HISTORY_MAX_MESSAGES = 40;
+const DEFAULT_HISTORY_ASSISTANT_PHASES = ["final_answer"];
 const DEFAULT_BOT_TOKEN_KEYCHAIN_SERVICE = "codex-telegram-bridge-bot-token";
 const DEFAULT_APP_CONTROL_COOLDOWN_MS = 5 * 60 * 1000;
 const execFileAsync = promisify(execFile);
@@ -211,6 +213,14 @@ async function loadConfig(configPath) {
     worktreeSummaryMaxFiles: Number.isFinite(fromFile?.worktreeSummaryMaxFiles)
       ? Math.max(1, Math.min(30, Number(fromFile.worktreeSummaryMaxFiles)))
       : DEFAULT_WORKTREE_SUMMARY_MAX_FILES,
+    historyMaxMessages: Number.isFinite(fromFile?.historyMaxMessages)
+      ? Math.max(1, Number(fromFile.historyMaxMessages))
+      : DEFAULT_HISTORY_MAX_MESSAGES,
+    historyMaxUserPrompts: Number.isFinite(fromFile?.historyMaxUserPrompts)
+      ? Math.max(1, Number(fromFile.historyMaxUserPrompts))
+      : null,
+    historyAssistantPhases: normalizeHistoryAssistantPhases(fromFile?.historyAssistantPhases),
+    historyIncludeHeartbeats: fromFile?.historyIncludeHeartbeats === true,
     statePath: fromFile?.statePath || DEFAULT_STATE_PATH,
     nativeHelperPath: fromFile?.nativeHelperPath || DEFAULT_NATIVE_HELPER_PATH,
     nativeFallbackHelperPath: fromFile?.nativeFallbackHelperPath || DEFAULT_NATIVE_FALLBACK_HELPER_PATH,
@@ -227,6 +237,12 @@ function normalizeOutboundMirrorPhases(value) {
   const raw = Array.isArray(value) ? value : DEFAULT_OUTBOUND_MIRROR_PHASES;
   const phases = Array.from(new Set(raw.map((item) => normalizeText(item)).filter((item) => allowed.has(item))));
   return phases.length ? phases : [...DEFAULT_OUTBOUND_MIRROR_PHASES];
+}
+
+function normalizeHistoryAssistantPhases(value) {
+  const raw = Array.isArray(value) ? value : DEFAULT_HISTORY_ASSISTANT_PHASES;
+  const phases = Array.from(new Set(raw.map((item) => normalizeText(item)).filter(Boolean)));
+  return phases.length ? phases : [...DEFAULT_HISTORY_ASSISTANT_PHASES];
 }
 
 async function readKeychainSecret(serviceName) {

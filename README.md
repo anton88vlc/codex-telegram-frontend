@@ -250,7 +250,7 @@ See [docs/ONBOARDING.md](docs/ONBOARDING.md) for the full flow.
 - The bot token can come from env, config, or macOS Keychain service `codex-telegram-bridge-bot-token`.
 - If `app-control` is unavailable, the bridge can still use fallback `app-server`.
 - The outbound mirror reads the bound thread `rollout_path`; user surrogates, live progress updates and final answers appear in Telegram without manual backfill.
-- Clean history import should not dump an infinite thread: `backfill-thread` defaults to the last 40 clean messages and supports `--max-history-messages`, `--max-user-prompts`, `--assistant-phase final_answer`.
+- Clean history import should not dump an infinite thread: defaults live in `config.local.json` (`historyMaxMessages`, `historyMaxUserPrompts`, `historyAssistantPhases`, `historyIncludeHeartbeats`) and can still be overridden with CLI flags.
 - If plain text in a group topic does not reach the bot, the quickest fallback is `@your_bot_username your request`; the real fix is usually BotFather privacy mode.
 - Long ops replies like `/project-status` and `/sync-project` are routed to direct chat when possible, leaving only a short trace in the working topic.
 - Parked sync topics are not active working-set topics and should not interfere with `/attach-latest` or the next sync preview.

@@ -36,10 +36,12 @@ DEFAULT_THREADS_DB_PATH = Path.home() / ".codex" / "state_5.sqlite"
 DEFAULT_BOT_TOKEN_KEYCHAIN_SERVICE = "codex-telegram-bridge-bot-token"
 DEFAULT_MESSAGE_DELAY_MS = 1100
 DEFAULT_BACKFILL_MAX_HISTORY_MESSAGES = 40
+DEFAULT_BACKFILL_MAX_USER_PROMPTS = None
 DEFAULT_CLEANUP_SCAN_LIMIT = 300
 TELEGRAM_TEXT_LIMIT = 3500
 TELEGRAM_HTML_TEXT_LIMIT = 3500
 DEFAULT_BACKFILL_ASSISTANT_PHASES = ("final_answer",)
+DEFAULT_BACKFILL_INCLUDE_HEARTBEATS = False
 CODEX_APP_DIRECTIVE_LINE = re.compile(r"^::[a-z][\w-]*\{.*\}\s*$", re.IGNORECASE)
 MEMORY_CITATION_BLOCK_PATTERN = re.compile(r"<oai-mem-citation>[\s\S]*?(?:</oai-mem-citation>|$)", re.IGNORECASE)
 MEMORY_CITATION_CHILD_BLOCK_PATTERN = re.compile(
@@ -276,6 +278,55 @@ def read_keychain_secret(service_name: str):
         return secret or None
     except Exception:
         return None
+
+
+def read_json_if_exists(path: Path) -> dict:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def positive_int(value, fallback=None):
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return fallback
+    return parsed if parsed > 0 else fallback
+
+
+def normalize_assistant_phases(value, fallback=DEFAULT_BACKFILL_ASSISTANT_PHASES):
+    raw = value if isinstance(value, list) else list(fallback)
+    phases = []
+    seen = set()
+    for item in raw:
+        phase = str(item or "").strip()
+        if phase and phase not in seen:
+            seen.add(phase)
+            phases.append(phase)
+    return phases or list(DEFAULT_BACKFILL_ASSISTANT_PHASES)
+
+
+def apply_config_defaults(args):
+    config = read_json_if_exists(args.config)
+    if getattr(args, "command", None) != "backfill-thread":
+        return
+    if args.max_history_messages is None:
+        args.max_history_messages = positive_int(
+            config.get("historyMaxMessages"),
+            DEFAULT_BACKFILL_MAX_HISTORY_MESSAGES,
+        )
+    if args.max_user_prompts is None:
+        args.max_user_prompts = positive_int(
+            config.get("historyMaxUserPrompts"),
+            DEFAULT_BACKFILL_MAX_USER_PROMPTS,
+        )
+    if args.assistant_phase is None:
+        args.assistant_phase = normalize_assistant_phases(config.get("historyAssistantPhases"))
+    else:
+        args.assistant_phase = normalize_assistant_phases(args.assistant_phase)
+    if not args.include_heartbeats and isinstance(config.get("historyIncludeHeartbeats"), bool):
+        args.include_heartbeats = config["historyIncludeHeartbeats"]
 
 
 def load_bot_token(bot_token_env: str, bot_token_keychain_service: str):
@@ -1419,6 +1470,7 @@ def build_parser():
     parser = argparse.ArgumentParser(description="User-side Telegram admin helper for Codex bridge.")
     parser.add_argument("--env-file", type=Path, default=DEFAULT_ENV_PATH)
     parser.add_argument("--session", type=Path, default=DEFAULT_SESSION_PATH)
+    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -1459,7 +1511,7 @@ def build_parser():
     backfill.add_argument("--render-helper", type=Path, default=DEFAULT_RENDER_HELPER_PATH)
     backfill.add_argument("--stop-after-user-text", default=None)
     backfill.add_argument("--assistant-phase", action="append", default=None)
-    backfill.add_argument("--max-history-messages", type=int, default=DEFAULT_BACKFILL_MAX_HISTORY_MESSAGES)
+    backfill.add_argument("--max-history-messages", type=int, default=None)
     backfill.add_argument("--max-user-prompts", type=int, default=None)
     backfill.add_argument("--include-heartbeats", action="store_true")
     backfill.add_argument("--ignore-message-id", action="append", type=int, default=None)
@@ -1510,6 +1562,7 @@ def build_parser():
 async def amain():
     parser = build_parser()
     args = parser.parse_args()
+    apply_config_defaults(args)
     await args.handler(args)
 
 

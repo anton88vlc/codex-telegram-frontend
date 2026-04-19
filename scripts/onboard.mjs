@@ -12,6 +12,10 @@ import { promisify } from "node:util";
 import {
   buildBootstrapPlan,
   buildProjectPlan,
+  DEFAULT_HISTORY_ASSISTANT_PHASES,
+  DEFAULT_HISTORY_INCLUDE_HEARTBEATS,
+  DEFAULT_HISTORY_MAX_MESSAGES,
+  DEFAULT_HISTORY_MAX_USER_PROMPTS,
   DEFAULT_REHEARSAL_FOLDER_TITLE,
   DEFAULT_REHEARSAL_GROUP_PREFIX,
   DEFAULT_TOPIC_DISPLAY,
@@ -47,7 +51,10 @@ function parseArgs(argv) {
     projects: [],
     projectLimit: 8,
     threadsPerProject: 3,
-    historyMaxMessages: 40,
+    historyMaxMessages: DEFAULT_HISTORY_MAX_MESSAGES,
+    historyMaxUserPrompts: DEFAULT_HISTORY_MAX_USER_PROMPTS,
+    historyAssistantPhases: [...DEFAULT_HISTORY_ASSISTANT_PHASES],
+    historyIncludeHeartbeats: DEFAULT_HISTORY_INCLUDE_HEARTBEATS,
     groupPrefix: null,
     folderTitle: null,
     topicDisplay: DEFAULT_TOPIC_DISPLAY,
@@ -77,6 +84,9 @@ function parseArgs(argv) {
     _projectLimitExplicit: false,
     _threadsPerProjectExplicit: false,
     _historyMaxMessagesExplicit: false,
+    _historyMaxUserPromptsExplicit: false,
+    _historyAssistantPhasesExplicit: false,
+    _historyIncludeHeartbeatsExplicit: false,
     _outputPathExplicit: false,
   };
   if (command === "--help" || command === "-h") {
@@ -102,6 +112,21 @@ function parseArgs(argv) {
       case "--history-max-messages":
         args.historyMaxMessages = parsePositiveInt(rest[++index], args.historyMaxMessages);
         args._historyMaxMessagesExplicit = true;
+        break;
+      case "--history-max-user-prompts":
+        args.historyMaxUserPrompts = parsePositiveInt(rest[++index], args.historyMaxUserPrompts);
+        args._historyMaxUserPromptsExplicit = true;
+        break;
+      case "--history-assistant-phase":
+        if (!args._historyAssistantPhasesExplicit) {
+          args.historyAssistantPhases = [];
+        }
+        args.historyAssistantPhases.push(rest[++index]);
+        args._historyAssistantPhasesExplicit = true;
+        break;
+      case "--history-include-heartbeats":
+        args.historyIncludeHeartbeats = true;
+        args._historyIncludeHeartbeatsExplicit = true;
         break;
       case "--group-prefix":
         args.groupPrefix = rest[++index];
@@ -212,7 +237,7 @@ function renderHelp() {
     "Usage:",
     "  node scripts/onboard.mjs doctor [--json]",
     "  node scripts/onboard.mjs scan [--project-limit 8] [--threads-per-project 3] [--json]",
-    "  node scripts/onboard.mjs plan --project /path/to/repo [--project /path/to/other] [--threads-per-project 3] [--group-prefix 'Codex - '] [--folder-title codex] [--topic-display tabs|list] [--write]",
+    "  node scripts/onboard.mjs plan --project /path/to/repo [--project /path/to/other] [--threads-per-project 3] [--history-max-messages 40] [--history-assistant-phase final_answer] [--group-prefix 'Codex - '] [--folder-title codex] [--topic-display tabs|list] [--write]",
     "  node scripts/onboard.mjs plan --rehearsal --project /path/to/repo [--write]",
     "  node scripts/onboard.mjs wizard [--rehearsal] [--write] [--apply] [--cleanup-dry-run|--cleanup] [--backfill-dry-run|--backfill] [--smoke]",
     "  npm run codex:launch",
@@ -223,6 +248,7 @@ function renderHelp() {
     "  scan is read-only and shows candidate Codex projects/threads.",
     "  plan is a preview by default; add --write to update admin/bootstrap-plan.json.",
     "  wizard is interactive by default and keeps Telegram side effects behind explicit confirmation or flags.",
+    "  history import defaults come from config.local.json unless a history flag overrides them.",
     "  --cleanup-dry-run previews a clean rebuild for bootstrapped topics; --cleanup deletes visible topic messages except protected root/status ids.",
     "  --rehearsal writes admin/bootstrap-plan.rehearsal.json by default and uses codex-lab/Codex Lab naming.",
     "  bootstrap/apply is still handled by admin/telegram_user_admin.py bootstrap.",
@@ -243,6 +269,36 @@ async function readJsonIfExists(filePath, fallback = {}) {
     return JSON.parse(await fs.readFile(filePath, "utf8"));
   } catch {
     return fallback;
+  }
+}
+
+function normalizeAssistantPhases(value, fallback = DEFAULT_HISTORY_ASSISTANT_PHASES) {
+  const raw = Array.isArray(value) ? value : fallback;
+  const phases = Array.from(
+    new Set(
+      raw
+        .map((item) => String(item ?? "").trim())
+        .filter(Boolean),
+    ),
+  );
+  return phases.length ? phases : [...DEFAULT_HISTORY_ASSISTANT_PHASES];
+}
+
+async function applyConfigDefaults(args) {
+  const config = await readJsonIfExists(args.configPath, {});
+  if (!args.rehearsal && !args._historyMaxMessagesExplicit && Number.isFinite(config.historyMaxMessages)) {
+    args.historyMaxMessages = parsePositiveInt(config.historyMaxMessages, args.historyMaxMessages);
+  }
+  if (!args._historyMaxUserPromptsExplicit && Number.isFinite(config.historyMaxUserPrompts)) {
+    args.historyMaxUserPrompts = parsePositiveInt(config.historyMaxUserPrompts, args.historyMaxUserPrompts);
+  }
+  if (!args._historyAssistantPhasesExplicit && Array.isArray(config.historyAssistantPhases)) {
+    args.historyAssistantPhases = normalizeAssistantPhases(config.historyAssistantPhases);
+  } else {
+    args.historyAssistantPhases = normalizeAssistantPhases(args.historyAssistantPhases);
+  }
+  if (!args._historyIncludeHeartbeatsExplicit && typeof config.historyIncludeHeartbeats === "boolean") {
+    args.historyIncludeHeartbeats = config.historyIncludeHeartbeats;
   }
 }
 
@@ -437,6 +493,8 @@ async function runJsonCommand(command, args, { timeoutMs = 180_000 } = {}) {
 function adminBaseArgs(args) {
   return [
     args.adminHelperPath,
+    "--config",
+    args.configPath,
     "--env-file",
     args.adminEnvPath,
     "--session",
@@ -458,7 +516,9 @@ async function runBootstrap(args, python) {
 async function runBackfillForSummary(args, python, bootstrapSummary, { dryRun = true } = {}) {
   const onboarding = bootstrapSummary?.onboarding ?? {};
   const historyMaxMessages = onboarding.historyMaxMessages ?? args.historyMaxMessages;
-  const assistantPhases = onboarding.historyAssistantPhases ?? ["final_answer"];
+  const historyMaxUserPrompts = onboarding.historyMaxUserPrompts ?? args.historyMaxUserPrompts;
+  const assistantPhases = normalizeAssistantPhases(onboarding.historyAssistantPhases ?? args.historyAssistantPhases);
+  const includeHeartbeats = onboarding.historyIncludeHeartbeats ?? args.historyIncludeHeartbeats;
   const results = [];
   for (const group of bootstrapSummary?.groups ?? []) {
     for (const topic of group.topics ?? []) {
@@ -481,6 +541,12 @@ async function runBackfillForSummary(args, python, bootstrapSummary, { dryRun = 
       }
       if (dryRun) {
         commandArgs.push("--dry-run");
+      }
+      if (historyMaxUserPrompts) {
+        commandArgs.push("--max-user-prompts", String(historyMaxUserPrompts));
+      }
+      if (includeHeartbeats) {
+        commandArgs.push("--include-heartbeats");
       }
       results.push(await runJsonCommand(python, commandArgs, { timeoutMs: 240_000 }));
     }
@@ -636,6 +702,9 @@ async function commandPlan(args) {
   const plan = buildBootstrapPlan(projectPlans, {
     threadsPerProject: args.threadsPerProject,
     historyMaxMessages: args.historyMaxMessages,
+    historyMaxUserPrompts: args.historyMaxUserPrompts,
+    historyAssistantPhases: args.historyAssistantPhases,
+    historyIncludeHeartbeats: args.historyIncludeHeartbeats,
     groupPrefix: args.groupPrefix ?? undefined,
     folderTitle: args.folderTitle ?? undefined,
     topicDisplay: args.topicDisplay,
@@ -731,6 +800,9 @@ async function commandWizard(args) {
     const plan = buildBootstrapPlan(projectPlans, {
       threadsPerProject: args.threadsPerProject,
       historyMaxMessages: args.historyMaxMessages,
+      historyMaxUserPrompts: args.historyMaxUserPrompts,
+      historyAssistantPhases: args.historyAssistantPhases,
+      historyIncludeHeartbeats: args.historyIncludeHeartbeats,
       groupPrefix: args.groupPrefix ?? undefined,
       folderTitle: args.folderTitle ?? undefined,
       topicDisplay: args.topicDisplay,
@@ -835,6 +907,7 @@ async function main() {
     process.stdout.write(`${renderHelp()}\n`);
     return;
   }
+  await applyConfigDefaults(args);
   if (args.command === "scan") {
     await commandScan(args);
     return;

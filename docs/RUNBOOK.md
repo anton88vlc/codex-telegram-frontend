@@ -165,9 +165,10 @@ Write a plan after selecting projects:
 npm run onboard:plan -- \
   --project /path/to/codex-project \
   --threads-per-project 3 \
-  --history-max-messages 40 \
   --write
 ```
+
+Clean history defaults come from `config.local.json`, not from a secret CLI incantation. Override with `--history-max-messages`, `--history-max-user-prompts`, `--history-assistant-phase` or `--history-include-heartbeats` only for one-off runs.
 
 Write a disposable rehearsal plan:
 
@@ -223,8 +224,6 @@ admin/.venv/bin/python admin/telegram_user_admin.py backfill-thread \
   --thread-id <codex-thread-id> \
   --chat-id <telegram-chat-id> \
   --topic-id <telegram-topic-id> \
-  --max-history-messages 40 \
-  --assistant-phase final_answer \
   --sender-mode labeled-bot \
   --dry-run
 ```
@@ -235,7 +234,7 @@ Notes:
 
 - `labeled-bot` is safer for imports: messages are sent as `Anton:` / `Codex:` by the bot and do not loop back as fresh user turns.
 - default `--render-mode html` uses the same Telegram renderer as live bridge messages; `--render-mode plain` is only a debugging fallback.
-- default backfill imports only clean tail: user prompts plus assistant `final_answer`
+- default backfill imports only the configured clean tail: user prompts plus configured assistant phases, `final_answer` by default
 - commentary, heartbeat/system-like entries, Codex app directives and memory citations are skipped by default
 - topic root, pinned status bar and recent live mirror ids from `state/state.json` are protected
 - Telegram `retry_after` is respected, so a partial 429 can usually be resumed by rerunning the command

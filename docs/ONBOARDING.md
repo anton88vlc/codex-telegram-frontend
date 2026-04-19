@@ -140,8 +140,7 @@ Preview:
 npm run onboard:plan -- \
   --project /path/to/codex-project \
   --project /path/to/another-project \
-  --threads-per-project 3 \
-  --history-max-messages 40
+  --threads-per-project 3
 ```
 
 Write `admin/bootstrap-plan.json`:
@@ -151,9 +150,10 @@ npm run onboard:plan -- \
   --project /path/to/codex-project \
   --project /path/to/another-project \
   --threads-per-project 3 \
-  --history-max-messages 40 \
   --write
 ```
+
+History defaults come from `config.local.json`: `historyMaxMessages`, `historyMaxUserPrompts`, `historyAssistantPhases`, `historyIncludeHeartbeats`. Use CLI history flags only when this one run needs to be different.
 
 Rehearsal preview for a disposable Telegram surface:
 
@@ -210,15 +210,13 @@ admin/.venv/bin/python admin/telegram_user_admin.py backfill-thread \
   --thread-id <thread-id> \
   --chat-id <telegram-chat-id> \
   --topic-id <topic-id> \
-  --max-history-messages 40 \
-  --assistant-phase final_answer \
   --sender-mode labeled-bot \
   --dry-run
 ```
 
 Then run without `--dry-run` only after the preview looks sane.
 
-Defaults intentionally skip commentary, heartbeat/system-like entries, Codex app directives, memory citations and smoke noise. If a future user wants more, make it configurable, not the default firehose.
+Defaults intentionally skip commentary, heartbeat/system-like entries, Codex app directives, memory citations and smoke noise. Change `config.local.json` if the machine needs a different clean-history policy; do not turn the default into a firehose.
 Backfill renders through the same Telegram HTML renderer as the live bridge by default (`--render-mode html`), so imported history should not show raw `**bold**`/markdown syntax.
 Use `--render-mode plain` only for debugging parser issues.
 
@@ -249,8 +247,9 @@ Expected UX:
 ## Recommended Defaults
 
 - `threads-per-project`: 3
-- `history-max-messages`: 40
-- `assistant-phase`: `final_answer`
+- `historyMaxMessages`: 40
+- `historyAssistantPhases`: `["final_answer"]`
+- `historyIncludeHeartbeats`: false
 - `sender-mode`: `labeled-bot`
 - auto-create new topics: off by default until rules are explicit
 - Telegram frontend copy: English-first; mirrored user prompts and final answers keep the original thread language
