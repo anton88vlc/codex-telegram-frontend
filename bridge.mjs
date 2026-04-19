@@ -26,22 +26,14 @@ import {
   parseCommand,
 } from "./lib/message-routing.mjs";
 import { appendTransportNotice, renderNativeSendError } from "./lib/native-ux.mjs";
-import { isOutboundMirrorBindingEligible } from "./lib/outbound-binding-eligibility.mjs";
 import {
   appControlCooldownUntilMs,
   markAppControlCooldown,
   markTransportError,
   shouldPreferAppServer,
 } from "./lib/native-transport-state.mjs";
-import {
-  formatOutboundAssistantMirrorText,
-  formatOutboundUserMirrorText,
-  isCommentaryAssistantMirrorMessage,
-  isFinalAssistantMirrorMessage,
-  isPlanMirrorMessage,
-  makePromptPreview,
-} from "./lib/outbound-mirror-messages.mjs";
-import { completeOutboundProgressMessage, upsertOutboundProgressMessage } from "./lib/outbound-progress-message.mjs";
+import { makePromptPreview } from "./lib/outbound-mirror-messages.mjs";
+import { syncOutboundMirrors } from "./lib/outbound-mirror-runner.mjs";
 import { getInitialProgressText, startProgressBubble } from "./lib/progress-bubble.mjs";
 import {
   getBindingsForChat,
@@ -67,7 +59,6 @@ import { inspectStateDoctor } from "./lib/state-doctor.mjs";
 import { refreshStatusBars } from "./lib/status-bar-runner.mjs";
 import {
   getBinding,
-  getOutboundMirror,
   hasProcessedMessage,
   loadState,
   makeBindingKey,
@@ -79,7 +70,6 @@ import {
   saveStateMerged as saveState,
   setBinding,
   setOutboundMirror,
-  consumeOutboundSuppression,
 } from "./lib/state.mjs";
 import {
   clamp,
@@ -89,7 +79,7 @@ import {
   listProjectThreads,
   parsePositiveInt,
 } from "./lib/thread-db.mjs";
-import { makeOutboundMirrorSignature, readThreadMirrorDelta } from "./lib/thread-rollout.mjs";
+import { makeOutboundMirrorSignature } from "./lib/thread-rollout.mjs";
 import {
   normalizeTypingHeartbeatIntervalMs,
   stopTypingHeartbeats,
@@ -1854,181 +1844,6 @@ async function processMessage({ config, state, message, appServerStream = null, 
   }
 }
 
-async function syncOutboundMirrors({ config, state }) {
-  if (config.outboundSyncEnabled === false) {
-    return { delivered: 0, suppressed: 0, changed: false };
-  }
-
-  const bindingEntries = Object.entries(state.bindings ?? {}).filter(([, binding]) =>
-    isOutboundMirrorBindingEligible(binding),
-  );
-  if (bindingEntries.length === 0) {
-    return { delivered: 0, suppressed: 0, changed: false };
-  }
-
-  const threads = await getThreadsByIds(
-    config.threadsDbPath,
-    bindingEntries.map(([, binding]) => binding.threadId),
-  );
-  const threadsById = new Map(threads.map((thread) => [String(thread.id), thread]));
-  const changedFilesCache = new Map();
-
-  let delivered = 0;
-  let suppressed = 0;
-  let changed = false;
-
-  for (const [bindingKey, binding] of bindingEntries) {
-    const thread = threadsById.get(String(binding.threadId));
-    if (!thread?.rollout_path || Number(thread.archived) !== 0) {
-      continue;
-    }
-
-    const previousMirror = getOutboundMirror(state, bindingKey);
-    let delta;
-    try {
-      delta = await readThreadMirrorDelta({
-        rolloutPath: thread.rollout_path,
-        mirrorState: previousMirror,
-        threadId: binding.threadId,
-        phases: config.outboundMirrorPhases,
-      });
-    } catch (error) {
-      logBridgeEvent("outbound_mirror_scan_error", {
-        bindingKey,
-        threadId: binding.threadId,
-        rolloutPath: thread.rollout_path,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      continue;
-    }
-
-    const carryPending =
-      previousMirror?.threadId === binding.threadId && previousMirror?.rolloutPath === delta.mirror.rolloutPath
-        ? Array.isArray(previousMirror?.pendingMessages)
-          ? previousMirror.pendingMessages
-          : []
-        : [];
-    const queuedMessages = [...carryPending, ...delta.messages];
-    let pendingMessages = [];
-    let lastSignature = normalizeText(delta.mirror.lastSignature) || null;
-    let replyTargetMessageId = Number.isInteger(previousMirror?.replyTargetMessageId)
-      ? previousMirror.replyTargetMessageId
-      : null;
-
-    for (let index = 0; index < queuedMessages.length; index += 1) {
-      const message = queuedMessages[index];
-      if (!message?.text || !message?.signature || !message?.role) {
-        continue;
-      }
-
-      if (consumeOutboundSuppression(state, bindingKey, message.signature)) {
-        lastSignature = message.signature;
-        if (message.role === "user") {
-          replyTargetMessageId = Number.isInteger(binding.lastInboundMessageId) ? binding.lastInboundMessageId : null;
-        } else if (message.role === "assistant") {
-          if (isFinalAssistantMirrorMessage(message)) {
-            replyTargetMessageId = null;
-            binding.currentTurn = null;
-          }
-        }
-        suppressed += 1;
-        changed = true;
-        continue;
-      }
-
-      try {
-        const target = {
-          chatId: binding.chatId,
-          messageThreadId: binding.messageThreadId ?? null,
-        };
-        const isFinalAssistant = isFinalAssistantMirrorMessage(message);
-        const isCommentaryAssistant = isCommentaryAssistantMirrorMessage(message);
-        const isPlan = isPlanMirrorMessage(message);
-        const changedFilesText =
-          isCommentaryAssistant || isPlan || isFinalAssistant
-            ? await loadChangedFilesTextForThread({
-                config,
-                thread,
-                binding,
-                cache: changedFilesCache,
-              })
-            : null;
-        let sent = [];
-        if (message.role === "user") {
-          sent = await sendRichTextChunks(config.botToken, target, formatOutboundUserMirrorText(message.text, config));
-        } else if (isCommentaryAssistant || isPlan) {
-          sent = await upsertOutboundProgressMessage({
-            config,
-            binding,
-            target,
-            replyToMessageId: replyTargetMessageId,
-            message,
-            changedFilesText,
-          });
-        } else {
-          sent = await sendRichTextChunks(config.botToken, target, formatOutboundAssistantMirrorText(message), replyTargetMessageId);
-          if (isFinalAssistant) {
-            await completeOutboundProgressMessage({ config, binding, target, changedFilesText });
-          }
-        }
-        rememberOutbound(binding, sent);
-        binding.updatedAt = new Date().toISOString();
-        binding.lastMirroredAt = message.timestamp || binding.updatedAt;
-        binding.lastMirroredPhase = message.phase || message.role;
-        binding.lastMirroredRole = message.role;
-        state.bindings[bindingKey] = binding;
-        if (message.role === "user") {
-          replyTargetMessageId = sent[0]?.message_id ?? replyTargetMessageId;
-          binding.lastMirroredUserMessageId = replyTargetMessageId;
-          const worktreeBaseline = await captureWorktreeBaseline(thread);
-          binding.currentTurn = {
-            source: "codex",
-            startedAt: message.timestamp || new Date().toISOString(),
-            promptPreview: makePromptPreview(message.text),
-            worktreeBaseHead: worktreeBaseline.head,
-            worktreeBaseSummary: worktreeBaseline.summary,
-          };
-        } else if (isFinalAssistant) {
-          replyTargetMessageId = null;
-          binding.currentTurn = null;
-        }
-        lastSignature = message.signature;
-        delivered += 1;
-        changed = true;
-      } catch (error) {
-        pendingMessages = queuedMessages.slice(index);
-        logBridgeEvent("outbound_mirror_delivery_error", {
-          bindingKey,
-          threadId: binding.threadId,
-          rolloutPath: thread.rollout_path,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        break;
-      }
-    }
-
-    const liveMirror = getOutboundMirror(state, bindingKey);
-    const nextSuppressions = Array.isArray(liveMirror?.suppressions)
-      ? liveMirror.suppressions.filter((item) => item !== lastSignature)
-      : [];
-    const nextMirror = {
-      ...delta.mirror,
-      threadId: binding.threadId,
-      rolloutPath: thread.rollout_path,
-      lastSignature,
-      pendingMessages,
-      replyTargetMessageId,
-      suppressions: nextSuppressions,
-    };
-    if (JSON.stringify(previousMirror ?? null) !== JSON.stringify(nextMirror)) {
-      setOutboundMirror(state, bindingKey, nextMirror);
-      changed = true;
-    }
-  }
-
-  return { delivered, suppressed, changed };
-}
-
 async function checkpointMessage(statePath, state, update) {
   const updateId = Number.isInteger(update?.update_id) ? update.update_id : state.lastUpdateId;
   const messageKey = makeMessageKey(update.message);
@@ -2162,7 +1977,13 @@ async function main() {
 
     let syncResult = { changed: false };
     try {
-      syncResult = await syncOutboundMirrors({ config, state });
+      syncResult = await syncOutboundMirrors({
+        config,
+        state,
+        loadChangedFilesTextForThreadFn: loadChangedFilesTextForThread,
+        captureWorktreeBaselineFn: captureWorktreeBaseline,
+        rememberOutboundFn: rememberOutbound,
+      });
     } catch (error) {
       logBridgeEvent("outbound_mirror_error", {
         error: error instanceof Error ? error.message : String(error),
