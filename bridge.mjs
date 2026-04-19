@@ -111,7 +111,7 @@ import {
   hasUnsupportedTelegramMedia,
   saveTelegramAttachments,
 } from "./lib/telegram-attachments.mjs";
-import { formatWorktreeSummary, readGitHead, readWorktreeSummary, subtractWorktreeSummary } from "./lib/worktree-summary.mjs";
+import { captureWorktreeBaseline, loadChangedFilesTextForThread } from "./lib/worktree-summary.mjs";
 import {
   closeForumTopic,
   createForumTopic,
@@ -261,53 +261,6 @@ function rememberOutboundMirrorSuppression(state, bindingKey, text, { role = "as
   });
   rememberOutboundSuppression(state, bindingKey, signature);
   return signature;
-}
-
-async function captureWorktreeBaseline(thread) {
-  const cwd = normalizeText(thread?.cwd);
-  if (!cwd) {
-    return {
-      head: null,
-      summary: null,
-    };
-  }
-  const head = await readGitHead(cwd);
-  const summary = await readWorktreeSummary(cwd, { baseRef: head });
-  return {
-    head,
-    summary,
-  };
-}
-
-async function loadChangedFilesTextForThread({ config, thread, binding, cache }) {
-  if (config.worktreeSummaryEnabled === false) {
-    return null;
-  }
-  const cwd = normalizeText(thread?.cwd);
-  if (!cwd) {
-    return null;
-  }
-  let baseRef = normalizeText(binding?.currentTurn?.worktreeBaseHead);
-  let baselineSummary = binding?.currentTurn?.worktreeBaseSummary || null;
-  if (!baseRef && binding?.currentTurn) {
-    const baseline = await captureWorktreeBaseline(thread);
-    baseRef = baseline.head;
-    baselineSummary = baseline.summary;
-    if (baseRef || baselineSummary) {
-      binding.currentTurn.worktreeBaseHead = baseRef;
-      binding.currentTurn.worktreeBaseSummary = baselineSummary;
-    }
-  }
-  const cacheKey = `${cwd}\0${baseRef || ""}\0${JSON.stringify(baselineSummary?.files || [])}`;
-  if (cache.has(cacheKey)) {
-    return cache.get(cacheKey) || null;
-  }
-  const summary = subtractWorktreeSummary(await readWorktreeSummary(cwd, { baseRef }), baselineSummary);
-  const text = formatWorktreeSummary(summary, {
-    maxFiles: config.worktreeSummaryMaxFiles,
-  });
-  cache.set(cacheKey, text);
-  return text || null;
 }
 
 function renderHelp(config) {

@@ -7,7 +7,9 @@ import path from "node:path";
 import { promisify } from "node:util";
 
 import {
+  captureWorktreeBaseline,
   formatWorktreeSummary,
+  loadChangedFilesTextForThread,
   parseGitNumstat,
   parseUntrackedFiles,
   readGitHead,
@@ -106,6 +108,93 @@ test("subtractWorktreeSummary returns null when nothing changed after baseline",
   };
 
   assert.equal(subtractWorktreeSummary(summary, summary), null);
+});
+
+test("captureWorktreeBaseline reads HEAD and a baseline summary for a thread cwd", async () => {
+  const calls = [];
+  const summary = { files: [], fileCount: 0 };
+  const baseline = await captureWorktreeBaseline(
+    { cwd: "/repo" },
+    {
+      readGitHeadFn: async (cwd) => {
+        calls.push(["head", cwd]);
+        return "abc123";
+      },
+      readWorktreeSummaryFn: async (cwd, options) => {
+        calls.push(["summary", cwd, options]);
+        return summary;
+      },
+    },
+  );
+
+  assert.deepEqual(baseline, { head: "abc123", summary });
+  assert.deepEqual(calls, [
+    ["head", "/repo"],
+    ["summary", "/repo", { baseRef: "abc123" }],
+  ]);
+});
+
+test("loadChangedFilesTextForThread fills a missing turn baseline and caches formatted text", async () => {
+  let reads = 0;
+  const baselineSummary = {
+    cwd: "/repo",
+    files: parseGitNumstat("1\t0\tbridge.mjs\n").files,
+    fileCount: 1,
+    trackedCount: 1,
+    untrackedCount: 0,
+    totalAdditions: 1,
+    totalDeletions: 0,
+  };
+  const currentSummary = {
+    cwd: "/repo",
+    files: parseGitNumstat("3\t0\tbridge.mjs\n1\t0\tREADME.md\n").files,
+    fileCount: 2,
+    trackedCount: 2,
+    untrackedCount: 0,
+    totalAdditions: 4,
+    totalDeletions: 0,
+  };
+  const binding = { currentTurn: {} };
+  const cache = new Map();
+
+  const first = await loadChangedFilesTextForThread({
+    config: { worktreeSummaryMaxFiles: 0 },
+    thread: { cwd: "/repo" },
+    binding,
+    cache,
+    captureWorktreeBaselineFn: async () => ({ head: "base", summary: baselineSummary }),
+    readWorktreeSummaryFn: async (cwd, options) => {
+      reads += 1;
+      assert.deepEqual([cwd, options], ["/repo", { baseRef: "base" }]);
+      return currentSummary;
+    },
+  });
+  const second = await loadChangedFilesTextForThread({
+    config: {},
+    thread: { cwd: "/repo" },
+    binding,
+    cache,
+    readWorktreeSummaryFn: async () => {
+      throw new Error("cache should avoid a second read");
+    },
+  });
+
+  assert.equal(reads, 1);
+  assert.equal(binding.currentTurn.worktreeBaseHead, "base");
+  assert.match(first, /2 files changed \+3/);
+  assert.match(first, /`bridge\.mjs` \+2 -0/);
+  assert.equal(second, first);
+});
+
+test("loadChangedFilesTextForThread respects disabled worktree summaries", async () => {
+  assert.equal(
+    await loadChangedFilesTextForThread({
+      config: { worktreeSummaryEnabled: false },
+      thread: { cwd: "/repo" },
+      binding: {},
+    }),
+    null,
+  );
 });
 
 test("readWorktreeSummary includes committed changes since baseline plus current dirty worktree", async () => {
