@@ -133,7 +133,7 @@ This is what good looks like:
 1. Send normal text in a bound topic and confirm one progress bubble appears.
 2. Confirm the bubble edits in place for longer replies.
 3. Confirm the final answer is a reply to the triggering user/surrogate message.
-4. Run `/project-status` or `/sync-project dry-run` and confirm long details go to direct chat when possible.
+4. Run `/project-status` or `/sync-project dry-run` and confirm details appear in the same chat/topic.
 5. Send a short turn directly from Codex Desktop and confirm Telegram receives the surrogate user message plus assistant updates.
 6. Confirm each active topic has one pinned compact status bar.
 
@@ -200,16 +200,16 @@ admin/.venv/bin/python admin/telegram_user_admin.py bootstrap \
   --plan admin/bootstrap-plan.json
 ```
 
-`bootstrap` creates or updates the Telegram folder from the plan by default and puts project groups there.
+`bootstrap` creates or updates the Telegram folder from the plan by default and puts project groups plus the bot direct chat there.
 It also forces forum topics to display as `Tabs`; pass `--topic-display list` only for manual debugging.
 It merges groups into `state/bootstrap-result.json`; pass `--replace-result` only for an intentional clean rebuild.
-Use `--skip-folder` only when debugging folder automation.
+Use `--skip-folder` only when debugging folder automation. Use `--skip-bot-folder` if the bot direct chat should stay out of the folder for a one-off test.
 Bot username is read from `config.local.json -> botUsername`, `CODEX_TELEGRAM_BOT_USERNAME`, or `--bot-username`.
 
 ## Telegram Ops Commands
 
 - `/health` - quick health for the current chat/topic: binding, project mapping, transport endpoints, delivery clues and recent failures
-- `/settings` or `/config` - safe read-only runtime settings; sent to direct chat from topics
+- `/settings` or `/config` - safe read-only runtime settings, answered where you ask
 - `/project-status [count]` - desired thread column, active topics, parked sync topics and sync preview
 - `/sync-project [count] dry-run` - safe preview before rename/reopen/create/park
 

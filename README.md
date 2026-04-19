@@ -82,7 +82,7 @@ Docs should sound like a competent teammate at 2am: direct, practical, and a lit
 - reply-style answers to the triggering Telegram message
 - Telegram HTML rendering for `**bold**`, `_italic_` / `*italic*`, quotes, lists, code, spoilers, links, Markdown tables and local file links, with plain-text fallback
 - short human-facing errors in chat, technical details in logs
-- noisy ops commands can be routed to direct chat with the bot to keep work topics clean
+- ops commands reply where they were asked; direct chat stays an explicit escape hatch, not a surprise detour
 - `/health` includes delivery clues, recent failures and app-control vs fallback counters
 - mention-aware ingress (`@bot your request`) when group privacy blocks plain text
 - `sync-project dry-run` and CLI `--self-check`
@@ -95,7 +95,7 @@ Docs should sound like a competent teammate at 2am: direct, practical, and a lit
 - user-side history backfill from `rollout_path` into Telegram topics via `admin/telegram_user_admin.py backfill-thread`; defaults to user prompts plus assistant `final_answer`, with a bounded clean history tail
 - backfill uses the same Markdown-to-Telegram HTML renderer as the live bridge
 - safe topic cleanup via `admin/telegram_user_admin.py cleanup-topic`: dry-run first, deletion only with `--delete`
-- bootstrap can create/update a Telegram folder, create project groups and put them into that folder
+- bootstrap can create/update a Telegram folder, create project groups and put those groups plus the bot direct chat into that folder
 - retry on temporary Telegram fetch errors
 - inbound update checkpointing to avoid duplicate turns after restart
 - live outbound mirror: Codex Desktop user-turn surrogate and final answers are mirrored into the bound Telegram topic/chat
@@ -247,5 +247,5 @@ Lower-level `scan`, `plan`, `bootstrap` and `backfill-thread` commands still exi
 - The outbound mirror reads the bound thread `rollout_path`; user surrogates, live progress updates and final answers appear in Telegram without manual backfill.
 - Clean history import should not dump an infinite thread: defaults live in `config.local.json` (`historyMaxMessages`, `historyMaxUserPrompts`, `historyAssistantPhases`, `historyIncludeHeartbeats`) and can still be overridden with CLI flags.
 - If plain text in a group topic does not reach the bot, the quickest fallback is `@your_bot_username your request`; the real fix is usually BotFather privacy mode.
-- Long ops replies like `/project-status` and `/sync-project` are routed to direct chat when possible, leaving only a short trace in the working topic.
+- Ops replies like `/project-status` and `/sync-project` answer in the same chat/topic by default. If a future command is truly noisy, it should make the detour explicit instead of quietly teleporting the result to DM.
 - Parked sync topics are not active working-set topics and should not interfere with `/attach-latest` or the next sync preview.

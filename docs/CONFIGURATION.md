@@ -72,7 +72,7 @@ Bot commands are for operational state, not full config editing.
 
 Working commands today:
 
-- `/help` or `/start` - shows help, usually routed to direct chat to keep topics clean.
+- `/help` or `/start` - shows help in the chat/topic where it was asked.
 - `/attach <thread-id>` - binds the current chat/topic to a Codex thread.
 - `/attach-latest` - binds this forum topic to the newest unbound thread for the mapped project.
 - `/detach` - removes the current binding.

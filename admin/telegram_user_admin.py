@@ -605,7 +605,7 @@ def clone_dialog_filter_with_peers(dialog_filter, include_peers):
     )
 
 
-async def ensure_dialog_folder(client: TelegramClient, title: str, channels):
+async def ensure_dialog_folder(client: TelegramClient, title: str, peers):
     normalized_title = str(title or "").strip()
     if not normalized_title:
         return None
@@ -621,7 +621,7 @@ async def ensure_dialog_folder(client: TelegramClient, title: str, channels):
         ),
         None,
     )
-    input_peers = [await client.get_input_entity(channel) for channel in channels]
+    input_peers = [await client.get_input_entity(peer) for peer in peers]
     input_by_key = {input_peer_key(peer): peer for peer in input_peers}
 
     if existing:
@@ -1112,10 +1112,18 @@ async def command_bootstrap(args):
             "groups": [],
             "folder": None,
             "folderTitle": folder_title,
+            "folderIncludesBot": False,
+            "folderBotError": None,
             "topicDisplay": topic_display,
             "rehearsal": bool(plan.get("onboarding", {}).get("rehearsal")),
         }
-        folder_channels = []
+        folder_peers = []
+        if not args.skip_folder and not args.skip_bot_folder:
+            try:
+                folder_peers.append(await client.get_entity(bot_username))
+                summary["folderIncludesBot"] = True
+            except Exception as exc:
+                summary["folderBotError"] = str(exc)
 
         for project in plan.get("projects", []):
             group, created_group = await ensure_forum_group(
@@ -1124,7 +1132,7 @@ async def command_bootstrap(args):
                 about=project.get("about", ""),
                 topic_display=topic_display,
             )
-            folder_channels.append(group)
+            folder_peers.append(group)
             await ensure_bot_member_and_admin(client, group, bot_username)
             chat_id = bot_api_chat_id(group.id)
 
@@ -1157,8 +1165,8 @@ async def command_bootstrap(args):
 
             summary["groups"].append(group_summary)
 
-        if not args.skip_folder and folder_channels:
-            summary["folder"] = await ensure_dialog_folder(client, folder_title, folder_channels)
+        if not args.skip_folder and folder_peers:
+            summary["folder"] = await ensure_dialog_folder(client, folder_title, folder_peers)
     finally:
         await client.disconnect()
 
@@ -1495,6 +1503,7 @@ def build_parser():
     bootstrap.add_argument("--topic-display", choices=["tabs", "list"], default=None)
     bootstrap.add_argument("--replace-result", action="store_true")
     bootstrap.add_argument("--skip-folder", action="store_true")
+    bootstrap.add_argument("--skip-bot-folder", action="store_true")
     bootstrap.set_defaults(handler=command_bootstrap)
 
     backfill = subparsers.add_parser("backfill-thread")

@@ -96,3 +96,4 @@ It does not wire Telegram yet. It records what Codex app-server actually emits s
 - Codex feature maturity docs: https://developers.openai.com/codex/feature-maturity
 - Telegram Bot API: https://core.telegram.org/bots/api
 - Telegram Bot API changelog: https://core.telegram.org/bots/api-changelog
+- Telegram bot profile photo via MTProto: https://core.telegram.org/method/photos.uploadProfilePhoto

@@ -21,7 +21,7 @@ Codex should do the boring parts:
 3. Guide the few unavoidable Telegram steps.
 4. Scan local Codex projects and ask which projects/threads belong on the phone.
 5. Check the wizard reuse preview so repeat runs reuse known groups/topics instead of creating Telegram confetti.
-6. Bootstrap Telegram folder/groups/topics, backfill a bounded clean history tail, start the bridge and run a smoke.
+6. Bootstrap Telegram folder/groups/topics, put the bot direct chat in the same folder when possible, backfill a bounded clean history tail, start the bridge and run a smoke.
 
 The user should not have to manually stitch together `scan -> plan -> bootstrap -> backfill` unless something weird happens.
 

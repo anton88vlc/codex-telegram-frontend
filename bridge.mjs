@@ -1048,8 +1048,6 @@ async function handleCommand({ config, state, message, bindingKey, binding, pars
         config,
         message,
         text: renderHelp(config),
-        quietInTopic: true,
-        topicSummary: "I sent the help text to your direct chat with the bot to keep this topic clean.",
       });
       return true;
 
@@ -1152,8 +1150,6 @@ async function handleCommand({ config, state, message, bindingKey, binding, pars
           config,
           message,
           text: await renderHealth(config, state, message, bindingKey, binding),
-          quietInTopic: true,
-          topicSummary: "I sent the health report to your direct chat with the bot to keep this topic clean.",
         }),
       );
       return true;
@@ -1166,8 +1162,6 @@ async function handleCommand({ config, state, message, bindingKey, binding, pars
           config,
           message,
           text: buildSettingsReport({ config, state, bindingKey, binding }),
-          quietInTopic: true,
-          topicSummary: "I sent the runtime settings to your direct chat with the bot to keep this topic clean.",
         }),
       );
       return true;
@@ -1180,8 +1174,6 @@ async function handleCommand({ config, state, message, bindingKey, binding, pars
           config,
           message,
           text: await renderProjectStatus(config, state, message, requestedLimit),
-          quietInTopic: true,
-          topicSummary: "I sent the project summary to your direct chat with the bot to keep this topic clean.",
         }),
       );
       return true;
@@ -1210,8 +1202,6 @@ async function handleCommand({ config, state, message, bindingKey, binding, pars
           config,
           message,
           text: previewText,
-          quietInTopic: true,
-          topicSummary: "I sent the `/sync-project` preview to your direct chat with the bot to keep this topic clean.",
         });
         return true;
       }
@@ -1381,11 +1371,6 @@ async function handleCommand({ config, state, message, bindingKey, binding, pars
         config,
         message,
         text: lines.join("\n"),
-        quietInTopic: true,
-        topicSummary:
-          plan.park.length > 0
-            ? "Working set synced; I sent the details to your direct chat with the bot."
-            : "Working set is already aligned; I sent the details to your direct chat with the bot.",
       });
 
       for (const item of parkAfterReply) {

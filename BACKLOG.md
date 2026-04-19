@@ -12,8 +12,8 @@
 
 1. ~~In-place commentary/progress bubbles instead of silence followed by one final answer.~~
 2. True streaming from Codex. Current progress is honest rollout/commentary mirroring, not raw app-server event streaming.
-3. ~~Basic ops/admin quiet path: help, health, settings, project-status and sync previews can route long replies to direct chat.~~
-4. Dedicated ops topic or configurable ops routing, so the working topics stay chat-like even under heavier admin use.
+3. ~~Ops command reply policy corrected: help, health, settings, project-status and sync previews answer where they were asked instead of silently jumping to bot DM.~~
+4. Dedicated ops topic or configurable explicit ops routing, so genuinely noisy admin flows can move away without surprising the user.
 5. ~~Telegram HTML rendering for bold, italic, code, code fences, lists, task lists, links, blockquotes, spoilers and plain fallback.~~
 6. ~~Richer rendering polish: Markdown tables and cleaner local file links.~~
 7. ~~Onboarding wizard base: doctor, project/thread selection, plan write, optional bootstrap, clean rebuild preview, backfill and smoke.~~
@@ -42,12 +42,14 @@
 6. Native Telegram Checklist spike for Codex Todo blocks. Likely not default yet because Bot API checklist sending is business-account-shaped, but it is worth validating before we keep hand-rendering Todo forever.
 7. ~~Telegram `date_time` entity base for compact rate-limit resets in the pinned status bar.~~ Live visual polish can still tune the exact format after mobile review.
 8. ~~Bot profile/install polish base: default administrator rights, command menu, menu button and profile descriptions.~~ Cleaner topic/project icons still need a visual pass.
+9. ~~Add the bot direct chat to the `codex` Telegram folder during bootstrap when possible.~~
+10. Bot avatar polish: use the official Codex app icon if licensing/asset path is clean. Telegram MTProto supports changing a bot we own via `photos.uploadProfilePhoto(bot=...)`; the Bot API alone does not expose a simple `setMyPhoto`.
 
 ## P4 - UX Modes
 
 1. Split Telegram UX into two explicit modes: `chat-like` for normal work and `ops-like` for service commands, so the system does not look like an admin panel after P1.
-2. ~~First quiet-path slice: noisy ops replies can go to direct chat with a short trace in the topic.~~
-3. Inline-keyboard ops actions: `Apply`, `Retry`, `Run smoke`, `Copy command`, `Open runbook`, routed to DM or ops topic instead of polluting work topics.
+2. ~~First routing lesson: silent DM detours feel worse than local replies. Commands now answer in-place by default.~~
+3. Inline-keyboard ops actions: `Apply`, `Retry`, `Run smoke`, `Copy command`, `Open runbook`, routed explicitly to DM or ops topic instead of polluting work topics.
 
 ## Done
 
@@ -72,3 +74,5 @@
 19. Telegram Bot API helper base for cleanup batches, private-chat drafts, inline keyboard markup and bot profile/admin-rights polish.
 20. Bot install polish script: dry-run/apply flow for command menu, profile text, menu button and suggested admin rights, plus Telegram-menu-safe command aliases.
 21. Status bar reset times now use Telegram `date_time` entities while keeping the plain compact text readable.
+22. Telegram command replies now stay in the chat/topic where the command was sent; direct chat is no longer the surprise default for project/status/sync output.
+23. Bootstrap now includes the bot direct chat in the Telegram folder alongside project groups, with `--skip-bot-folder` as the escape hatch.
