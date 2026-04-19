@@ -37,7 +37,7 @@ import {
   isPlanMirrorMessage,
   makePromptPreview,
 } from "./lib/outbound-mirror-messages.mjs";
-import { appendOutboundProgressItem, formatOutboundProgressMirrorText } from "./lib/outbound-progress.mjs";
+import { completeOutboundProgressMessage, upsertOutboundProgressMessage } from "./lib/outbound-progress-message.mjs";
 import { getInitialProgressText, startProgressBubble } from "./lib/progress-bubble.mjs";
 import {
   getBindingsForChat,
@@ -427,83 +427,6 @@ function isStatusBarBindingEligible(binding) {
     return false;
   }
   return binding.messageThreadId != null;
-}
-
-async function upsertOutboundProgressMessage({
-  config,
-  binding,
-  target,
-  replyToMessageId,
-  message,
-  changedFilesText = null,
-}) {
-  const baseTurn = {
-    source: "codex",
-    startedAt: message.timestamp || binding.currentTurn?.startedAt || new Date().toISOString(),
-    promptPreview: binding.currentTurn?.promptPreview || "Codex progress",
-    ...(binding.currentTurn || {}),
-  };
-  binding.currentTurn = isPlanMirrorMessage(message)
-    ? {
-        ...baseTurn,
-        planText: normalizeText(message.text),
-        planUpdatedAt: message.timestamp || new Date().toISOString(),
-      }
-    : {
-        ...baseTurn,
-        progressItems: appendOutboundProgressItem(binding.currentTurn, message),
-      };
-  if (changedFilesText) {
-    binding.currentTurn.changedFilesText = changedFilesText;
-  } else {
-    delete binding.currentTurn.changedFilesText;
-  }
-  const text = formatOutboundProgressMirrorText({
-    message,
-    currentTurn: binding.currentTurn,
-    config,
-  });
-  if (!text) {
-    return [];
-  }
-  const messageId = binding.currentTurn?.codexProgressMessageId;
-  if (Number.isInteger(messageId)) {
-    const edited = await editThenSendRichTextChunks(config.botToken, target, messageId, text);
-    return edited.length ? edited : [{ message_id: messageId }];
-  }
-  const sent = await sendRichTextChunks(config.botToken, target, text, replyToMessageId);
-  const progressMessageId = sent[0]?.message_id;
-  if (Number.isInteger(progressMessageId)) {
-    binding.currentTurn = {
-      ...(binding.currentTurn || {}),
-      codexProgressMessageId: progressMessageId,
-    };
-  }
-  return sent;
-}
-
-async function completeOutboundProgressMessage({ config, binding, target, changedFilesText = null }) {
-  const messageId = binding.currentTurn?.codexProgressMessageId;
-  if (!Number.isInteger(messageId)) {
-    return [];
-  }
-  if (changedFilesText) {
-    binding.currentTurn.changedFilesText = changedFilesText;
-  } else if (binding.currentTurn) {
-    delete binding.currentTurn.changedFilesText;
-  }
-  const text = formatOutboundProgressMirrorText({
-    currentTurn: binding.currentTurn,
-    config,
-    completed: true,
-  });
-  const edited = await editThenSendRichTextChunks(
-    config.botToken,
-    target,
-    messageId,
-    text || "**Progress**\nDone. Final answer below.",
-  );
-  return edited.length ? edited : [{ message_id: messageId }];
 }
 
 function makeAppServerLiveStream(config) {
