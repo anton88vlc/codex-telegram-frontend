@@ -35,6 +35,7 @@ Codex outbound:
 - `lib/command-response.mjs` - command replies, including quiet ops-to-DM routing.
 - `lib/codex-native.mjs` - `app-control` plus `app-server` transport wrapper.
 - `lib/native-transport-state.mjs` - app-control cooldown and fallback state.
+- `lib/health-report.mjs` - `/status` and `/health` text shaping, state-doctor/event-log sampling and binding diagnostics.
 - `lib/private-topic-bindings.mjs` - private bot topics mapped to Codex Desktop `Chats`.
 - `lib/project-sync.mjs` - project topic sync planning.
 - `lib/project-sync-runner.mjs` - project status rendering, `/sync-project` application and optional auto-sync orchestration.
@@ -63,9 +64,8 @@ Do not build a giant framework around this. The right move is boring extraction:
 
 Good next slices:
 
-- `lib/command-handlers.mjs` for `/help`, `/status`, `/health`, `/settings`, `/project-status` and `/sync-project` routing.
+- `lib/command-handlers.mjs` for `/help`, `/status`, `/settings`, `/project-status` and `/sync-project` routing.
 - `lib/inbound-turn-runner.mjs` for the safer half of `handlePlainText`: prompt preparation, surrogate bubbles and native send result handling.
-- `lib/health-report.mjs` for `/health` text shaping and state-doctor/event-log sampling.
 
 Bad next slices:
 

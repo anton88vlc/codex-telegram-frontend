@@ -114,3 +114,4 @@ These are the useful Telegram platform leads found during the April 2026 API pas
 41. Outbound mirror runner extracted: rollout delivery, suppression handling, pending retry state, changed-files progress and final-answer routing now live in `lib/outbound-mirror-runner.mjs` with tests. This was one of the last high-risk loops sitting raw in `bridge.mjs`.
 42. Turn worktree summaries moved into `lib/worktree-summary.mjs`: baseline capture, changed-file delta formatting and cache behavior are now tested outside the bridge.
 43. Project sync runner extracted: project status, sync preview/apply and auto-sync orchestration now live in `lib/project-sync-runner.mjs` with Telegram API calls injected in tests.
+44. Health report rendering extracted: `/status` and `/health` now live in `lib/health-report.mjs`, with tests for binding diagnostics, event-log fallback and state-doctor clues.
