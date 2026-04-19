@@ -17,9 +17,10 @@
 5. ~~Telegram HTML rendering for bold, italic, code, code fences, lists, task lists, links, blockquotes, spoilers and plain fallback.~~
 6. ~~Richer rendering polish: Markdown tables and cleaner local file links.~~
 7. ~~Onboarding wizard base: doctor, project/thread selection, plan write, optional bootstrap, clean rebuild preview, backfill and smoke.~~
-8. Onboarding polish: safer restore/reuse flows, clearer selectors and nicer recovery when Telegram credentials/session are wrong.
+8. ~~Onboarding polish base: safer reuse preview, clearer selectors and actionable recovery hints when setup is incomplete.~~
 9. ~~Agent-led install docs: public docs let a new user open Codex in this repo, paste one clear install prompt, and let Codex drive doctor/setup/wizard/bootstrap/backfill/smoke while asking only for unavoidable Telegram steps.~~
 10. ~~Agent-led onboarding automation hardening base: `onboard:prepare` creates local config/admin env files, can set up the admin Python venv, guides credential wiring and can run QR login before the wizard path.~~
+11. Onboarding recovery hardening for bad-but-present Telegram credentials/session errors, not only missing files.
 
 ## P2 - Transport And Observability
 
@@ -57,3 +58,4 @@
 13. Agent-led onboarding docs: README install prompt, simplified onboarding guide and lower-level commands reframed as escape hatches.
 14. `onboard:prepare` for agent-led local setup: safe config/admin env creation, optional admin venv install, credential prompts and QR-login handoff.
 15. Richer Telegram rendering polish: Markdown tables become compact monospace blocks, and local file links render as readable code text instead of broken phone links.
+16. Onboarding polish base: doctor prints exact recovery steps, wizard shows reuse/create preview from the local bootstrap index, and selectors include recency/model/token hints.

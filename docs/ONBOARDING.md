@@ -20,7 +20,7 @@ Codex should do the boring parts:
 2. Run `npm run onboard:doctor`.
 3. Guide the few unavoidable Telegram steps.
 4. Scan local Codex projects and ask which projects/threads belong on the phone.
-5. Run the wizard with explicit side effects only after the plan looks sane.
+5. Check the wizard reuse preview so repeat runs reuse known groups/topics instead of creating Telegram confetti.
 6. Bootstrap Telegram folder/groups/topics, backfill a bounded clean history tail, start the bridge and run a smoke.
 
 The user should not have to manually stitch together `scan -> plan -> bootstrap -> backfill` unless something weird happens.
@@ -53,6 +53,8 @@ The wizard is the product path:
 ```bash
 npm run onboard:wizard
 ```
+
+The wizard shows recency/model/token hints in selectors and prints a reuse preview before side effects. If a group/topic is already in the local bootstrap index, it should be listed as reused; if the index is stale, the lower-level bootstrap still tries to reuse live Telegram groups/topics by title.
 
 Useful side-effect flags:
 

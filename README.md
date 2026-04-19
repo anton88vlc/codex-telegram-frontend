@@ -86,7 +86,7 @@ Docs should sound like a competent teammate at 2am: direct, practical, and a lit
 - `sync-project dry-run` and CLI `--self-check`
 - npm scripts for running, self-checks, tests and guided onboarding
 - `onboard:prepare` creates missing local config/admin env files and can set up the admin Python venv before the wizard runs
-- onboarding wizard with interactive project/thread selection, checklist, plan write, optional bootstrap, clean backfill dry-run/send and Telegram smoke
+- onboarding wizard with interactive project/thread selection, checklist, reuse preview, plan write, optional bootstrap, clean backfill dry-run/send and Telegram smoke
 - `/project-status` shows desired thread column, active topics, parked sync topics and sync preview
 - `/sync-project` can rename/reopen/create/park sync-managed topics for the current working set
 - user-side history backfill from `rollout_path` into Telegram topics via `admin/telegram_user_admin.py backfill-thread`; defaults to user prompts plus assistant `final_answer`, with a bounded clean history tail
@@ -150,6 +150,8 @@ Preflight:
 npm run onboard:prepare
 npm run onboard:doctor
 ```
+
+`onboard:doctor` prints a short recovery plan when setup is incomplete. The wizard also shows a reuse preview before side effects, so a repeat run can say "reuse this group/topic" instead of making you wonder whether Telegram is about to grow a second head.
 
 Launch `Codex.app` with the app-control debug port:
 

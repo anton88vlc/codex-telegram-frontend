@@ -125,6 +125,36 @@ test("onboard prepare creates local config and admin env from safe templates", (
   assert.match(envText, /API_HASH=/);
 });
 
+test("onboard doctor prints actionable recovery steps", () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codex-onboard-doctor-"));
+  const result = spawnSync(
+    process.execPath,
+    [
+      "scripts/onboard.mjs",
+      "doctor",
+      "--config",
+      path.join(tmpDir, "config.local.json"),
+      "--admin-env",
+      path.join(tmpDir, "admin", ".env"),
+      "--admin-python",
+      path.join(tmpDir, "admin", ".venv", "bin", "python"),
+      "--admin-session",
+      path.join(tmpDir, "state", "telegram_user.session"),
+      "--threads-db",
+      path.join(tmpDir, "state.sqlite"),
+    ],
+    {
+      cwd: PROJECT_ROOT,
+      encoding: "utf8",
+    },
+  );
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stdout, /Recovery plan:/);
+  assert.match(result.stdout, /npm run onboard:prepare/);
+  assert.match(result.stdout, /--login-qr/);
+});
+
 test("onboard wizard can write a non-interactive rehearsal plan", () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codex-onboard-"));
   const dbPath = path.join(tmpDir, "state.sqlite");
@@ -183,6 +213,101 @@ test("onboard wizard can write a non-interactive rehearsal plan", () => {
     plan.projects[0].topics.map((topic) => topic.threadId),
     ["t1", "t2"],
   );
+});
+
+test("onboard wizard previews existing Telegram surface reuse", () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codex-onboard-reuse-"));
+  const dbPath = path.join(tmpDir, "state.sqlite");
+  const outputPath = path.join(tmpDir, "bootstrap-plan.rehearsal.json");
+  const configPath = path.join(tmpDir, "config.local.json");
+  const projectIndexPath = path.join(tmpDir, "bootstrap-result.json");
+  const bridgeStatePath = path.join(tmpDir, "state.json");
+  const sql = `
+    create table threads (
+      id text,
+      title text,
+      cwd text,
+      archived integer,
+      updated_at integer,
+      updated_at_ms integer,
+      source text,
+      rollout_path text,
+      model_provider text,
+      model text,
+      reasoning_effort text,
+      tokens_used integer,
+      agent_nickname text,
+      agent_role text
+    );
+    insert into threads values ('t1', 'Setup thread', '/tmp/project-a', 0, 20, 20000, 'local', '/tmp/rollout-a.jsonl', '', 'gpt-5.4', 'high', 10, '', '');
+  `;
+  const sqlite = spawnSync("sqlite3", [dbPath, sql], {
+    cwd: PROJECT_ROOT,
+    encoding: "utf8",
+  });
+  assert.equal(sqlite.status, 0, sqlite.stderr);
+  fs.writeFileSync(configPath, JSON.stringify({ projectIndexPath }, null, 2));
+  fs.writeFileSync(
+    projectIndexPath,
+    JSON.stringify(
+      {
+        groups: [
+          {
+            projectRoot: "/tmp/project-a",
+            groupTitle: "Codex Lab - project-a",
+            botApiChatId: "-1001",
+            topics: [{ title: "Setup thread", topicId: 5, threadId: "t1" }],
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+  );
+  fs.writeFileSync(
+    bridgeStatePath,
+    JSON.stringify(
+      {
+        bindings: {
+          "group:-1001:topic:5": {
+            chatId: "-1001",
+            messageThreadId: 5,
+            threadId: "t1",
+          },
+        },
+      },
+      null,
+      2,
+    ),
+  );
+
+  const result = spawnSync(
+    process.execPath,
+    [
+      "scripts/onboard.mjs",
+      "wizard",
+      "--rehearsal",
+      "--no-input",
+      "--write",
+      "--threads-db",
+      dbPath,
+      "--output",
+      outputPath,
+      "--config",
+      configPath,
+      "--bridge-state",
+      bridgeStatePath,
+    ],
+    {
+      cwd: PROJECT_ROOT,
+      encoding: "utf8",
+    },
+  );
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Reuse preview:/);
+  assert.match(result.stdout, /group Codex Lab - project-a: reuse -1001/);
+  assert.match(result.stdout, /topic Setup thread: reuse 5; binding already present/);
 });
 
 test("onboard wizard reads clean history defaults from config", () => {

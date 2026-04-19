@@ -39,6 +39,7 @@ const DEFAULT_ADMIN_ENV_EXAMPLE_PATH = path.join(PROJECT_ROOT, "admin", ".env.ex
 const DEFAULT_ADMIN_REQUIREMENTS_PATH = path.join(PROJECT_ROOT, "admin", "requirements.txt");
 const DEFAULT_ADMIN_SESSION_PATH = path.join(PROJECT_ROOT, "state", "telegram_user.session");
 const DEFAULT_BRIDGE_STATE_PATH = path.join(PROJECT_ROOT, "state", "state.json");
+const DEFAULT_PROJECT_INDEX_PATH = path.join(PROJECT_ROOT, "state", "bootstrap-result.json");
 const DEFAULT_BOT_TOKEN_KEYCHAIN_SERVICE = "codex-telegram-bridge-bot-token";
 const DEFAULT_NATIVE_DEBUG_BASE_URL = DEFAULT_APP_CONTROL_BASE_URL;
 const execFileAsync = promisify(execFile);
@@ -598,18 +599,47 @@ function parseSelection(input, max, fallback = []) {
   return selected.size ? [...selected].sort((a, b) => a - b) : fallback;
 }
 
-function makeCheck(label, ok, detail = "", { required = true } = {}) {
+function makeCheck(label, ok, detail = "", { required = true, action = "" } = {}) {
   return {
     label,
     ok: Boolean(ok),
     detail,
     required,
+    action,
   };
 }
 
 function renderChecklistItem(check) {
   const status = check.ok ? "[ok]" : check.required ? "[missing]" : "[warn]";
   return `${status} ${check.label}${check.detail ? ` - ${check.detail}` : ""}`;
+}
+
+function uniqueStrings(values) {
+  return Array.from(new Set(values.map((value) => String(value ?? "").trim()).filter(Boolean)));
+}
+
+function renderRecoveryPlan(checks) {
+  const missingRequired = checks.filter((check) => !check.ok && check.required);
+  const missingOptional = checks.filter((check) => !check.ok && !check.required);
+  const lines = [];
+  const requiredActions = uniqueStrings(missingRequired.map((check) => check.action));
+  if (requiredActions.length) {
+    lines.push("Recovery plan:");
+    for (const action of requiredActions) {
+      lines.push(`- ${action}`);
+    }
+  }
+  const optionalActions = uniqueStrings(missingOptional.map((check) => check.action));
+  if (optionalActions.length) {
+    if (lines.length) {
+      lines.push("");
+    }
+    lines.push("Optional polish:");
+    for (const action of optionalActions) {
+      lines.push(`- ${action}`);
+    }
+  }
+  return lines.join("\n");
 }
 
 async function buildOnboardingChecks(args) {
@@ -632,20 +662,41 @@ async function buildOnboardingChecks(args) {
     ]);
   const appControlOk = appControl.ok;
   return [
-    makeCheck("macOS host", process.platform === "darwin", process.platform),
-    makeCheck("Codex.app", codexAppOk, "/Applications/Codex.app/Contents/MacOS/Codex"),
-    makeCheck("config.local.json", configOk, args.configPath),
-    makeCheck("admin .env with Telegram API_ID/API_HASH", envOk, args.adminEnvPath),
-    makeCheck("Telethon helper", helperOk, args.adminHelperPath),
-    makeCheck("admin Python venv", adminPythonOk, args.adminPythonPath),
-    makeCheck("authorized Telegram user session", sessionOk, args.adminSessionPath),
-    makeCheck("local Codex threads DB", threadsDbOk, args.threadsDbPath),
-    makeCheck("Telegram bot token", botTokenOk, `${botTokenEnv}, config, or Keychain service ${keychainService}`),
+    makeCheck("macOS host", process.platform === "darwin", process.platform, {
+      action: "Use a local macOS host for v1. Linux/Windows are not supported yet.",
+    }),
+    makeCheck("Codex.app", codexAppOk, "/Applications/Codex.app/Contents/MacOS/Codex", {
+      action: "Install Codex Desktop in /Applications, then open this repo in Codex.",
+    }),
+    makeCheck("config.local.json", configOk, args.configPath, {
+      action: "Run `npm run onboard:prepare`; it creates a safe local config from the example.",
+    }),
+    makeCheck("admin .env with Telegram API_ID/API_HASH", envOk, args.adminEnvPath, {
+      action: "Run `npm run onboard:prepare` and paste Telegram API_ID/API_HASH from my.telegram.org when asked.",
+    }),
+    makeCheck("Telethon helper", helperOk, args.adminHelperPath, {
+      action: "Restore the repo files; admin/telegram_user_admin.py is required for folder/group/topic bootstrap.",
+    }),
+    makeCheck("admin Python venv", adminPythonOk, args.adminPythonPath, {
+      action: "Run `npm run onboard:prepare` without `--skip-admin-deps` to create the admin Python venv.",
+    }),
+    makeCheck("authorized Telegram user session", sessionOk, args.adminSessionPath, {
+      action: "Run `npm run onboard:prepare -- --login-qr` and authorize the local Telegram user session.",
+    }),
+    makeCheck("local Codex threads DB", threadsDbOk, args.threadsDbPath, {
+      action: "Open Codex Desktop locally at least once; the wizard needs the local Codex threads DB.",
+    }),
+    makeCheck("Telegram bot token", botTokenOk, `${botTokenEnv}, config, or Keychain service ${keychainService}`, {
+      action: "Create/reuse a bot with @BotFather, then let `npm run onboard:prepare` store the token locally.",
+    }),
     makeCheck(
       "app-control debug port",
       appControlOk,
       appControlOk ? nativeDebugBaseUrl : `${nativeDebugBaseUrl}; run npm run codex:launch`,
-      { required: false },
+      {
+        required: false,
+        action: "Run `npm run codex:launch` for the best live Telegram <-> Codex Desktop UX.",
+      },
     ),
   ];
 }
@@ -762,15 +813,175 @@ async function maybePrepareForWizard(args, rl) {
 function printProjectChoices(projects) {
   process.stdout.write("Candidate projects:\n");
   for (const [index, project] of projects.entries()) {
-    process.stdout.write(`${index + 1}. ${project.projectRoot} (${project.threadCount ?? project.threads?.length ?? 0} threads)\n`);
+    process.stdout.write(`${index + 1}. ${project.projectRoot} (${formatProjectMeta(project)})\n`);
     for (const [threadIndex, thread] of (project.threads ?? []).slice(0, 5).entries()) {
-      process.stdout.write(`   ${threadIndex + 1}. ${sanitizeThreadTitle(thread)} (${thread.id})\n`);
+      process.stdout.write(`   ${threadIndex + 1}. ${sanitizeThreadTitle(thread)} (${thread.id}; ${formatThreadMeta(thread)})\n`);
     }
   }
 }
 
 function sanitizeThreadTitle(thread) {
   return String(thread?.title || thread?.id || "thread").replace(/\s+/g, " ").trim();
+}
+
+function normalizeTimestampMs(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+  return parsed < 100_000_000_000 ? parsed * 1000 : parsed;
+}
+
+function formatAge(value) {
+  const timestampMs = normalizeTimestampMs(value);
+  if (!timestampMs) {
+    return null;
+  }
+  const deltaMs = Math.max(0, Date.now() - timestampMs);
+  const minute = 60_000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+  if (deltaMs < hour) {
+    return `${Math.max(1, Math.round(deltaMs / minute))}m ago`;
+  }
+  if (deltaMs < day) {
+    return `${Math.max(1, Math.round(deltaMs / hour))}h ago`;
+  }
+  return `${Math.max(1, Math.round(deltaMs / day))}d ago`;
+}
+
+function formatCompactNumber(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+  if (parsed >= 1_000_000) {
+    return `${Math.round(parsed / 100_000) / 10}m`;
+  }
+  if (parsed >= 1_000) {
+    return `${Math.round(parsed / 100) / 10}k`;
+  }
+  return String(parsed);
+}
+
+function formatProjectMeta(project) {
+  const bits = [`${project.threadCount ?? project.threads?.length ?? 0} threads`];
+  const age = formatAge(project.latestUpdatedAtMs ?? project.latestUpdatedAt);
+  if (age) {
+    bits.push(`last ${age}`);
+  }
+  return bits.join(", ");
+}
+
+function formatThreadMeta(thread) {
+  const bits = [];
+  const age = formatAge(thread.updated_at_ms ?? thread.updated_at);
+  if (age) {
+    bits.push(`last ${age}`);
+  }
+  const model = String(thread.model ?? "").trim();
+  const reasoning = String(thread.reasoning_effort ?? "").trim();
+  if (model && reasoning) {
+    bits.push(`${model}/${reasoning}`);
+  } else if (model) {
+    bits.push(model);
+  }
+  const tokens = formatCompactNumber(thread.tokens_used);
+  if (tokens) {
+    bits.push(`${tokens} tokens`);
+  }
+  return bits.join(", ") || "no recent metadata";
+}
+
+function resolveProjectPath(value, fallback) {
+  const text = String(value || fallback || "").trim();
+  if (!text) {
+    return fallback;
+  }
+  return path.isAbsolute(text) ? text : path.join(PROJECT_ROOT, text);
+}
+
+function findExistingGroup(projectIndex, projectPlan) {
+  const groups = Array.isArray(projectIndex?.groups) ? projectIndex.groups : [];
+  return (
+    groups.find((group) => String(group.projectRoot ?? "") === String(projectPlan.projectRoot ?? "")) ??
+    groups.find((group) => String(group.groupTitle ?? "") === String(projectPlan.groupTitle ?? "")) ??
+    null
+  );
+}
+
+function findExistingTopic(group, topicPlan) {
+  const topics = Array.isArray(group?.topics) ? group.topics : [];
+  return (
+    topics.find((topic) => String(topic.threadId ?? "") === String(topicPlan.threadId ?? "")) ??
+    topics.find((topic) => String(topic.title ?? "") === String(topicPlan.title ?? "")) ??
+    null
+  );
+}
+
+function findBridgeBinding(bridgeState, group, topicPlan, existingTopic) {
+  const bindings = Object.values(bridgeState?.bindings ?? {});
+  return (
+    bindings.find(
+      (binding) =>
+        String(binding?.chatId ?? "") === String(group?.botApiChatId ?? "") &&
+        existingTopic?.topicId &&
+        String(binding?.messageThreadId ?? "") === String(existingTopic.topicId),
+    ) ??
+    bindings.find(
+      (binding) =>
+        String(binding?.chatId ?? "") === String(group?.botApiChatId ?? "") &&
+        String(binding?.threadId ?? "") === String(topicPlan.threadId ?? ""),
+    ) ??
+    null
+  );
+}
+
+function formatReusePreview(plan, { projectIndex = {}, bridgeState = {}, projectIndexPath = DEFAULT_PROJECT_INDEX_PATH } = {}) {
+  const lines = ["Reuse preview:"];
+  const groups = Array.isArray(projectIndex?.groups) ? projectIndex.groups : [];
+  if (!groups.length) {
+    lines.push(`- no previous bootstrap index at ${projectIndexPath}`);
+    lines.push("- bootstrap still reuses Telegram groups/topics by title when it can see them live");
+    lines.push("- cleanup/backfill/smoke only run when you explicitly choose those steps");
+    return lines.join("\n");
+  }
+
+  for (const project of plan.projects ?? []) {
+    const existingGroup = findExistingGroup(projectIndex, project);
+    if (existingGroup) {
+      lines.push(`- group ${project.groupTitle}: reuse ${existingGroup.botApiChatId ?? existingGroup.groupId ?? "known group"}`);
+    } else {
+      lines.push(`- group ${project.groupTitle}: create or reuse by Telegram title`);
+    }
+
+    for (const topic of project.topics ?? []) {
+      const existingTopic = findExistingTopic(existingGroup, topic);
+      const binding = findBridgeBinding(bridgeState, existingGroup, topic, existingTopic);
+      if (existingTopic) {
+        lines.push(
+          `  - topic ${topic.title}: reuse ${existingTopic.topicId ?? "known topic"}; ${
+            binding ? "binding already present" : "binding refreshed on apply"
+          }`,
+        );
+      } else {
+        lines.push(`  - topic ${topic.title}: create or reuse by Telegram title`);
+      }
+    }
+  }
+
+  lines.push("- no Telegram history is deleted unless cleanup flags are selected");
+  return lines.join("\n");
+}
+
+async function buildReusePreview(args, plan) {
+  const config = await readJsonIfExists(args.configPath, {});
+  const projectIndexPath = resolveProjectPath(config.projectIndexPath, DEFAULT_PROJECT_INDEX_PATH);
+  const [projectIndex, bridgeState] = await Promise.all([
+    readJsonIfExists(projectIndexPath, {}),
+    readJsonIfExists(args.bridgeStatePath, {}),
+  ]);
+  return formatReusePreview(plan, { projectIndex, bridgeState, projectIndexPath });
 }
 
 async function runJsonCommand(command, args, { timeoutMs = 180_000 } = {}) {
@@ -997,6 +1208,10 @@ async function commandDoctor(args) {
   } else {
     process.stdout.write("Onboarding doctor:\n");
     process.stdout.write(`${checks.map(renderChecklistItem).map((item) => `- ${item}`).join("\n")}\n`);
+    const recoveryPlan = renderRecoveryPlan(checks);
+    if (recoveryPlan) {
+      process.stdout.write(`\n${recoveryPlan}\n`);
+    }
     process.stdout.write(
       ok
         ? "\nLooks good. If Telegram still acts cursed, run self-check next.\n"
@@ -1061,6 +1276,7 @@ async function commandPlan(args) {
     return;
   }
   process.stdout.write(`${formatBootstrapPlanSummary(plan)}\n`);
+  process.stdout.write(`\n${await buildReusePreview(args, plan)}\n`);
   if (args.write) {
     process.stdout.write(`\nWrote ${args.outputPath}\n`);
   } else {
@@ -1119,9 +1335,14 @@ async function commandWizard(args) {
   try {
     await maybePrepareForWizard(args, rl);
     await applyConfigDefaults(args);
-    const checklist = await buildOnboardingChecklist(args);
+    const checks = await buildOnboardingChecks(args);
+    const checklist = checks.map(renderChecklistItem);
     process.stdout.write("Onboarding checklist:\n");
     process.stdout.write(`${checklist.map((item) => `- ${item}`).join("\n")}\n\n`);
+    const recoveryPlan = renderRecoveryPlan(checks);
+    if (recoveryPlan) {
+      process.stdout.write(`${recoveryPlan}\n\n`);
+    }
 
     const projectsWithThreads = await loadProjectsWithThreads(args);
     const selectedProjects = await chooseProjectsForWizard(args, rl, projectsWithThreads);
@@ -1152,6 +1373,7 @@ async function commandWizard(args) {
     });
 
     process.stdout.write(`\n${formatBootstrapPlanSummary(plan)}\n`);
+    process.stdout.write(`\n${await buildReusePreview(args, plan)}\n`);
     if (args.json) {
       process.stdout.write(`${JSON.stringify(plan, null, 2)}\n`);
     }
