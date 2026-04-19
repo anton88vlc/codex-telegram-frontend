@@ -61,7 +61,7 @@ Quickstart is the product path:
 npm run onboard:quickstart
 ```
 
-By default it scans the 10 latest active Codex work items across the local Codex DB. Project threads become topics inside project groups. Codex Chats become private topics inside the bot direct chat when Telegram private-topic mode is available. Then it writes the bootstrap plan, applies Telegram surfaces, imports 10 clean messages per topic and runs a smoke. That is the "make my phone usable" button.
+By default it scans the 10 latest active Codex work items across the local Codex DB. Project threads become topics inside project groups. Codex Chats become private topics inside the bot direct chat when the bot has Threaded Mode enabled. Then it writes the bootstrap plan, applies Telegram surfaces, imports 10 clean messages per topic and runs a smoke. That is the "make my phone usable" button.
 
 If private bot topics are not enabled yet, quickstart should keep project onboarding alive and report the Chats surface warning plainly. Rough beta edges are fine; silent fake project groups are not.
 

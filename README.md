@@ -23,7 +23,7 @@ Install codex-telegram-frontend on this Mac.
 
 Run the onboarding doctor, prepare local config from examples, guide me through the unavoidable Telegram steps, then run the quickstart onboarding path.
 
-Create or reuse the Telegram folder `codex`, scan my latest active Codex project threads and Codex Chats, create one group per detected Codex project, create one topic per selected Codex project thread, map Codex Chats into private topics inside the bot direct chat when Telegram supports it, import about 10 clean messages into each topic, start the bridge, run a real Telegram smoke test, and leave the repo in a clean documented state.
+Create or reuse the Telegram folder `codex`, scan my latest active Codex project threads and Codex Chats, create one group per detected Codex project, create one topic per selected Codex project thread, map Codex Chats into private topics inside the bot direct chat, import about 10 clean messages into each topic, start the bridge, run a real Telegram smoke test, and leave the repo in a clean documented state.
 
 Default to about 10 latest active threads total. Do not ask me to choose projects unless the quickstart preview looks wrong. Keep Telegram as a clean remote Codex working set, not a landfill.
 ```
@@ -66,7 +66,7 @@ This project is a frontend. It does not replace Codex.
 - Attachments: photos/documents, including media albums, are saved to ignored local storage and forwarded to Codex as file paths.
 - Voice/audio: Telegram voice is transcribed first, shown as an italic quoted transcript, then sent to Codex as text.
 - Clean bounded history backfill: user prompts plus assistant final answers by default.
-- Quickstart onboarding: latest active Codex project threads become Telegram groups/topics, and Codex Chats can become private topics inside the bot direct chat.
+- Quickstart onboarding: latest active Codex project threads become Telegram groups/topics, and Codex Chats become private topics inside the bot direct chat when the bot has Threaded Mode enabled.
 - Private bot topic preflight for Codex Desktop `Chats`: `npm run bot:topics`.
 - Bootstrap can create/reuse Telegram folder, project groups, topics, bot folder entry and status bars.
 - Optional curated topic auto-sync for fresh Codex threads in already bootstrapped project groups.

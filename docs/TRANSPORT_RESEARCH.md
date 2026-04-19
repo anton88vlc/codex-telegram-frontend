@@ -60,7 +60,7 @@ Telegram also shipped a few useful things recently:
 
 - `deleteMessages` can delete 1-100 message ids in one call, within normal Bot API deletion limits. This can make cleanup less slow and less fragile for bot-owned or admin-deletable messages.
 - `sendMessageDraft` streams a partial message while it is being generated. The useful product target is Codex Desktop `Chats`, because drafts target private chats/private topics; it is not a replacement for progress bubbles in project supergroups.
-- Private chats can now have topics for bots. This no longer fights our product shape: project groups still map to Codex projects, while bot-private topics can map to Codex Desktop `Chats`. Current live blocker is enabling private-topic mode for the bot.
+- Private chats can now have topics for bots. This no longer fights our product shape: project groups still map to Codex projects, while bot-private topics map to Codex Desktop `Chats`. The live bot has Threaded Mode enabled now; keep the preflight because new installs still need that BotFather switch.
 - Managed Bots in Bot API 9.6 are the big onboarding lead. Telegram now has `request_managed_bot`, `getManagedBotToken`, `replaceManagedBotToken` and `https://t.me/newbot/{manager_bot_username}/...` links. If this is usable enough, the install flow can stop saying "go wrestle BotFather" and instead guide the user through a tighter manager-bot flow.
 - Bot API profile photo support means the avatar path can move from the MTProto `photos.uploadProfilePhoto(bot=...)` workaround to official `setMyProfilePhoto`.
 - Native Telegram Checklists look tempting for Codex Todo, but sending/editing checklists is currently business-account-shaped. Worth a spike, not a default.
