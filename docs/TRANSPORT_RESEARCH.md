@@ -65,6 +65,8 @@ Telegram also shipped a few useful things recently:
 - Native Telegram Checklists look tempting for Codex Todo, but sending/editing checklists is currently business-account-shaped. Worth a spike, not a default.
 - Inline keyboards are still the cleanest way to keep ops actions out of working topics: preview, apply, cleanup, smoke, retry, open runbook.
 
+The first Bot API helper layer now covers `deleteMessages`, private-chat `sendMessageDraft`, inline-keyboard markup on messages, and bot profile/admin-rights calls. That is deliberately only plumbing; the product decision is still "use these where they keep the working surface clean."
+
 ## Recommendation
 
 Next implementation step:

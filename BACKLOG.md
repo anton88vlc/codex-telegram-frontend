@@ -29,7 +29,7 @@
 3. Event log retention and nicer operator views once the structured log gets real usage.
 4. Codex Hooks spike: evaluate experimental `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse` and `Stop` hooks for lifecycle logging, completion checks and local guardrails. Do not treat hooks as the main streaming transport yet: current tool hooks mostly see Bash and do not cover MCP, WebSearch or other non-shell tools.
 5. Telegram native streaming/draft spike: `sendMessageDraft` is interesting for private chats with topics, but it is not the project-group happy path because Bot API targets private chats for drafts.
-6. Telegram cleanup hardening: use Bot API `deleteMessages` for bot-deletable cleanup batches where possible, keep Telethon/user-session cleanup for older or non-bot-owned history.
+6. ~~Telegram cleanup helper base: Bot API `deleteMessages` batching for bot-deletable cleanup where possible.~~ Keep Telethon/user-session cleanup for older or non-bot-owned history.
 7. Wire app-server stream probe results into the live bridge once the probe has stable evidence from real turns.
 
 ## P3 - Product Surface
@@ -69,3 +69,4 @@
 16. Onboarding polish base: doctor prints exact recovery steps, wizard shows reuse/create preview from the local bootstrap index, and selectors include recency/model/token hints.
 17. Transport research spike: official Codex app-server, hooks and Telegram Bot API docs reviewed; app-server v2 events are the strongest next path, managed bots are the biggest onboarding lead, and Telegram drafts/checklists are useful but constrained.
 18. App-server stream probe base: CLI probe plus tested event normalization for assistant deltas, reasoning, Todo, diffs, token/rate updates and tool progress.
+19. Telegram Bot API helper base for cleanup batches, private-chat drafts, inline keyboard markup and bot profile/admin-rights polish.
