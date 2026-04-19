@@ -1017,6 +1017,21 @@ def filter_missing_transmissions(transmissions, existing_texts):
     ]
 
 
+def is_bot_private_topic_chat(chat_id: int) -> bool:
+    # Bot API private chats use a positive user id as chat_id. Telethon's
+    # reply iterator works for forum supergroups, not for bot-private topics.
+    return int(chat_id) > 0
+
+
+def require_user_side_forum_topic(chat_id: int, operation: str):
+    if is_bot_private_topic_chat(chat_id):
+        raise SystemExit(
+            f"{operation} is not supported for bot-private topics through this user-side helper yet. "
+            "Use `npm run bot:topics -- --smoke --chat-id <user-id>` for capability checks, "
+            "or send the prompt from Telegram itself."
+        )
+
+
 def binding_key_for_topic(chat_id: int, topic_id: int) -> str:
     return f"group:{chat_id}:topic:{topic_id}"
 
@@ -1364,13 +1379,17 @@ async def command_backfill_thread(args):
             ignored_existing_ids.update(
                 load_keep_message_ids_from_bridge_state(args.bridge_state, args.chat_id, args.topic_id)
             )
-        existing_texts = await topic_visible_texts(
-            client,
-            args.chat_id,
-            args.topic_id,
-            limit=len(transmissions) + 100,
-            ignore_message_ids=ignored_existing_ids,
-        )
+        existing_history_check_skipped = is_bot_private_topic_chat(args.chat_id)
+        if existing_history_check_skipped:
+            existing_texts = []
+        else:
+            existing_texts = await topic_visible_texts(
+                client,
+                args.chat_id,
+                args.topic_id,
+                limit=len(transmissions) + 100,
+                ignore_message_ids=ignored_existing_ids,
+            )
         resume_index = 0 if args.force else find_transmission_resume_index(transmissions, existing_texts)
         pending_transmissions = transmissions if args.force else filter_missing_transmissions(transmissions, existing_texts)
         skipped_existing = len(transmissions) - len(pending_transmissions)
@@ -1387,6 +1406,7 @@ async def command_backfill_thread(args):
                         "transmissions": len(transmissions),
                         "transmissionsToSend": len(pending_transmissions),
                         "existingHistoryMessages": len(existing_texts),
+                        "existingHistoryCheckSkipped": existing_history_check_skipped,
                         "resumedFrom": resume_index,
                         "skippedExisting": skipped_existing,
                         "ignoredExistingMessageIds": sorted(ignored_existing_ids),
@@ -1445,6 +1465,7 @@ async def command_backfill_thread(args):
                 "transmissionsToSend": len(pending_transmissions),
                 "resumedFrom": resume_index,
                 "skippedExisting": skipped_existing,
+                "existingHistoryCheckSkipped": existing_history_check_skipped,
                 "userMessages": user_messages,
                 "assistantMessages": assistant_messages,
                 "telegramMessagesSent": sent_messages,
@@ -1461,6 +1482,7 @@ async def command_backfill_thread(args):
 
 
 async def command_cleanup_topic(args):
+    require_user_side_forum_topic(args.chat_id, "cleanup-topic")
     env = load_env(args.env_file)
     client = make_client(args.session, env)
     keep_message_ids = set(args.keep_message_id or [])
@@ -1544,6 +1566,7 @@ async def command_pin_message(args):
 
 
 async def command_send_topic_message(args):
+    require_user_side_forum_topic(args.chat_id, "send-topic-message")
     env = load_env(args.env_file)
     client = make_client(args.session, env)
     await client.connect()
@@ -1614,6 +1637,7 @@ async def command_set_bot_avatar(args):
 
 
 async def command_wait_topic_text(args):
+    require_user_side_forum_topic(args.chat_id, "wait-topic-text")
     env = load_env(args.env_file)
     client = make_client(args.session, env)
     deadline = asyncio.get_running_loop().time() + max(1, args.timeout_seconds)

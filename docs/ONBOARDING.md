@@ -128,6 +128,8 @@ admin/.venv/bin/python admin/telegram_user_admin.py backfill-thread \
 
 Run without `--dry-run` only after the preview looks sane. Skipping the preview is how Telegram topics become archaeology.
 
+For bot-private Codex `Chats` topics, use `npm run bot:topics -- --smoke --chat-id <telegram-user-id>` for the create/delete capability check, then do the real prompt smoke from Telegram itself. The user-side admin helper intentionally refuses `send-topic-message`, `wait-topic-text` and cleanup there until Telegram's private-topic MTProto path is boring enough.
+
 ## Good Defaults
 
 - quickstart thread limit: 10 latest active threads total

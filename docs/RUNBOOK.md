@@ -312,6 +312,7 @@ Notes:
 - default backfill imports only the configured clean tail: user prompts plus configured assistant phases, `final_answer` by default
 - commentary, heartbeat/system-like entries, Codex app directives and memory citations are skipped by default
 - topic root, pinned status bar and recent live mirror ids from `state/state.json` are protected
+- bot-private Codex `Chats` topics can be backfilled, but the helper skips the existing-history scan there because Telethon does not reliably read those topic replies yet. `send-topic-message`, `wait-topic-text` and cleanup intentionally refuse that surface for now. Do not rerun private-topic backfill casually unless duplicates are acceptable or you are doing a clean rebuild.
 - Telegram `retry_after` is respected, so a partial 429 can usually be resumed by rerunning the command
 
 If a status bar message exists but Telegram Desktop does not surface the pinned banner, re-pin it via MTProto:

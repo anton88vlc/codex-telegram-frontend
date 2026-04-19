@@ -1212,6 +1212,9 @@ async function runCleanupForSummary(args, python, bootstrapSummary, { dryRun = t
 
 function firstBootstrapTopic(bootstrapSummary) {
   for (const group of bootstrapSummary?.groups ?? []) {
+    if (group.privateChat || group.surface === "private-chat-topics") {
+      continue;
+    }
     const topic = group.topics?.[0];
     if (topic?.topicId && group?.botApiChatId) {
       return {
@@ -1227,7 +1230,9 @@ function firstBootstrapTopic(bootstrapSummary) {
 async function runSmoke(args, python, bootstrapSummary) {
   const target = firstBootstrapTopic(bootstrapSummary);
   if (!target) {
-    throw new Error("no bootstrap topic available for smoke");
+    throw new Error(
+      "no project group topic available for automated smoke; bot-private Codex Chats need `npm run bot:topics -- --smoke --chat-id <user-id>` or a real Telegram UI smoke",
+    );
   }
   const sent = await runJsonCommand(python, [
     ...adminBaseArgs(args),

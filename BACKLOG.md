@@ -12,7 +12,7 @@
 
 These are the useful Telegram platform leads found during the April 2026 API pass. Treat this as a ranked implementation queue, not a shiny-object shopping list.
 
-1. ~~Private bot topics for Codex Desktop `Chats` capability layer.~~ Base onboarding support exists, the live bot has Threaded Mode enabled, `bot:topics` can smoke create/delete private topics, bootstrap skips cleanly with a BotFather recovery hint when private topic mode is off, and self-check surfaces the status. Next step is applying a real Codex `Chats` onboarding slice.
+1. ~~Private bot topics for Codex Desktop `Chats` capability layer.~~ Base onboarding support exists, the live bot has Threaded Mode enabled, `bot:topics` can smoke create/delete private topics, bootstrap creates the bot-direct `Codex - Chats` surface, clean backfill works there, and self-check surfaces the status. Keep one rough edge visible: user-side Telethon automation cannot reliably send/read inside bot-private topics yet, so use Bot API preflight plus real Telegram UI smoke for that surface.
 2. `sendMessageDraft` for native "assistant is writing" UX. It streams animated drafts in private chats and private bot topics, so it is perfect for Codex `Chats`; it should not replace project-group progress bubbles unless Telegram opens drafts for supergroups.
 3. Managed bots and `t.me/newbot/...` links. This is the big onboarding simplifier: fewer BotFather gymnastics, cleaner token handoff, maybe a future manager-bot flow. Keep it local/user-owned; do not turn the project into a weird SaaS control plane.
 4. Official bot avatar API. Bot API now has `setMyProfilePhoto`, so replace the MTProto avatar workaround with the official path when practical.
