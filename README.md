@@ -30,12 +30,12 @@ Create or reuse the Telegram folder `codex`, create one group per selected Codex
 Do not mirror every thread. Keep Telegram as a clean remote Codex working set, not a landfill.
 ```
 
-What you still need to do manually:
+What you may still need to do manually:
 
-1. Create a Telegram bot with [@BotFather](https://t.me/BotFather) and give Codex the token through env, config, or macOS Keychain.
-2. Create Telegram `API_ID` / `API_HASH` at [my.telegram.org](https://my.telegram.org/) for the user-side admin helper.
-3. Authorize one local Telegram user session with the helper when Codex asks.
-4. Keep `Codex.app` open; for the best UX let Codex launch it with `npm run codex:launch`.
+1. Create a Telegram bot with [@BotFather](https://t.me/BotFather) if you do not already have one. Codex will tell you when to paste the token and will choose the local storage path.
+2. Create or reuse Telegram app credentials from [my.telegram.org](https://my.telegram.org/) if the admin helper needs them. In a good run, Codex handles the local `.env` wiring and you only paste the values when asked.
+3. Authorize one local Telegram user session when Codex asks; this is what lets the helper create folders, groups and topics as your Telegram user.
+4. Keep `Codex.app` available. For the best UX, let Codex launch it with `npm run codex:launch`.
 
 After that, the wizard can create/reuse the Telegram folder, project groups, thread topics, bindings, status bars, clean history backfill and smoke checks. BotFather has no proper public API, so pretending the bot itself can be created magically would be cute and false.
 
