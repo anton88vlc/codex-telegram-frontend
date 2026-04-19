@@ -30,6 +30,7 @@
 4. Codex Hooks spike: evaluate experimental `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse` and `Stop` hooks for lifecycle logging, completion checks and local guardrails. Do not treat hooks as the main streaming transport yet: current tool hooks mostly see Bash and do not cover MCP, WebSearch or other non-shell tools.
 5. Telegram native streaming/draft spike: `sendMessageDraft` is interesting for private chats with topics, but it is not the project-group happy path because Bot API targets private chats for drafts.
 6. Telegram cleanup hardening: use Bot API `deleteMessages` for bot-deletable cleanup batches where possible, keep Telethon/user-session cleanup for older or non-bot-owned history.
+7. Wire app-server stream probe results into the live bridge once the probe has stable evidence from real turns.
 
 ## P3 - Product Surface
 
@@ -39,11 +40,14 @@
 4. Heartbeat transport as an alternative mode for UI-visible jobs.
 5. Managed-bot onboarding spike: Bot API 9.6 added managed bots and `t.me/newbot/...` links. Investigate whether a manager bot can make first install less BotFather-heavy without adding a creepy SaaS control plane.
 6. Native Telegram Checklist spike for Codex Todo blocks. Likely not default yet because Bot API checklist sending is business-account-shaped, but it is worth validating before we keep hand-rendering Todo forever.
+7. Telegram `date_time` entity spike for compact rate-limit resets in the pinned status bar.
+8. Bot profile/install polish: default administrator rights, menu button, short description and cleaner topic/project icons.
 
 ## P4 - UX Modes
 
 1. Split Telegram UX into two explicit modes: `chat-like` for normal work and `ops-like` for service commands, so the system does not look like an admin panel after P1.
 2. ~~First quiet-path slice: noisy ops replies can go to direct chat with a short trace in the topic.~~
+3. Inline-keyboard ops actions: `Apply`, `Retry`, `Run smoke`, `Copy command`, `Open runbook`, routed to DM or ops topic instead of polluting work topics.
 
 ## Done
 
@@ -64,3 +68,4 @@
 15. Richer Telegram rendering polish: Markdown tables become compact monospace blocks, and local file links render as readable code text instead of broken phone links.
 16. Onboarding polish base: doctor prints exact recovery steps, wizard shows reuse/create preview from the local bootstrap index, and selectors include recency/model/token hints.
 17. Transport research spike: official Codex app-server, hooks and Telegram Bot API docs reviewed; app-server v2 events are the strongest next path, managed bots are the biggest onboarding lead, and Telegram drafts/checklists are useful but constrained.
+18. App-server stream probe base: CLI probe plus tested event normalization for assistant deltas, reasoning, Todo, diffs, token/rate updates and tool progress.

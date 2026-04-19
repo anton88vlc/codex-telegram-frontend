@@ -75,6 +75,14 @@ Next implementation step:
 - Do not chase `sendMessageDraft` for project topics unless Telegram expands it beyond private chats.
 - Add a managed-bot onboarding spike after streaming, because that could remove one of the ugliest install steps.
 
+The first probe now lives in:
+
+```bash
+npm run app-server:probe -- --thread-id <codex-thread-id> --prompt "Reply exactly: STREAM_PROBE_OK" --out logs/app-server-stream-probe.ndjson
+```
+
+It does not wire Telegram yet. It records what Codex app-server actually emits so the next transport slice can be boring instead of brave.
+
 ## Sources
 
 - Codex app-server docs: https://developers.openai.com/codex/app-server

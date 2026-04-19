@@ -115,8 +115,10 @@ Docs should sound like a competent teammate at 2am: direct, practical, and a lit
 - [bridge.mjs](bridge.mjs) - main polling bridge
 - [lib/telegram.mjs](lib/telegram.mjs) - Telegram transport
 - [lib/codex-native.mjs](lib/codex-native.mjs) - native Codex send wrapper
+- [lib/app-server-stream.mjs](lib/app-server-stream.mjs) - app-server streaming event normalization for the next transport slice
 - [scripts/send_via_app_control.js](scripts/send_via_app_control.js) - renderer-aware send through Codex app-control
 - [scripts/send_via_app_server.js](scripts/send_via_app_server.js) - fallback transport through local Codex app-server
+- [scripts/probe_app_server_stream.mjs](scripts/probe_app_server_stream.mjs) - app-server event stream probe
 - [scripts/launch_codex_app_control.mjs](scripts/launch_codex_app_control.mjs) - safe launcher for Codex.app with the app-control debug port
 - [scripts/onboard.mjs](scripts/onboard.mjs) - onboarding scan/plan/wizard generator from the local Codex DB
 - [admin/telegram_user_admin.py](admin/telegram_user_admin.py) - user-side bootstrap/admin helper for Telegram groups and topics
