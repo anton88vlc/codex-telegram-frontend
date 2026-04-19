@@ -24,6 +24,10 @@ import {
   shouldPreferAppServer,
 } from "./lib/native-transport-state.mjs";
 import { makePromptPreview } from "./lib/outbound-mirror-messages.mjs";
+import {
+  rememberOutbound,
+  rememberOutboundMirrorSuppressionForText,
+} from "./lib/outbound-memory.mjs";
 import { syncOutboundMirrors } from "./lib/outbound-mirror-runner.mjs";
 import { getInitialProgressText, startProgressBubble } from "./lib/progress-bubble.mjs";
 import { syncAutoProjectTopics } from "./lib/project-sync-runner.mjs";
@@ -41,11 +45,9 @@ import {
   makeBindingKey,
   makeMessageKey,
   markProcessedMessage,
-  rememberOutboundSuppression,
   saveStateMerged as saveState,
 } from "./lib/state.mjs";
 import { clamp } from "./lib/thread-db.mjs";
-import { makeOutboundMirrorSignature } from "./lib/thread-rollout.mjs";
 import {
   normalizeTypingHeartbeatIntervalMs,
   stopTypingHeartbeats,
@@ -142,29 +144,6 @@ function parseArgs(argv) {
 
 function isTelegramServiceMessage(message) {
   return TELEGRAM_SERVICE_MESSAGE_KEYS.some((key) => key in (message || {}));
-}
-
-function rememberOutbound(binding, sentMessages) {
-  if (!binding || !Array.isArray(sentMessages)) {
-    return;
-  }
-  binding.lastOutboundMessageIds = sentMessages
-    .map((item) => item?.message_id)
-    .filter((value) => Number.isInteger(value));
-}
-
-function rememberOutboundMirrorSuppression(state, bindingKey, text, { role = "assistant", phase = "final_answer" } = {}) {
-  const normalizedText = normalizeText(text);
-  if (!normalizedText) {
-    return null;
-  }
-  const signature = makeOutboundMirrorSignature({
-    role,
-    phase,
-    text: normalizedText,
-  });
-  rememberOutboundSuppression(state, bindingKey, signature);
-  return signature;
 }
 
 async function handlePlainText({
@@ -372,7 +351,7 @@ async function handlePlainText({
       binding.updatedAt = new Date().toISOString();
       state.bindings[bindingKey] = binding;
       rememberOutbound(binding, receipt);
-      rememberOutboundMirrorSuppression(state, bindingKey, prompt, {
+      rememberOutboundMirrorSuppressionForText(state, bindingKey, prompt, {
         role: "user",
         phase: null,
       });
@@ -417,7 +396,7 @@ async function handlePlainText({
   };
   binding.updatedAt = new Date().toISOString();
   state.bindings[bindingKey] = binding;
-  rememberOutboundMirrorSuppression(state, bindingKey, prompt, {
+  rememberOutboundMirrorSuppressionForText(state, bindingKey, prompt, {
     role: "user",
     phase: null,
   });
@@ -534,7 +513,7 @@ async function handlePlainText({
       ? await editThenSendRichTextChunks(config.botToken, target, receiptMessageId, deliveredReplyText)
       : await reply(config.botToken, message, deliveredReplyText);
     rememberOutbound(binding, sent);
-    rememberOutboundMirrorSuppression(state, bindingKey, replyText, {
+    rememberOutboundMirrorSuppressionForText(state, bindingKey, replyText, {
       role: "assistant",
       phase: "final_answer",
     });
