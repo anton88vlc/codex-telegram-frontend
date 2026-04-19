@@ -32,6 +32,7 @@ Codex outbound:
 - `lib/config.mjs` - config defaults, local file parsing and secret lookup.
 - `lib/telegram.mjs` - raw Telegram Bot API calls and rendering chunks.
 - `lib/telegram-targets.mjs` - chat/topic target helpers and small Telegram formatting helpers.
+- `lib/unbound-group-rescue.mjs` - General/All accidental-message rescue into the most active bound topic.
 - `lib/command-response.mjs` - command replies, including quiet ops-to-DM routing.
 - `lib/command-handlers.mjs` - `/help`, `/attach`, `/status`, `/health`, `/settings`, `/project-status`, `/sync-project` and `/mode` routing.
 - `lib/codex-native.mjs` - `app-control` plus `app-server` transport wrapper.

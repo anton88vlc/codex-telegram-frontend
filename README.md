@@ -175,6 +175,7 @@ These are local runtime files and should not be committed:
 - [lib/codex-native.mjs](lib/codex-native.mjs) - Codex send wrapper
 - [lib/command-handlers.mjs](lib/command-handlers.mjs) - Telegram slash-command routing
 - [lib/binding-send-validation.mjs](lib/binding-send-validation.mjs) - pre-send binding safety checks and archived-thread rescue
+- [lib/unbound-group-rescue.mjs](lib/unbound-group-rescue.mjs) - General/All message rescue into the active topic
 - [lib/voice-transcription.mjs](lib/voice-transcription.mjs) - Telegram voice/audio STT
 - [lib/health-report.mjs](lib/health-report.mjs) - `/status` and `/health` text shaping
 - [lib/project-sync-runner.mjs](lib/project-sync-runner.mjs) - project topic status/sync orchestration
