@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import {
   buildBootstrapPlan,
   buildGroupTitle,
+  buildPrivateChatTopicsPlan,
   buildProjectPlan,
   formatBootstrapPlanSummary,
   projectNameFromRoot,
@@ -39,6 +40,25 @@ test("buildProjectPlan selects a bounded thread working set", () => {
     plan.topics.map((topic) => topic.threadId),
     ["t1", "t2"],
   );
+});
+
+test("buildPrivateChatTopicsPlan maps Codex Chats to bot private topics", () => {
+  const plan = buildPrivateChatTopicsPlan(
+    [
+      { id: "c1", title: "Сравнить Codex и ChatGPT" },
+      { id: "c2", title: "Ежедневный 1:00" },
+    ],
+    { chatId: 123, title: "Codex - Chats", threadLimit: 2 },
+  );
+
+  assert.equal(plan.surface, "private-chat-topics");
+  assert.equal(plan.botApiChatId, "123");
+  assert.equal(plan.projectRoot, "");
+  assert.deepEqual(
+    plan.topics.map((topic) => topic.threadId),
+    ["c1", "c2"],
+  );
+  assert.match(formatBootstrapPlanSummary(buildBootstrapPlan([plan])), /private chat topics/);
 });
 
 test("buildBootstrapPlan keeps onboarding defaults near the generated plan", () => {
@@ -304,7 +324,7 @@ test("onboard quickstart writes latest active threads without manual selection",
   );
 
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /Quickstart selected 3 latest active thread/);
+  assert.match(result.stdout, /Quickstart selected 3 project thread/);
   const plan = JSON.parse(fs.readFileSync(outputPath, "utf8"));
   assert.equal(plan.onboarding.historyMaxMessages, 10);
   assert.equal(plan.onboarding.threadsPerProject, 3);
@@ -319,6 +339,80 @@ test("onboard quickstart writes latest active threads without manual selection",
   assert.deepEqual(
     plan.projects[1].topics.map((topic) => topic.threadId),
     ["t2"],
+  );
+});
+
+test("onboard quickstart maps Codex Chats to private bot topics", () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codex-onboard-quickstart-chats-"));
+  const dbPath = path.join(tmpDir, "state.sqlite");
+  const outputPath = path.join(tmpDir, "bootstrap-plan.json");
+  const homeDir = os.homedir().replaceAll("'", "''");
+  const scratchDir = path.join(os.homedir(), "Documents", "Codex", "2026-04-19-new-chat").replaceAll("'", "''");
+  const sql = `
+    create table threads (
+      id text,
+      title text,
+      cwd text,
+      archived integer,
+      updated_at integer,
+      updated_at_ms integer,
+      source text,
+      rollout_path text,
+      model_provider text,
+      model text,
+      reasoning_effort text,
+      tokens_used integer,
+      agent_nickname text,
+      agent_role text
+    );
+    insert into threads values ('c1', 'Global chat', '${homeDir}', 0, 40, 40000, 'local', '/tmp/chat-a.jsonl', '', 'gpt-5.4', 'xhigh', 40, '', '');
+    insert into threads values ('c2', 'Scratch chat', '${scratchDir}', 0, 30, 30000, 'local', '/tmp/chat-b.jsonl', '', 'gpt-5.4', 'high', 30, '', '');
+    insert into threads values ('p1', 'Project thread', '/tmp/project-a', 0, 20, 20000, 'local', '/tmp/rollout-a.jsonl', '', 'gpt-5.4', 'high', 20, '', '');
+  `;
+  const sqlite = spawnSync("sqlite3", [dbPath, sql], {
+    cwd: PROJECT_ROOT,
+    encoding: "utf8",
+  });
+  assert.equal(sqlite.status, 0, sqlite.stderr);
+
+  const result = spawnSync(
+    process.execPath,
+    [
+      "scripts/onboard.mjs",
+      "quickstart",
+      "--preview",
+      "--write",
+      "--thread-limit",
+      "3",
+      "--private-chat-user-id",
+      "123",
+      "--no-input",
+      "--threads-db",
+      dbPath,
+      "--output",
+      outputPath,
+    ],
+    {
+      cwd: PROJECT_ROOT,
+      encoding: "utf8",
+    },
+  );
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /2 Codex Chat/);
+  const plan = JSON.parse(fs.readFileSync(outputPath, "utf8"));
+  assert.deepEqual(
+    plan.projects.map((project) => project.surface || "project-group"),
+    ["project-group", "private-chat-topics"],
+  );
+  assert.equal(plan.projects[1].botApiChatId, "123");
+  assert.deepEqual(
+    plan.projects[0].topics.map((topic) => topic.threadId),
+    ["p1"],
+  );
+  assert.deepEqual(
+    plan.projects[1].topics.map((topic) => topic.threadId),
+    ["c1", "c2"],
   );
 });
 

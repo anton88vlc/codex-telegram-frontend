@@ -12,6 +12,7 @@ import { promisify } from "node:util";
 
 import {
   buildBootstrapPlan,
+  buildPrivateChatTopicsPlan,
   buildProjectPlan,
   DEFAULT_HISTORY_ASSISTANT_PHASES,
   DEFAULT_HISTORY_INCLUDE_HEARTBEATS,
@@ -20,11 +21,12 @@ import {
   DEFAULT_REHEARSAL_FOLDER_TITLE,
   DEFAULT_REHEARSAL_GROUP_PREFIX,
   DEFAULT_TOPIC_DISPLAY,
+  PRIVATE_CHAT_TOPICS_SURFACE,
   formatBootstrapPlanSummary,
   formatScanSummary,
 } from "../lib/onboarding-plan.mjs";
 import { DEFAULT_APP_CONTROL_BASE_URL, checkAppControl } from "../lib/app-control-launcher.mjs";
-import { listProjectThreads, listRecentProjects, listRecentThreads, parsePositiveInt } from "../lib/thread-db.mjs";
+import { listProjectThreads, listRecentProjects, listRecentThreads, listRecentWorkItems, parsePositiveInt } from "../lib/thread-db.mjs";
 
 const PROJECT_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DEFAULT_THREADS_DB_PATH = path.join(os.homedir(), ".codex", "state_5.sqlite");
@@ -44,6 +46,7 @@ const DEFAULT_BOT_TOKEN_KEYCHAIN_SERVICE = "codex-telegram-bridge-bot-token";
 const DEFAULT_NATIVE_DEBUG_BASE_URL = DEFAULT_APP_CONTROL_BASE_URL;
 const DEFAULT_QUICKSTART_THREAD_LIMIT = 10;
 const DEFAULT_QUICKSTART_HISTORY_MAX_MESSAGES = 10;
+const DEFAULT_CHATS_SURFACE_TITLE = "Codex - Chats";
 const execFileAsync = promisify(execFile);
 
 function fail(message) {
@@ -59,6 +62,9 @@ function parseArgs(argv) {
     projectLimit: 8,
     threadLimit: DEFAULT_QUICKSTART_THREAD_LIMIT,
     threadsPerProject: 3,
+    includeChats: true,
+    privateChatUserId: null,
+    chatsSurfaceTitle: DEFAULT_CHATS_SURFACE_TITLE,
     historyMaxMessages: DEFAULT_HISTORY_MAX_MESSAGES,
     historyMaxUserPrompts: DEFAULT_HISTORY_MAX_USER_PROMPTS,
     historyAssistantPhases: [...DEFAULT_HISTORY_ASSISTANT_PHASES],
@@ -126,6 +132,15 @@ function parseArgs(argv) {
       case "--threads-per-project":
         args.threadsPerProject = parsePositiveInt(rest[++index], args.threadsPerProject);
         args._threadsPerProjectExplicit = true;
+        break;
+      case "--no-chats":
+        args.includeChats = false;
+        break;
+      case "--private-chat-user-id":
+        args.privateChatUserId = rest[++index];
+        break;
+      case "--chats-title":
+        args.chatsSurfaceTitle = rest[++index];
         break;
       case "--history-max-messages":
         args.historyMaxMessages = parsePositiveInt(rest[++index], args.historyMaxMessages);
@@ -289,7 +304,7 @@ function renderHelp() {
     "  node scripts/onboard.mjs prepare [--skip-admin-deps] [--login-qr]",
     "  node scripts/onboard.mjs doctor [--json]",
     "  node scripts/onboard.mjs scan [--project-limit 8] [--threads-per-project 3] [--json]",
-    "  node scripts/onboard.mjs quickstart [--thread-limit 10] [--history-max-messages 10] [--preview]",
+    "  node scripts/onboard.mjs quickstart [--thread-limit 10] [--history-max-messages 10] [--preview] [--no-chats]",
     "  node scripts/onboard.mjs plan --project /path/to/repo [--project /path/to/other] [--threads-per-project 3] [--history-max-messages 40] [--history-assistant-phase final_answer] [--group-prefix 'Codex - '] [--folder-title codex] [--topic-display tabs|list] [--write]",
     "  node scripts/onboard.mjs plan --rehearsal --project /path/to/repo [--write]",
     "  node scripts/onboard.mjs wizard [--rehearsal] [--write] [--apply] [--cleanup-dry-run|--cleanup] [--backfill-dry-run|--backfill] [--smoke]",
@@ -301,7 +316,7 @@ function renderHelp() {
     "  doctor checks local prerequisites before the wizard gets creative.",
     "  codex:launch starts Codex.app with the app-control debug port when it is not already open.",
     "  scan is read-only and shows candidate Codex projects/threads.",
-    "  quickstart is automatic: latest active Codex threads, bounded clean history, bootstrap, backfill and smoke.",
+    "  quickstart is automatic: latest active Codex threads and Chats, bounded clean history, bootstrap, backfill and smoke.",
     "  plan is a preview by default; add --write to update admin/bootstrap-plan.json.",
     "  wizard is the manual escape hatch and can write/apply/backfill/smoke with explicit confirmation or flags.",
     "  history import defaults come from config.local.json unless a history flag overrides them.",
@@ -943,8 +958,42 @@ function resolveProjectPath(value, fallback) {
   return path.isAbsolute(text) ? text : path.join(PROJECT_ROOT, text);
 }
 
+function normalizePathText(value) {
+  return String(value ?? "").replace(/\/+$/, "");
+}
+
+function isLikelyCodexChatThread(thread, { homeDir = os.homedir() } = {}) {
+  const cwd = normalizePathText(thread?.cwd);
+  if (!cwd) {
+    return true;
+  }
+  const home = normalizePathText(homeDir);
+  const codexScratchRoot = normalizePathText(path.join(homeDir, "Documents", "Codex"));
+  return cwd === home || cwd === codexScratchRoot || cwd.startsWith(`${codexScratchRoot}/`);
+}
+
+async function resolvePrivateChatUserId(args) {
+  if (args.privateChatUserId) {
+    return String(args.privateChatUserId).trim();
+  }
+  const config = await readJsonIfExists(args.configPath, {});
+  const firstAllowedUser = Array.isArray(config.allowedUserIds) ? config.allowedUserIds[0] : null;
+  return firstAllowedUser != null ? String(firstAllowedUser).trim() : "";
+}
+
 function findExistingGroup(projectIndex, projectPlan) {
   const groups = Array.isArray(projectIndex?.groups) ? projectIndex.groups : [];
+  if (projectPlan.surface === PRIVATE_CHAT_TOPICS_SURFACE) {
+    return (
+      groups.find(
+        (group) =>
+          group?.surface === PRIVATE_CHAT_TOPICS_SURFACE &&
+          String(group?.botApiChatId ?? "") === String(projectPlan.botApiChatId ?? ""),
+      ) ??
+      groups.find((group) => group?.surface === PRIVATE_CHAT_TOPICS_SURFACE) ??
+      null
+    );
+  }
   return (
     groups.find((group) => String(group.projectRoot ?? "") === String(projectPlan.projectRoot ?? "")) ??
     groups.find((group) => String(group.groupTitle ?? "") === String(projectPlan.groupTitle ?? "")) ??
@@ -992,9 +1041,11 @@ function formatReusePreview(plan, { projectIndex = {}, bridgeState = {}, project
   for (const project of plan.projects ?? []) {
     const existingGroup = findExistingGroup(projectIndex, project);
     if (existingGroup) {
-      lines.push(`- group ${project.groupTitle}: reuse ${existingGroup.botApiChatId ?? existingGroup.groupId ?? "known group"}`);
+      const label = project.surface === PRIVATE_CHAT_TOPICS_SURFACE ? "private chat" : "group";
+      lines.push(`- ${label} ${project.groupTitle}: reuse ${existingGroup.botApiChatId ?? existingGroup.groupId ?? "known group"}`);
     } else {
-      lines.push(`- group ${project.groupTitle}: create or reuse by Telegram title`);
+      const label = project.surface === PRIVATE_CHAT_TOPICS_SURFACE ? "private chat" : "group";
+      lines.push(`- ${label} ${project.groupTitle}: create or reuse by Telegram title`);
     }
 
     for (const topic of project.topics ?? []) {
@@ -1243,9 +1294,14 @@ async function loadProjectsWithThreads(args) {
 }
 
 async function loadQuickstartProjectsWithThreads(args) {
-  const threads = await listRecentThreads(args.threadsDbPath, { limit: args.threadLimit });
+  const threads = await listRecentWorkItems(args.threadsDbPath, { limit: args.threadLimit });
   const projectsByRoot = new Map();
+  const chatThreads = [];
   for (const thread of threads) {
+    if (args.includeChats && isLikelyCodexChatThread(thread)) {
+      chatThreads.push(thread);
+      continue;
+    }
     const projectRoot = String(thread.cwd ?? "").trim();
     if (!projectRoot) {
       continue;
@@ -1269,16 +1325,34 @@ async function loadQuickstartProjectsWithThreads(args) {
       project.latestUpdatedAtMs = thread.updated_at_ms ?? project.latestUpdatedAtMs;
     }
   }
-  return [...projectsByRoot.values()];
+  return {
+    projectsWithThreads: [...projectsByRoot.values()],
+    chatThreads,
+  };
 }
 
-function buildBootstrapPlanForProjects(projectsWithThreads, args, { threadsPerProject = args.threadsPerProject } = {}) {
+async function buildBootstrapPlanForProjects(projectsWithThreads, args, {
+  threadsPerProject = args.threadsPerProject,
+  chatThreads = [],
+} = {}) {
   const projectPlans = projectsWithThreads.map((project) =>
     buildProjectPlan(project.projectRoot, project.threads ?? [], {
       threadsPerProject,
       groupPrefix: args.groupPrefix ?? undefined,
     }),
   );
+  if (args.includeChats && chatThreads.length) {
+    const privateChatUserId = await resolvePrivateChatUserId(args);
+    if (privateChatUserId) {
+      projectPlans.push(
+        buildPrivateChatTopicsPlan(chatThreads, {
+          chatId: privateChatUserId,
+          title: args.chatsSurfaceTitle,
+          threadLimit: chatThreads.length,
+        }),
+      );
+    }
+  }
   return buildBootstrapPlan(projectPlans, {
     threadsPerProject,
     historyMaxMessages: args.historyMaxMessages,
@@ -1395,17 +1469,24 @@ async function commandQuickstart(args) {
       process.stdout.write(`${recoveryPlan}\n\n`);
     }
 
-    const projectsWithThreads = await loadQuickstartProjectsWithThreads(args);
+    const { projectsWithThreads, chatThreads } = await loadQuickstartProjectsWithThreads(args);
     const selectedThreadCount = projectsWithThreads.reduce((sum, project) => sum + (project.threads?.length ?? 0), 0);
-    if (!selectedThreadCount) {
+    const selectedChatCount = chatThreads.length;
+    if (!selectedThreadCount && !selectedChatCount) {
       fail("No active Codex threads found. Open Codex Desktop once, then run quickstart again.");
     }
+    if (selectedChatCount && !(await resolvePrivateChatUserId(args))) {
+      process.stdout.write(
+        "Warning: Codex Chats were found, but no private chat user id is configured. Add allowedUserIds or pass --private-chat-user-id to sync them.\n\n",
+      );
+    }
 
-    const plan = buildBootstrapPlanForProjects(projectsWithThreads, args, {
+    const plan = await buildBootstrapPlanForProjects(projectsWithThreads, args, {
       threadsPerProject: Math.max(1, args.threadLimit),
+      chatThreads,
     });
     process.stdout.write(
-      `Quickstart selected ${selectedThreadCount} latest active thread(s) across ${plan.projects.length} project(s).\n\n`,
+      `Quickstart selected ${selectedThreadCount} project thread(s) and ${selectedChatCount} Codex Chat(s) across ${plan.projects.length} surface(s).\n\n`,
     );
     process.stdout.write(`${formatBootstrapPlanSummary(plan)}\n`);
     process.stdout.write(`\n${await buildReusePreview(args, plan)}\n`);

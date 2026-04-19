@@ -33,6 +33,7 @@ DEFAULT_RENDER_HELPER_PATH = PROJECT_ROOT / "scripts" / "render_telegram_text.mj
 DEFAULT_BOT_AVATAR_PATH = PROJECT_ROOT / "assets" / "bot-avatar.png"
 DEFAULT_FOLDER_TITLE = "codex"
 DEFAULT_TOPIC_DISPLAY = "tabs"
+PRIVATE_CHAT_TOPICS_SURFACE = "private-chat-topics"
 DEFAULT_THREADS_DB_PATH = Path.home() / ".codex" / "state_5.sqlite"
 DEFAULT_BOT_TOKEN_KEYCHAIN_SERVICE = "codex-telegram-bridge-bot-token"
 DEFAULT_MESSAGE_DELAY_MS = 1100
@@ -138,6 +139,8 @@ def load_json(path: Path, fallback):
 
 
 def bootstrap_group_identity(group: dict):
+    if group.get("surface") == PRIVATE_CHAT_TOPICS_SURFACE and group.get("botApiChatId"):
+        return f"{PRIVATE_CHAT_TOPICS_SURFACE}:{group.get('botApiChatId')}"
     for key in ("botApiChatId", "groupId", "groupTitle"):
         value = group.get(key)
         if value:
@@ -365,6 +368,50 @@ def call_bot_api(token: str, method: str, payload: dict):
     if not result.get("ok"):
         raise RuntimeError(f"telegram {method} failed: {result.get('description') or result}")
     return result.get("result")
+
+
+def find_existing_group(existing_result: dict, project: dict, chat_id: str = ""):
+    groups = existing_result.get("groups", []) if isinstance(existing_result, dict) else []
+    if not isinstance(groups, list):
+        return None
+    surface = project.get("surface")
+    for group in groups:
+        if not isinstance(group, dict):
+            continue
+        if surface == PRIVATE_CHAT_TOPICS_SURFACE:
+            if group.get("surface") == PRIVATE_CHAT_TOPICS_SURFACE and str(group.get("botApiChatId", "")) == str(chat_id):
+                return group
+            continue
+        if project.get("projectRoot") and str(group.get("projectRoot", "")) == str(project.get("projectRoot", "")):
+            return group
+        if project.get("groupTitle") and str(group.get("groupTitle", "")) == str(project.get("groupTitle", "")):
+            return group
+    return None
+
+
+def find_existing_topic(existing_group: dict, topic_plan: dict):
+    topics = existing_group.get("topics", []) if isinstance(existing_group, dict) else []
+    if not isinstance(topics, list):
+        return None
+    for topic in topics:
+        if not isinstance(topic, dict):
+            continue
+        if topic_plan.get("threadId") and str(topic.get("threadId", "")) == str(topic_plan.get("threadId", "")):
+            return topic
+        if topic_plan.get("title") and str(topic.get("title", "")) == str(topic_plan.get("title", "")):
+            return topic
+    return None
+
+
+def create_private_chat_topic(bot_token: str, chat_id: str, title: str):
+    return call_bot_api(
+        bot_token,
+        "createForumTopic",
+        {
+            "chat_id": int(chat_id),
+            "name": title,
+        },
+    )
 
 
 def make_client(session_path: Path, env: EnvConfig) -> TelegramClient:
@@ -1102,6 +1149,7 @@ async def command_bootstrap(args):
     env = load_env(args.env_file)
     plan = load_json(args.plan, {"projects": []})
     bridge_state = load_json(args.bridge_state, {"version": 1, "lastUpdateId": 0, "bindings": {}})
+    existing_result = load_json(args.result_path, {})
     bot_username = resolve_bot_username(args)
     folder_title = resolve_folder_title(args, plan)
     topic_display = resolve_topic_display(args, plan)
@@ -1125,6 +1173,7 @@ async def command_bootstrap(args):
             "folderIncludesBot": False,
             "folderBotError": None,
             "topicDisplay": topic_display,
+            "warnings": [],
             "rehearsal": bool(plan.get("onboarding", {}).get("rehearsal")),
         }
         folder_peers = []
@@ -1136,6 +1185,60 @@ async def command_bootstrap(args):
                 summary["folderBotError"] = str(exc)
 
         for project in plan.get("projects", []):
+            if project.get("surface") == PRIVATE_CHAT_TOPICS_SURFACE:
+                chat_id = str(project.get("botApiChatId") or args.private_chat_user_id or "").strip()
+                if not chat_id:
+                    summary["warnings"].append(
+                        f"Skipped {project.get('groupTitle', 'Codex Chats')}: missing private chat user id."
+                    )
+                    continue
+                existing_group = find_existing_group(existing_result, project, chat_id=chat_id)
+                group_summary = {
+                    "surface": PRIVATE_CHAT_TOPICS_SURFACE,
+                    "projectRoot": "",
+                    "groupTitle": project.get("groupTitle") or "Codex - Chats",
+                    "botApiChatId": chat_id,
+                    "createdGroup": False,
+                    "privateChat": True,
+                    "topics": [],
+                    "topicError": None,
+                }
+                try:
+                    bot_token = load_bot_token("CODEX_TELEGRAM_BOT_TOKEN", DEFAULT_BOT_TOKEN_KEYCHAIN_SERVICE)
+                    for topic_plan in project.get("topics", []):
+                        existing_topic = find_existing_topic(existing_group or {}, topic_plan)
+                        created_topic = False
+                        if existing_topic and existing_topic.get("topicId"):
+                            topic_id = int(existing_topic["topicId"])
+                            title = existing_topic.get("title") or topic_plan["title"]
+                        else:
+                            topic = create_private_chat_topic(bot_token, chat_id, topic_plan["title"])
+                            topic_id = int(topic["message_thread_id"])
+                            title = topic.get("name") or topic_plan["title"]
+                            created_topic = True
+                        upsert_binding(
+                            bridge_state["bindings"],
+                            chat_id=chat_id,
+                            topic_id=topic_id,
+                            title=group_summary["groupTitle"],
+                            thread_id=topic_plan["threadId"],
+                        )
+                        group_summary["topics"].append(
+                            {
+                                "title": title,
+                                "topicId": topic_id,
+                                "threadId": topic_plan["threadId"],
+                                "createdTopic": created_topic,
+                            }
+                        )
+                except Exception as exc:
+                    group_summary["topicError"] = str(exc)
+                    summary["warnings"].append(
+                        f"Could not create private chat topics for {group_summary['groupTitle']}: {exc}"
+                    )
+                summary["groups"].append(group_summary)
+                continue
+
             group, created_group = await ensure_forum_group(
                 client,
                 title=project["groupTitle"],
@@ -1183,7 +1286,7 @@ async def command_bootstrap(args):
     save_json(args.bridge_state, bridge_state)
     result_payload = summary
     if not args.replace_result:
-        result_payload = merge_bootstrap_results(load_json(args.result_path, {}), summary)
+        result_payload = merge_bootstrap_results(existing_result, summary)
     save_json(args.result_path, result_payload)
     print(json.dumps(summary, ensure_ascii=False, indent=2))
 
@@ -1551,6 +1654,7 @@ def build_parser():
     bootstrap.add_argument("--bot-username", default=None)
     bootstrap.add_argument("--folder-title", default=None)
     bootstrap.add_argument("--topic-display", choices=["tabs", "list"], default=None)
+    bootstrap.add_argument("--private-chat-user-id", default=None)
     bootstrap.add_argument("--replace-result", action="store_true")
     bootstrap.add_argument("--skip-folder", action="store_true")
     bootstrap.add_argument("--skip-bot-folder", action="store_true")

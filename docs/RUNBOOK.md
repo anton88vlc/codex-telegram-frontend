@@ -180,7 +180,7 @@ Preferred guided flow:
 npm run onboard:quickstart
 ```
 
-This is the normal install story now: latest 10 active Codex threads, grouped into project groups, about 10 clean messages per topic, then bootstrap/backfill/smoke. If that working set looks wrong, drop to the manual wizard:
+This is the normal install story now: latest 10 active Codex work items, grouped into project groups plus bot private topics for Codex Desktop `Chats`, about 10 clean messages per topic, then bootstrap/backfill/smoke. If that working set looks wrong, drop to the manual wizard:
 
 ```bash
 npm run onboard:wizard
@@ -242,6 +242,7 @@ admin/.venv/bin/python admin/telegram_user_admin.py bootstrap \
 ```
 
 `bootstrap` creates or updates the Telegram folder from the plan by default and puts project groups plus the bot direct chat there.
+If the plan contains the `private-chat-topics` surface, `bootstrap` creates/reuses topics inside the bot direct chat via Bot API. That depends on Telegram's private-topic mode for bots; if it is not enabled, the helper records a warning instead of pretending those Chats are projects.
 It also forces forum topics to display as `Tabs`; pass `--topic-display list` only for manual debugging.
 It merges groups into `state/bootstrap-result.json`; pass `--replace-result` only for an intentional clean rebuild.
 Use `--skip-folder` only when debugging folder automation. Use `--skip-bot-folder` if the bot direct chat should stay out of the folder for a one-off test.
