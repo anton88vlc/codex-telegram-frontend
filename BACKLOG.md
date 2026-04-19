@@ -7,6 +7,7 @@
 3. Do not mirror every possible thread and do not turn Telegram into a dump. Keep a clean working set where topics represent the current project threads, not the infinite historical tail.
 4. Do not turn the working surface into an admin panel. Ops/admin noise must support the chat-like work experience, not dominate it.
 5. Telegram frontend copy should be English-first for open-source readiness. User prompts and final answers should keep the original thread language.
+6. Public-release docs must explain the runtime honestly, in human language: `app-control` is the live near-Mac happy path and may cause a brief Codex Desktop renderer hiccup; `app-server` is calmer but does not give the same real-time Desktop UI sync. Do not bury this in polite fog.
 
 ## Telegram Platform Radar
 
