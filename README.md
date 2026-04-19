@@ -124,6 +124,7 @@ Docs should sound like a competent teammate at 2am: direct, practical, and a lit
 - [docs/CONFIGURATION.md](docs/CONFIGURATION.md) - config keys, secret sources and Telegram command boundaries
 - [docs/ONBOARDING.md](docs/ONBOARDING.md) - recommended setup flow for a new user
 - [docs/RUNBOOK.md](docs/RUNBOOK.md) - ops runbook
+- [docs/TRANSPORT_RESEARCH.md](docs/TRANSPORT_RESEARCH.md) - current research notes on Codex app-server, hooks and newer Telegram Bot API surfaces
 - [BACKLOG.md](BACKLOG.md) - product and UX backlog
 
 ## Runtime Files

@@ -11,7 +11,7 @@
 ## P1 - Bring Telegram UX Closer To Codex
 
 1. ~~In-place commentary/progress bubbles instead of silence followed by one final answer.~~
-2. True token streaming from Codex UI. Current progress is honest rollout/commentary mirroring, not raw token streaming.
+2. True streaming from Codex. Current progress is honest rollout/commentary mirroring, not raw app-server event streaming.
 3. ~~Basic ops/admin quiet path: help, health, settings, project-status and sync previews can route long replies to direct chat.~~
 4. Dedicated ops topic or configurable ops routing, so the working topics stay chat-like even under heavier admin use.
 5. ~~Telegram HTML rendering for bold, italic, code, code fences, lists, task lists, links, blockquotes, spoilers and plain fallback.~~
@@ -24,10 +24,12 @@
 
 ## P2 - Transport And Observability
 
-1. Separate streaming mode on top of app-control if intermediate events can be extracted.
+1. Prototype app-server v2 event streaming as the next transport layer. Local Codex 0.121.0 exposes `item/agentMessage/delta`, `item/reasoning/*`, `turn/plan/updated`, `turn/diff/updated`, `thread/tokenUsage/updated`, `account/rateLimits/updated` and tool/file-change progress events, which is a much better source than renderer polling.
 2. ~~Structured event/audit log at `logs/bridge.events.ndjson`, sampled by `/health`.~~
 3. Event log retention and nicer operator views once the structured log gets real usage.
-4. Codex Hooks spike: evaluate experimental `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse` and `Stop` hooks as a cleaner source for lifecycle events, completion checks, auto-continue and Telegram progress updates. This should complement app-control send-only, not replace it, unless the local proof says otherwise.
+4. Codex Hooks spike: evaluate experimental `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse` and `Stop` hooks for lifecycle logging, completion checks and local guardrails. Do not treat hooks as the main streaming transport yet: current tool hooks mostly see Bash and do not cover MCP, WebSearch or other non-shell tools.
+5. Telegram native streaming/draft spike: `sendMessageDraft` is interesting for private chats with topics, but it is not the project-group happy path because Bot API targets private chats for drafts.
+6. Telegram cleanup hardening: use Bot API `deleteMessages` for bot-deletable cleanup batches where possible, keep Telethon/user-session cleanup for older or non-bot-owned history.
 
 ## P3 - Product Surface
 
@@ -35,6 +37,8 @@
 2. Voice / audio ingress.
 3. Auto-create topic rules for fresh threads without turning Telegram into a dump.
 4. Heartbeat transport as an alternative mode for UI-visible jobs.
+5. Managed-bot onboarding spike: Bot API 9.6 added managed bots and `t.me/newbot/...` links. Investigate whether a manager bot can make first install less BotFather-heavy without adding a creepy SaaS control plane.
+6. Native Telegram Checklist spike for Codex Todo blocks. Likely not default yet because Bot API checklist sending is business-account-shaped, but it is worth validating before we keep hand-rendering Todo forever.
 
 ## P4 - UX Modes
 
@@ -59,3 +63,4 @@
 14. `onboard:prepare` for agent-led local setup: safe config/admin env creation, optional admin venv install, credential prompts and QR-login handoff.
 15. Richer Telegram rendering polish: Markdown tables become compact monospace blocks, and local file links render as readable code text instead of broken phone links.
 16. Onboarding polish base: doctor prints exact recovery steps, wizard shows reuse/create preview from the local bootstrap index, and selectors include recency/model/token hints.
+17. Transport research spike: official Codex app-server, hooks and Telegram Bot API docs reviewed; app-server v2 events are the strongest next path, managed bots are the biggest onboarding lead, and Telegram drafts/checklists are useful but constrained.
