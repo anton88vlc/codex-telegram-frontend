@@ -155,6 +155,40 @@ test("onboard doctor prints actionable recovery steps", () => {
   assert.match(result.stdout, /--login-qr/);
 });
 
+test("onboard doctor treats placeholder admin env as incomplete", () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codex-onboard-doctor-env-"));
+  const adminDir = path.join(tmpDir, "admin");
+  fs.mkdirSync(adminDir, { recursive: true });
+  const adminEnvPath = path.join(adminDir, ".env");
+  fs.writeFileSync(adminEnvPath, "API_ID=\nAPI_HASH=\nCODEX_TELEGRAM_BOT_USERNAME=your_bot_username_without_at\n");
+
+  const result = spawnSync(
+    process.execPath,
+    [
+      "scripts/onboard.mjs",
+      "doctor",
+      "--config",
+      path.join(tmpDir, "config.local.json"),
+      "--admin-env",
+      adminEnvPath,
+      "--admin-python",
+      path.join(tmpDir, "admin", ".venv", "bin", "python"),
+      "--admin-session",
+      path.join(tmpDir, "state", "telegram_user.session"),
+      "--threads-db",
+      path.join(tmpDir, "state.sqlite"),
+    ],
+    {
+      cwd: PROJECT_ROOT,
+      encoding: "utf8",
+    },
+  );
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stdout, /admin \.env with Telegram API_ID\/API_HASH/);
+  assert.match(result.stdout, /API_ID\/API_HASH required/);
+});
+
 test("onboard wizard can write a non-interactive rehearsal plan", () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codex-onboard-"));
   const dbPath = path.join(tmpDir, "state.sqlite");

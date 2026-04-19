@@ -372,6 +372,11 @@ async function readEnvValues(filePath) {
   }
 }
 
+function hasRealEnvValue(values, key) {
+  const value = String(values?.[key] ?? "").trim();
+  return Boolean(value) && !isPlaceholderValue(value);
+}
+
 function formatEnvValue(value) {
   const text = String(value ?? "");
   if (!text || /^[A-Za-z0-9_:@./-]+$/.test(text)) {
@@ -644,14 +649,17 @@ function renderRecoveryPlan(checks) {
 
 async function buildOnboardingChecks(args) {
   const config = await readJsonIfExists(args.configPath, {});
+  const envValues = await readEnvValues(args.adminEnvPath);
   const botTokenEnv = config.botTokenEnv || "CODEX_TELEGRAM_BOT_TOKEN";
   const keychainService = config.botTokenKeychainService || DEFAULT_BOT_TOKEN_KEYCHAIN_SERVICE;
   const nativeDebugBaseUrl = config.nativeDebugBaseUrl || DEFAULT_NATIVE_DEBUG_BASE_URL;
   const configHasBotToken = Boolean(process.env[botTokenEnv] || config.botToken);
-  const [configOk, envOk, helperOk, adminPythonOk, sessionOk, threadsDbOk, codexAppOk, botTokenOk, appControl] =
+  const envFileOk = await pathExists(args.adminEnvPath);
+  const envOk = envFileOk && hasRealEnvValue(envValues, "API_ID") && hasRealEnvValue(envValues, "API_HASH");
+  const envDetail = envFileOk ? `${args.adminEnvPath} (API_ID/API_HASH required)` : args.adminEnvPath;
+  const [configOk, helperOk, adminPythonOk, sessionOk, threadsDbOk, codexAppOk, botTokenOk, appControl] =
     await Promise.all([
       pathExists(args.configPath),
-      pathExists(args.adminEnvPath),
       pathExists(args.adminHelperPath),
       pathExists(args.adminPythonPath),
       pathExists(args.adminSessionPath),
@@ -671,7 +679,7 @@ async function buildOnboardingChecks(args) {
     makeCheck("config.local.json", configOk, args.configPath, {
       action: "Run `npm run onboard:prepare`; it creates a safe local config from the example.",
     }),
-    makeCheck("admin .env with Telegram API_ID/API_HASH", envOk, args.adminEnvPath, {
+    makeCheck("admin .env with Telegram API_ID/API_HASH", envOk, envDetail, {
       action: "Run `npm run onboard:prepare` and paste Telegram API_ID/API_HASH from my.telegram.org when asked.",
     }),
     makeCheck("Telethon helper", helperOk, args.adminHelperPath, {
@@ -706,11 +714,13 @@ async function buildOnboardingChecklist(args) {
 }
 
 async function buildLocalSetupNeeds(args) {
-  const [configOk, envOk, adminPythonOk] = await Promise.all([
+  const envValues = await readEnvValues(args.adminEnvPath);
+  const [configOk, envFileOk, adminPythonOk] = await Promise.all([
     pathExists(args.configPath),
     pathExists(args.adminEnvPath),
     pathExists(args.adminPythonPath),
   ]);
+  const envOk = envFileOk && hasRealEnvValue(envValues, "API_ID") && hasRealEnvValue(envValues, "API_HASH");
   const needs = [];
   if (!configOk) needs.push("config.local.json");
   if (!envOk) needs.push("admin/.env");

@@ -82,3 +82,4 @@
 27. Changed-files UX fix: progress bubbles compare against a turn-start worktree snapshot, so old dirty files are not reported as fresh work; default file list is full instead of `+N more`.
 28. Telegram media albums are grouped by `media_group_id`, so several photos attached at once become one Codex turn, one progress bubble and one reply chain.
 29. Telegram voice/audio ingress with Deepgram/OpenAI/custom-command STT, italic transcript bubble, reply-chain UX and no permanent audio file for built-in providers.
+30. Public-readiness cleanup pass: secret/local-artifact scan, neutral repo examples, agent notes without personal user context and onboarding doctor validation for placeholder Telegram API credentials.

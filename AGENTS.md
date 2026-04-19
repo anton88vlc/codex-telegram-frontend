@@ -4,7 +4,7 @@ This repo is the Telegram frontend for Codex Desktop. Treat it like a real produ
 
 ## Voice
 
-- Anton prefers Russian in direct conversation unless he clearly switches languages.
+- Follow the user's language in direct conversation unless they clearly ask to switch.
 - Project docs and Telegram frontend copy are English-first for open-source readiness.
 - Documentation should sound like a competent teammate at 2am: direct, practical, a little opinionated. No corporate fog. If something is rough, say it is rough.
 - Be concise. If the useful answer fits in one sentence, do not inflate it into a committee memo.
@@ -49,7 +49,7 @@ These are local/runtime artifacts. Do not commit them unless the user explicitly
 - Inspect before editing. This repo has live Telegram state and local Codex state; guessing is how weird ghosts get created.
 - Do not revert unrelated user changes. There may be intentional dirty work in progress.
 - Use dry-run paths before destructive Telegram actions. Topic cleanup and backfill are especially easy to make ugly.
-- Keep commits small and meaningful. Anton explicitly wants a readable project history.
+- Keep commits small and meaningful. The project history should read like a sequence of sane product slices.
 - If you touch docs, keep the tone human and direct.
 
 ## Checks

@@ -53,17 +53,17 @@ test("renderTelegramChunks renders Markdown tables as compact pre blocks", () =>
 
 test("renderTelegramChunks renders local file links as readable code text", () => {
   const [chunk] = renderTelegramChunks(
-    "See [bridge.mjs](/Users/antonnaumov/code/codex-telegram-frontend/bridge.mjs:42) and [space file](</Users/a/My File.md:3>).",
+    "See [bridge.mjs](/Users/example/code/codex-telegram-frontend/bridge.mjs:42) and [space file](</Users/example/My File.md:3>).",
   );
 
   assert.match(
     chunk.html,
-    /<code>bridge\.mjs — \/Users\/antonnaumov\/code\/codex-telegram-frontend\/bridge\.mjs:42<\/code>/,
+    /<code>bridge\.mjs — \/Users\/example\/code\/codex-telegram-frontend\/bridge\.mjs:42<\/code>/,
   );
-  assert.match(chunk.html, /<code>space file — \/Users\/a\/My File\.md:3<\/code>/);
+  assert.match(chunk.html, /<code>space file — \/Users\/example\/My File\.md:3<\/code>/);
   assert.equal(
     chunk.plain,
-    "See bridge.mjs — /Users/antonnaumov/code/codex-telegram-frontend/bridge.mjs:42 and space file — /Users/a/My File.md:3.",
+    "See bridge.mjs — /Users/example/code/codex-telegram-frontend/bridge.mjs:42 and space file — /Users/example/My File.md:3.",
   );
 });
 
