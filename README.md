@@ -173,6 +173,7 @@ These are local runtime files and should not be committed:
 - [bridge.mjs](bridge.mjs) - main polling bridge
 - [lib/telegram.mjs](lib/telegram.mjs) - Telegram Bot API helpers
 - [lib/codex-native.mjs](lib/codex-native.mjs) - Codex send wrapper
+- [lib/command-handlers.mjs](lib/command-handlers.mjs) - Telegram slash-command routing
 - [lib/binding-send-validation.mjs](lib/binding-send-validation.mjs) - pre-send binding safety checks and archived-thread rescue
 - [lib/voice-transcription.mjs](lib/voice-transcription.mjs) - Telegram voice/audio STT
 - [lib/health-report.mjs](lib/health-report.mjs) - `/status` and `/health` text shaping

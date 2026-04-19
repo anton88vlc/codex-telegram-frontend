@@ -33,6 +33,7 @@ Codex outbound:
 - `lib/telegram.mjs` - raw Telegram Bot API calls and rendering chunks.
 - `lib/telegram-targets.mjs` - chat/topic target helpers and small Telegram formatting helpers.
 - `lib/command-response.mjs` - command replies, including quiet ops-to-DM routing.
+- `lib/command-handlers.mjs` - `/help`, `/attach`, `/status`, `/health`, `/settings`, `/project-status`, `/sync-project` and `/mode` routing.
 - `lib/codex-native.mjs` - `app-control` plus `app-server` transport wrapper.
 - `lib/binding-send-validation.mjs` - pre-send binding safety checks, private Chat DB grace and archived-thread rescue.
 - `lib/native-transport-state.mjs` - app-control cooldown and fallback state.
@@ -65,7 +66,6 @@ Do not build a giant framework around this. The right move is boring extraction:
 
 Good next slices:
 
-- `lib/command-handlers.mjs` for `/help`, `/status`, `/settings`, `/project-status` and `/sync-project` routing.
 - `lib/inbound-turn-runner.mjs` for the safer half of `handlePlainText`: prompt preparation, surrogate bubbles and native send result handling.
 
 Bad next slices:

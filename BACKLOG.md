@@ -116,3 +116,4 @@ These are the useful Telegram platform leads found during the April 2026 API pas
 43. Project sync runner extracted: project status, sync preview/apply and auto-sync orchestration now live in `lib/project-sync-runner.mjs` with Telegram API calls injected in tests.
 44. Health report rendering extracted: `/status` and `/health` now live in `lib/health-report.mjs`, with tests for binding diagnostics, event-log fallback and state-doctor clues.
 45. Binding send validation extracted: parked-topic blocking, private Chat DB grace, archived-thread rescue and outbound mirror rebasing now live in `lib/binding-send-validation.mjs`.
+46. Command handlers extracted: slash-command routing is now in `lib/command-handlers.mjs`, with tests for attach/status/sync/mode flows instead of another blob inside `bridge.mjs`.
