@@ -29,12 +29,7 @@ npm run codex:launch
 
 If Codex is already open without the debug port, close it first. The launcher does not kill active Codex windows. Good tools do not yoink the steering wheel.
 
-Two modes matter in practice:
-
-- `app-control`: best UX, best mirror, most Desktop-like. Use it when you are near the Mac and can tolerate the Desktop app being part of the loop.
-- `app-server`: safer remote lane. Use it when you are away, the renderer is crashy, or you need the bridge to stop leaning on visible Desktop UI.
-
-Do not pretend they are the same thing. `app-control` is the shiny remote-Codex feel. `app-server` is the seatbelt.
+Mode rule: `app-control` is the shiny near-Mac lane; `app-server` is the seatbelt when you are away or the renderer is crashy.
 
 ## Install Assumptions
 
@@ -166,13 +161,6 @@ For the Desktop-first happy path without the old heavy renderer polling, use:
 
 This is now the expected app-control shape: a small `threads.send_message` action, then Telegram receives progress/final from the rollout mirror. If the renderer still crashes, turn `appControlShowThread` off first; if it still crashes, go back to `nativeIngressTransport: "app-server"`.
 That keeps Telegram ingress off the renderer while outbound mirroring can still read the Codex thread state.
-
-Use this rule of thumb:
-
-- working beside the laptop: `app-control`
-- walking outside with the phone: `app-server`
-- demoing the cool bit: `app-control`
-- debugging crashy Desktop behavior: `app-server` until the renderer stops being dramatic
 
 If Codex Desktop archives a thread while switching worktrees or returning to the main branch, a Telegram topic can briefly point at a dead thread id. The bridge now tries a conservative rescue: same title, same `cwd`, exactly one active successor. If that match exists, it silently rebinds the topic and continues. If there are multiple plausible successors, it refuses to guess. That is annoying for one message, but much better than sending work into the wrong Codex thread.
 

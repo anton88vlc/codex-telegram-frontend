@@ -80,16 +80,6 @@ Use this for things that should survive restarts and should not be changed from 
 
 Hard take: keep this file boring. If a setting can make the bridge unusable, do not expose it casually in Telegram until there is validation and rollback.
 
-## Runtime Mode Cheat Sheet
-
-`nativeIngressTransport` is the switch most people will care about:
-
-- `app-control`: default. Best live Codex Desktop feel. Requires Codex launched with the debug port, usually through `npm run codex:launch`.
-- `app-server`: steadier remote mode. Better when you are away from the Mac or the Desktop renderer is acting weird. Less instant visible UI sync, fewer moving parts.
-- `auto`: tries the shiny path first, then falls back. Useful for experiments, less predictable as a daily-driver setting.
-
-The sane default is `app-control`. The sane escape hatch is `app-server`.
-
 ## 2. Secrets And Local Setup
 
 These are not product settings; they are local machine plumbing.
