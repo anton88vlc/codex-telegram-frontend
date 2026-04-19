@@ -34,6 +34,7 @@ Codex outbound:
 - `lib/telegram-targets.mjs` - chat/topic target helpers and small Telegram formatting helpers.
 - `lib/command-response.mjs` - command replies, including quiet ops-to-DM routing.
 - `lib/codex-native.mjs` - `app-control` plus `app-server` transport wrapper.
+- `lib/binding-send-validation.mjs` - pre-send binding safety checks, private Chat DB grace and archived-thread rescue.
 - `lib/native-transport-state.mjs` - app-control cooldown and fallback state.
 - `lib/health-report.mjs` - `/status` and `/health` text shaping, state-doctor/event-log sampling and binding diagnostics.
 - `lib/private-topic-bindings.mjs` - private bot topics mapped to Codex Desktop `Chats`.
