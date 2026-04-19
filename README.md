@@ -69,6 +69,7 @@ This project is a frontend. It does not replace Codex.
 - Bootstrap can create/reuse Telegram folder, project groups, topics, bot folder entry and status bars.
 - Bot polish: command menu, profile text, suggested admin rights and bundled avatar.
 - Structured event log at `logs/bridge.events.ndjson`; `/health` samples it.
+- Local state doctor for stale topic bindings, orphan mirror state and bootstrap-index drift.
 
 ## Not Yet
 
@@ -105,6 +106,7 @@ Self-check and full check:
 
 ```bash
 npm run self-check
+npm run state:doctor
 npm run check
 ```
 
@@ -159,7 +161,9 @@ These are local runtime files and should not be committed:
 - [lib/codex-native.mjs](lib/codex-native.mjs) - Codex send wrapper
 - [lib/voice-transcription.mjs](lib/voice-transcription.mjs) - Telegram voice/audio STT
 - [lib/outbound-progress.mjs](lib/outbound-progress.mjs) - Telegram progress bubble content
+- [lib/state-doctor.mjs](lib/state-doctor.mjs) - local state/index drift inspection and safe repairs
 - [scripts/onboard.mjs](scripts/onboard.mjs) - onboarding scan/plan/wizard
+- [scripts/state_doctor.mjs](scripts/state_doctor.mjs) - CLI for local state repair previews
 - [admin/telegram_user_admin.py](admin/telegram_user_admin.py) - Telethon admin helper for folders/groups/topics
 - [docs/ONBOARDING.md](docs/ONBOARDING.md) - setup flow
 - [docs/RUNBOOK.md](docs/RUNBOOK.md) - operations and recovery

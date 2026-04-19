@@ -42,6 +42,7 @@ import {
 } from "./lib/project-sync.mjs";
 import { buildSelfCheckReport, formatSelfCheckReport } from "./lib/runtime-health.mjs";
 import { buildSettingsReport } from "./lib/settings-report.mjs";
+import { inspectStateDoctor } from "./lib/state-doctor.mjs";
 import { buildStatusBarMessage, makeStatusBarHash, readRolloutRuntimeStatus } from "./lib/status-bar.mjs";
 import {
   getBinding,
@@ -1306,6 +1307,13 @@ async function renderHealth(config, state, message, bindingKey, binding) {
     },
   ]);
   const eventSummary = summarizeBridgeEvents(recentEvents);
+  let stateDoctor = null;
+  let stateDoctorError = null;
+  try {
+    stateDoctor = await inspectStateDoctor({ config, state, recentEvents });
+  } catch (error) {
+    stateDoctorError = error instanceof Error ? error.message : String(error);
+  }
   const lines = [
     "**Bridge health**",
     `bot: ${config.botUsername ? `\`@${config.botUsername}\`` : "unknown username"}`,
@@ -1318,6 +1326,9 @@ async function renderHealth(config, state, message, bindingKey, binding) {
     `status bar: ${config.statusBarEnabled === false ? "off" : "on"}`,
     `event log: \`${eventLogPath}\` (${eventSummary.total} sampled)`,
     `delivery: app-control ${eventSummary.appControlSends}, app-server fallback ${eventSummary.appServerFallbackSends}, native errors ${eventSummary.nativeSendErrors}, ops dm fallbacks ${eventSummary.opsDmFallbacks}`,
+    stateDoctor
+      ? `state doctor: ${stateDoctor.summary.findings} findings, ${stateDoctor.summary.repairable} safe repairs`
+      : `state doctor: unavailable (${stateDoctorError || "unknown"})`,
   ];
 
   if (binding) {
@@ -1353,6 +1364,10 @@ async function renderHealth(config, state, message, bindingKey, binding) {
     }
   } else {
     lines.push("binding: none");
+  }
+
+  if (stateDoctor?.summary?.repairable) {
+    lines.push("state repair hint: run `npm run state:doctor -- --apply` locally. It only edits local state/index files.");
   }
 
   try {

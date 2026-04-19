@@ -12,6 +12,7 @@
     "check": "npm run test && npm run check:python && npm run check:launchd",
     "check:python": "python3 -m py_compile admin/telegram_user_admin.py",
     "check:launchd": "sh -n ops/install-launchd.sh && ./ops/install-launchd.sh --dry-run > /tmp/codex-telegram-bridge.plist && plutil -lint /tmp/codex-telegram-bridge.plist",
+    "state:doctor": "node scripts/state_doctor.mjs",
     "onboard:prepare": "node scripts/onboard.mjs prepare",
     "onboard:doctor": "node scripts/onboard.mjs doctor",
     "onboard:scan": "node scripts/onboard.mjs scan",

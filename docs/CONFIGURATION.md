@@ -85,7 +85,10 @@ Run the doctor before blaming Telegram:
 
 ```bash
 npm run onboard:doctor
+npm run state:doctor
 ```
+
+`onboard:doctor` checks setup prerequisites. `state:doctor` checks the bridge's live local memory: stale bindings, dead-topic errors, orphan mirror state and bootstrap entries that no longer match `state/state.json`.
 
 ## 3. Telegram Commands
 

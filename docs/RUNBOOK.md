@@ -64,6 +64,18 @@ Onboarding preflight without Telegram side effects:
 npm run onboard:doctor
 ```
 
+Local state/index repair preview:
+
+```bash
+npm run state:doctor
+```
+
+Apply safe local repairs. This tombstones stale bindings, removes orphan mirror state and prunes stale bootstrap entries; it does not delete Telegram messages:
+
+```bash
+npm run state:doctor -- --apply
+```
+
 Install or refresh launchd:
 
 ```bash
@@ -103,10 +115,11 @@ Do this in order. Random poking makes the bridge look haunted when it is usually
 1. Make sure `Codex.app` is open.
 2. Prefer `npm run codex:launch`; otherwise the bridge can still try the local app-server fallback.
 3. Run `npm run self-check`.
-4. Check `/health`; it samples `logs/bridge.events.ndjson`.
-5. If the bridge crashed before structured logging, check `logs/bridge.stderr.log`.
-6. Check whether `state/state.json -> lastUpdateId` moves.
-7. If launchd is alive but stuck, use `launchctl kickstart -k ...`.
+4. Run `npm run state:doctor`; if it reports safe repairs, apply them.
+5. Check `/health`; it samples `logs/bridge.events.ndjson`.
+6. If the bridge crashed before structured logging, check `logs/bridge.stderr.log`.
+7. Check whether `state/state.json -> lastUpdateId` moves.
+8. If launchd is alive but stuck, use `launchctl kickstart -k ...`.
 
 If `self-check` says `app-control: fetch failed`, but `app-server: reachable`, that is not fatal.
 

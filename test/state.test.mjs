@@ -75,6 +75,41 @@ test("mergeState does not resurrect detached bindings", () => {
   assert.equal(bridgeState.outboundMirrors["group:-1001:topic:3"], undefined);
 });
 
+test("mergeState lets persisted tombstones delete stale in-memory bindings", () => {
+  const bridgeState = {
+    version: 1,
+    lastUpdateId: 10,
+    bindings: {
+      "group:-1001:topic:3": {
+        threadId: "old",
+        updatedAt: "2026-04-18T20:00:00.000Z",
+      },
+    },
+    bindingTombstones: {},
+    processedMessageKeys: [],
+    outboundMirrors: {
+      "group:-1001:topic:3": {
+        initialized: true,
+      },
+    },
+  };
+  const persistedState = {
+    version: 1,
+    lastUpdateId: 11,
+    bindings: {},
+    bindingTombstones: {
+      "group:-1001:topic:3": "2026-04-18T20:05:00.000Z",
+    },
+    outboundMirrors: {},
+  };
+
+  mergeState(bridgeState, persistedState);
+
+  assert.equal(bridgeState.bindings["group:-1001:topic:3"], undefined);
+  assert.equal(bridgeState.outboundMirrors["group:-1001:topic:3"], undefined);
+  assert.equal(bridgeState.bindingTombstones["group:-1001:topic:3"], "2026-04-18T20:05:00.000Z");
+});
+
 test("setBinding clears a tombstone after a fresh attach", () => {
   const state = {
     bindings: {},
