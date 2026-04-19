@@ -22,6 +22,12 @@ import {
 } from "./lib/message-routing.mjs";
 import { appendTransportNotice, renderNativeSendError } from "./lib/native-ux.mjs";
 import {
+  appControlCooldownUntilMs,
+  markAppControlCooldown,
+  markTransportError,
+  shouldPreferAppServer,
+} from "./lib/native-transport-state.mjs";
+import {
   appendOutboundProgressItem,
   formatOutboundProgressMirrorText,
 } from "./lib/outbound-progress.mjs";
@@ -234,43 +240,6 @@ async function rerouteUnboundGroupMessageToFallbackTopic({ config, state, messag
 
 function isTelegramServiceMessage(message) {
   return TELEGRAM_SERVICE_MESSAGE_KEYS.some((key) => key in (message || {}));
-}
-
-function parseTimestampMs(value) {
-  const parsed = Date.parse(String(value || ""));
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function appControlCooldownUntilMs(binding) {
-  return parseTimestampMs(binding?.appControlCooldownUntil);
-}
-
-function shouldPreferAppServer(binding, config, nowMs = Date.now()) {
-  if (!config.nativeFallbackHelperPath) {
-    return false;
-  }
-  if (config.nativeIngressTransport === "app-server") {
-    return true;
-  }
-  return Boolean(appControlCooldownUntilMs(binding) > nowMs);
-}
-
-function markAppControlCooldown(binding, config, error, nowMs = Date.now()) {
-  const cooldownMs = Math.max(0, Number(config.appControlCooldownMs) || 0);
-  if (!cooldownMs) {
-    return null;
-  }
-  const kind = normalizeText(error?.kind) || "send_failed";
-  const until = new Date(nowMs + cooldownMs).toISOString();
-  binding.appControlCooldownUntil = until;
-  binding.lastTransportErrorAt = new Date(nowMs).toISOString();
-  binding.lastTransportErrorKind = kind;
-  return until;
-}
-
-function markTransportError(binding, error, nowMs = Date.now()) {
-  binding.lastTransportErrorAt = new Date(nowMs).toISOString();
-  binding.lastTransportErrorKind = normalizeText(error?.kind) || "send_failed";
 }
 
 function formatThreadBullet(thread) {
