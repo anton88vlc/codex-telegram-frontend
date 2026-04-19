@@ -37,6 +37,7 @@ Codex outbound:
 - `lib/native-transport-state.mjs` - app-control cooldown and fallback state.
 - `lib/private-topic-bindings.mjs` - private bot topics mapped to Codex Desktop `Chats`.
 - `lib/project-sync.mjs` - project topic sync planning.
+- `lib/project-sync-runner.mjs` - project status rendering, `/sync-project` application and optional auto-sync orchestration.
 - `lib/outbound-binding-eligibility.mjs` - shared checks for mirror/status/typing eligible bindings.
 - `lib/outbound-mirror-messages.mjs` - pure text shaping for Codex Desktop-originated mirrors.
 - `lib/outbound-mirror-runner.mjs` - rollout mirror delivery, suppression, pending retry state and progress/final routing.
@@ -64,7 +65,7 @@ Good next slices:
 
 - `lib/command-handlers.mjs` for `/help`, `/status`, `/health`, `/settings`, `/project-status` and `/sync-project` routing.
 - `lib/inbound-turn-runner.mjs` for the safer half of `handlePlainText`: prompt preparation, surrogate bubbles and native send result handling.
-- `lib/project-sync-runner.mjs` for applying sync plans through Telegram admin calls.
+- `lib/health-report.mjs` for `/health` text shaping and state-doctor/event-log sampling.
 
 Bad next slices:
 
