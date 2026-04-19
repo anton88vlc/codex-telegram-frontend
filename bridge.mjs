@@ -52,6 +52,7 @@ import {
 } from "./lib/state.mjs";
 import { clamp, getThreadById, getThreadsByIds, listProjectThreads, parsePositiveInt } from "./lib/thread-db.mjs";
 import { makeOutboundMirrorSignature, readThreadMirrorDelta } from "./lib/thread-rollout.mjs";
+import { formatWorktreeSummary, readWorktreeSummary } from "./lib/worktree-summary.mjs";
 import {
   closeForumTopic,
   createForumTopic,
@@ -84,6 +85,7 @@ const DEFAULT_NATIVE_WAIT_FOR_REPLY = false;
 const DEFAULT_OUTBOUND_POLL_INTERVAL_MS = 2_000;
 const DEFAULT_OUTBOUND_MIRROR_PHASES = ["commentary", "final_answer"];
 const DEFAULT_STATUS_BAR_TAIL_BYTES = 512 * 1024;
+const DEFAULT_WORKTREE_SUMMARY_MAX_FILES = 8;
 const DEFAULT_BOT_TOKEN_KEYCHAIN_SERVICE = "codex-telegram-bridge-bot-token";
 const DEFAULT_APP_CONTROL_COOLDOWN_MS = 5 * 60 * 1000;
 const execFileAsync = promisify(execFile);
@@ -200,6 +202,10 @@ async function loadConfig(configPath) {
     statusBarTailBytes: Number.isFinite(fromFile?.statusBarTailBytes)
       ? fromFile.statusBarTailBytes
       : DEFAULT_STATUS_BAR_TAIL_BYTES,
+    worktreeSummaryEnabled: fromFile?.worktreeSummaryEnabled !== false,
+    worktreeSummaryMaxFiles: Number.isFinite(fromFile?.worktreeSummaryMaxFiles)
+      ? Math.max(1, Math.min(30, Number(fromFile.worktreeSummaryMaxFiles)))
+      : DEFAULT_WORKTREE_SUMMARY_MAX_FILES,
     statePath: fromFile?.statePath || DEFAULT_STATE_PATH,
     nativeHelperPath: fromFile?.nativeHelperPath || DEFAULT_NATIVE_HELPER_PATH,
     nativeFallbackHelperPath: fromFile?.nativeFallbackHelperPath || DEFAULT_NATIVE_FALLBACK_HELPER_PATH,
@@ -388,6 +394,25 @@ function rememberOutboundMirrorSuppression(state, bindingKey, text, { role = "as
   return signature;
 }
 
+async function loadChangedFilesTextForThread({ config, thread, cache }) {
+  if (config.worktreeSummaryEnabled === false) {
+    return null;
+  }
+  const cwd = normalizeText(thread?.cwd);
+  if (!cwd) {
+    return null;
+  }
+  if (cache.has(cwd)) {
+    return cache.get(cwd);
+  }
+  const summary = await readWorktreeSummary(cwd);
+  const text = formatWorktreeSummary(summary, {
+    maxFiles: config.worktreeSummaryMaxFiles,
+  });
+  cache.set(cwd, text);
+  return text;
+}
+
 function isOutboundMirrorBindingEligible(binding) {
   if (!binding?.threadId) {
     return false;
@@ -447,7 +472,14 @@ function formatOutboundAssistantMirrorText(message) {
     .join("\n");
 }
 
-async function upsertOutboundProgressMessage({ config, binding, target, replyToMessageId, message }) {
+async function upsertOutboundProgressMessage({
+  config,
+  binding,
+  target,
+  replyToMessageId,
+  message,
+  changedFilesText = null,
+}) {
   const baseTurn = {
     source: "codex",
     startedAt: message.timestamp || binding.currentTurn?.startedAt || new Date().toISOString(),
@@ -464,6 +496,11 @@ async function upsertOutboundProgressMessage({ config, binding, target, replyToM
         ...baseTurn,
         progressItems: appendOutboundProgressItem(binding.currentTurn, message),
       };
+  if (changedFilesText) {
+    binding.currentTurn.changedFilesText = changedFilesText;
+  } else {
+    delete binding.currentTurn.changedFilesText;
+  }
   const text = formatOutboundProgressMirrorText({
     message,
     currentTurn: binding.currentTurn,
@@ -488,10 +525,15 @@ async function upsertOutboundProgressMessage({ config, binding, target, replyToM
   return sent;
 }
 
-async function completeOutboundProgressMessage({ config, binding, target }) {
+async function completeOutboundProgressMessage({ config, binding, target, changedFilesText = null }) {
   const messageId = binding.currentTurn?.codexProgressMessageId;
   if (!Number.isInteger(messageId)) {
     return [];
+  }
+  if (changedFilesText) {
+    binding.currentTurn.changedFilesText = changedFilesText;
+  } else if (binding.currentTurn) {
+    delete binding.currentTurn.changedFilesText;
   }
   const text = formatOutboundProgressMirrorText({
     currentTurn: binding.currentTurn,
@@ -1574,6 +1616,7 @@ async function syncOutboundMirrors({ config, state }) {
     bindingEntries.map(([, binding]) => binding.threadId),
   );
   const threadsById = new Map(threads.map((thread) => [String(thread.id), thread]));
+  const changedFilesCache = new Map();
 
   let delivered = 0;
   let suppressed = 0;
@@ -1646,6 +1689,14 @@ async function syncOutboundMirrors({ config, state }) {
         const isFinalAssistant = isFinalAssistantMirrorMessage(message);
         const isCommentaryAssistant = isCommentaryAssistantMirrorMessage(message);
         const isPlan = isPlanMirrorMessage(message);
+        const changedFilesText =
+          isCommentaryAssistant || isPlan || isFinalAssistant
+            ? await loadChangedFilesTextForThread({
+                config,
+                thread,
+                cache: changedFilesCache,
+              })
+            : null;
         let sent = [];
         if (message.role === "user") {
           sent = await sendRichTextChunks(config.botToken, target, formatOutboundUserMirrorText(message.text, config));
@@ -1656,11 +1707,12 @@ async function syncOutboundMirrors({ config, state }) {
             target,
             replyToMessageId: replyTargetMessageId,
             message,
+            changedFilesText,
           });
         } else {
           sent = await sendRichTextChunks(config.botToken, target, formatOutboundAssistantMirrorText(message), replyTargetMessageId);
           if (isFinalAssistant) {
-            await completeOutboundProgressMessage({ config, binding, target });
+            await completeOutboundProgressMessage({ config, binding, target, changedFilesText });
           }
         }
         rememberOutbound(binding, sent);

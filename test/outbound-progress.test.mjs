@@ -58,6 +58,28 @@ test("formatOutboundProgressMirrorText shows todo plan below live updates", () =
   assert.match(text, /\n\n\*\*Progress\*\*\nlast activity: 21:32$/);
 });
 
+test("formatOutboundProgressMirrorText shows changed files above progress footer", () => {
+  const turn = {
+    changedFilesText: "**Changed files**\n2 files changed +4 -1\n- `bridge.mjs` +3 -1\n- `README.md` +1 -0",
+    progressItems: [
+      {
+        text: "Editing progress bubble",
+        timestamp: "2026-04-18T21:33:00.000+02:00",
+      },
+    ],
+  };
+
+  const text = formatOutboundProgressMirrorText({
+    currentTurn: turn,
+    config: {},
+  });
+
+  assert.match(text, /^> Editing progress bubble/);
+  assert.match(text, /\*\*Changed files\*\*/);
+  assert.match(text, /- `bridge\.mjs` \+3 -1/);
+  assert.match(text, /\n\n\*\*Progress\*\*\nlast activity: 21:33$/);
+});
+
 test("formatOutboundProgressMirrorText generic mode hides commentary details", () => {
   const text = formatOutboundProgressMirrorText({
     message: {

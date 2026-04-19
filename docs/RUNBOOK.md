@@ -275,6 +275,7 @@ Notes:
 - User-facing replies render through Telegram HTML parse mode with plain-text fallback.
 - Progress bubbles are honest in-place status updates, not true Codex token streaming yet.
 - Codex-originated commentary is folded into one editable progress message with recent visible updates by default.
+- `Changed files` appears in the same progress bubble when the thread cwd has a git diff.
 - Set `outboundProgressMode: "generic"` to hide progress details, or `outboundProgressMode: "verbatim"` to mirror raw commentary.
 - Codex Desktop-originated turns first create a bot-side surrogate user message, then assistant replies attach to it.
 - Status bar is one pinned message per active topic and edits only on change.

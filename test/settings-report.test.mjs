@@ -27,6 +27,8 @@ test("buildSettingsReport shows safe runtime settings without secrets", () => {
       outboundMirrorPhases: ["commentary", "final_answer"],
       outboundProgressMode: "updates",
       outboundPollIntervalMs: 2000,
+      worktreeSummaryEnabled: true,
+      worktreeSummaryMaxFiles: 8,
       statusBarEnabled: true,
       statusBarPin: true,
       statusBarTailBytes: 524288,
@@ -55,6 +57,7 @@ test("buildSettingsReport shows safe runtime settings without secrets", () => {
   assert.match(text, /wait reply off; native poll 1s; app-control cooldown 300s/);
   assert.match(text, /app-control: show thread on/);
   assert.match(text, /mirror: on; phases commentary, final_answer; progress updates; poll 2s/);
+  assert.match(text, /worktree: changed files on; max 8/);
   assert.match(text, /current binding: `group:-100:topic:3`; thread `thread-1`; status bar `5`/);
   assert.doesNotMatch(text, /123456:secret-token/);
 });

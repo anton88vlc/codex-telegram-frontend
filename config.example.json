@@ -14,6 +14,8 @@
   "statusBarEnabled": true,
   "statusBarPin": true,
   "statusBarTailBytes": 524288,
+  "worktreeSummaryEnabled": true,
+  "worktreeSummaryMaxFiles": 8,
   "nativeTimeoutMs": 120000,
   "nativeWaitForReply": false,
   "nativePollIntervalMs": 1000,
