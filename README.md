@@ -169,6 +169,7 @@ These are local runtime files and should not be committed:
 
 ## Project Map
 
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - how the bridge is shaped and where refactors should go
 - [bridge.mjs](bridge.mjs) - main polling bridge
 - [lib/telegram.mjs](lib/telegram.mjs) - Telegram Bot API helpers
 - [lib/codex-native.mjs](lib/codex-native.mjs) - Codex send wrapper
