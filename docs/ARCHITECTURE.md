@@ -43,6 +43,7 @@ Codex outbound:
 - `lib/outbound-progress.mjs` - progress bubble text.
 - `lib/outbound-progress-message.mjs` - progress bubble send/edit/finalization.
 - `lib/app-server-stream-runner.mjs` - optional app-server stream subscription and progress coalescing.
+- `lib/worktree-summary.mjs` - git changed-file summaries plus per-turn baseline/delta helpers.
 - `lib/status-bar.mjs` - compact pinned topic status.
 - `lib/status-bar-runner.mjs` - status bar reserve/refresh orchestration.
 - `lib/typing-heartbeat.mjs` - raw Telegram typing heartbeat timer.

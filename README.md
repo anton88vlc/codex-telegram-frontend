@@ -178,6 +178,7 @@ These are local runtime files and should not be committed:
 - [lib/outbound-progress.mjs](lib/outbound-progress.mjs) - Telegram progress bubble content
 - [lib/outbound-progress-message.mjs](lib/outbound-progress-message.mjs) - progress bubble send/edit state
 - [lib/app-server-stream-runner.mjs](lib/app-server-stream-runner.mjs) - optional app-server event stream bridge
+- [lib/worktree-summary.mjs](lib/worktree-summary.mjs) - changed-file summaries and turn baselines
 - [lib/status-bar-runner.mjs](lib/status-bar-runner.mjs) - pinned topic status refresh loop
 - [lib/typing-heartbeat-runner.mjs](lib/typing-heartbeat-runner.mjs) - native Telegram "typing" loop for active turns
 - [lib/state-doctor.mjs](lib/state-doctor.mjs) - local state/index drift inspection and safe repairs
