@@ -4,6 +4,7 @@ import { statSync } from "node:fs";
 import process from "node:process";
 
 import { sendNativeTurn } from "./lib/codex-native.mjs";
+import { sendCommandResponse } from "./lib/command-response.mjs";
 import { DEFAULT_CONFIG_PATH, loadConfig } from "./lib/config.mjs";
 import { AppServerLiveStream } from "./lib/app-server-live.mjs";
 import { appendAppServerStreamBuffer, formatAppServerStreamProgressLine } from "./lib/app-server-stream.mjs";
@@ -269,46 +270,6 @@ function isAuthorized(config, message) {
     return false;
   }
   return true;
-}
-
-function buildOpsDmIntro(message) {
-  const chatTitle = normalizeText(message.chat.title || message.chat.username || message.chat.first_name || "chat");
-  const topic = message.message_thread_id != null ? `, topic ${message.message_thread_id}` : "";
-  return `**Ops details** from **${chatTitle}**${topic}\n\n`;
-}
-
-async function sendCommandResponse({
-  config,
-  message,
-  text,
-  quietInTopic = false,
-  topicSummary = null,
-}) {
-  if (quietInTopic && isTopicMessage(message) && Number.isInteger(message.from?.id)) {
-    try {
-      await sendRichTextChunks(
-        config.botToken,
-        {
-          chatId: message.from.id,
-          messageThreadId: null,
-        },
-        `${buildOpsDmIntro(message)}${text}`,
-      );
-      return reply(
-        config.botToken,
-        message,
-        topicSummary || "Done. I sent the details to your direct chat with the bot to keep this topic clean.",
-      );
-    } catch (error) {
-      logBridgeEvent("ops_direct_chat_fallback", {
-        chatId: message.chat.id,
-        messageId: message.message_id ?? null,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-
-  return reply(config.botToken, message, text);
 }
 
 function rememberOutbound(binding, sentMessages) {
