@@ -2,8 +2,6 @@
 
 import process from "node:process";
 
-import { validateBindingForSendWithRescue } from "./lib/binding-send-validation.mjs";
-import { sendNativeTurn } from "./lib/codex-native.mjs";
 import { handleCommand } from "./lib/command-handlers.mjs";
 import { DEFAULT_CONFIG_PATH, loadConfig } from "./lib/config.mjs";
 import {
@@ -16,23 +14,12 @@ import {
   logBridgeEvent,
 } from "./lib/bridge-events.mjs";
 import { isAuthorized } from "./lib/bridge-bindings.mjs";
-import { normalizeInboundPrompt, normalizeText, parseCommand } from "./lib/message-routing.mjs";
-import { appendTransportNotice, renderNativeSendError } from "./lib/native-ux.mjs";
-import {
-  markAppControlCooldown,
-  markTransportError,
-  shouldPreferAppServer,
-} from "./lib/native-transport-state.mjs";
-import { makePromptPreview } from "./lib/outbound-mirror-messages.mjs";
-import {
-  rememberOutbound,
-  rememberOutboundMirrorSuppressionForText,
-} from "./lib/outbound-memory.mjs";
+import { handlePlainText } from "./lib/inbound-turn-runner.mjs";
+import { normalizeInboundPrompt, parseCommand } from "./lib/message-routing.mjs";
+import { rememberOutbound } from "./lib/outbound-memory.mjs";
 import { syncOutboundMirrors } from "./lib/outbound-mirror-runner.mjs";
-import { getInitialProgressText, startProgressBubble } from "./lib/progress-bubble.mjs";
 import { syncAutoProjectTopics } from "./lib/project-sync-runner.mjs";
 import {
-  autoCreatePrivateTopicBinding,
   rememberPrivateTopicTitle,
   shouldAutoCreatePrivateTopicBinding,
 } from "./lib/private-topic-bindings.mjs";
@@ -54,36 +41,20 @@ import {
 } from "./lib/typing-heartbeat.mjs";
 import { syncTypingHeartbeats } from "./lib/typing-heartbeat-runner.mjs";
 import {
-  buildTargetFromMessage,
-  isPrivateTopicMessage,
-  isTopicMessage,
   reply,
-  replyPlain,
 } from "./lib/telegram-targets.mjs";
 import { rerouteUnboundGroupMessageToFallbackTopic } from "./lib/unbound-group-rescue.mjs";
-import {
-  chooseVoiceTranscriptionProvider,
-  collectTelegramVoiceRefs,
-  formatVoiceTranscriptBubble,
-  formatVoiceTranscriptPrompt,
-  formatVoiceTranscriptionReceipt,
-  transcribeTelegramVoice,
-} from "./lib/voice-transcription.mjs";
+import { collectTelegramVoiceRefs } from "./lib/voice-transcription.mjs";
 import {
   collectTelegramAttachments,
-  formatAttachmentPrompt,
-  formatAttachmentReceipt,
   getMessageIngressText,
   groupTelegramMediaGroupUpdates,
   hasUnsupportedTelegramMedia,
-  saveTelegramAttachments,
 } from "./lib/telegram-attachments.mjs";
 import { captureWorktreeBaseline, loadChangedFilesTextForThread } from "./lib/worktree-summary.mjs";
 import {
-  editThenSendRichTextChunks,
   getMe,
   getUpdates,
-  sendTyping,
 } from "./lib/telegram.mjs";
 
 const TELEGRAM_SERVICE_MESSAGE_KEYS = [
@@ -144,403 +115,6 @@ function parseArgs(argv) {
 
 function isTelegramServiceMessage(message) {
   return TELEGRAM_SERVICE_MESSAGE_KEYS.some((key) => key in (message || {}));
-}
-
-async function handlePlainText({
-  config,
-  state,
-  message,
-  bindingKey,
-  binding,
-  appServerStream = null,
-  typingHeartbeats = null,
-}) {
-  const shouldAutoCreatePrivateTopic = shouldAutoCreatePrivateTopicBinding({ config, message, binding });
-  if (!binding && !shouldAutoCreatePrivateTopic) {
-    const hint = isPrivateTopicMessage(message)
-      ? "No Codex Chat is bound here yet. Open an existing Codex Chat topic, or bind this one with /attach <thread-id>."
-      : "No Codex thread is bound here. Open a topic or use /attach <thread-id>.";
-    await reply(config.botToken, message, hint);
-    return;
-  }
-
-  if (binding && (binding.transport || "native") !== "native") {
-    await reply(config.botToken, message, "This v1 bridge only supports native transport.");
-    return;
-  }
-
-  const rawText = getMessageIngressText(message);
-  const promptText = normalizeInboundPrompt(rawText, {
-    botUsername: config.botUsername,
-  });
-  const attachmentRefs = collectTelegramAttachments(message, {
-    maxCount: config.attachmentMaxCount,
-  });
-  const voiceRefs = collectTelegramVoiceRefs(message, {
-    maxCount: config.voiceTranscriptionMaxCount,
-  });
-  if (!promptText && !attachmentRefs.length && !voiceRefs.length) {
-    await reply(config.botToken, message, "The text is empty. If you mention the bot, put the actual request after the mention.");
-    return;
-  }
-  if (attachmentRefs.length && config.attachmentsEnabled === false) {
-    await reply(config.botToken, message, "Attachments are disabled in this bridge config. Text still works.");
-    return;
-  }
-  if (voiceRefs.length && config.voiceTranscriptionEnabled === false) {
-    await reply(config.botToken, message, "Voice transcription is disabled in this bridge config. Text still works.");
-    return;
-  }
-  if (voiceRefs.length && !chooseVoiceTranscriptionProvider(config)) {
-    await reply(
-      config.botToken,
-      message,
-      "Voice transcription is not configured yet. Set a Deepgram/OpenAI key or a local command, then restart the bridge.",
-    );
-    return;
-  }
-
-  const bindingValidation = binding
-    ? await validateBindingForSendWithRescue({ config, state, bindingKey, binding })
-    : { ok: true, thread: null, binding: null, notice: null };
-  if (!bindingValidation.ok) {
-    await reply(config.botToken, message, bindingValidation.message);
-    return;
-  }
-  binding = bindingValidation.binding || binding;
-
-  let savedAttachments = [];
-  let voiceTranscripts = [];
-  let prompt = promptText;
-  let replyMessage = message;
-  if (voiceRefs.length) {
-    try {
-      if (config.sendTyping) {
-        await sendTyping(config.botToken, buildTargetFromMessage(message)).catch(() => null);
-      }
-      voiceTranscripts = await transcribeTelegramVoice({
-        token: config.botToken,
-        message,
-        config,
-        maxBytes: config.voiceTranscriptionMaxBytes,
-        maxCount: config.voiceTranscriptionMaxCount,
-        getFile,
-        downloadFile: downloadTelegramFile,
-      });
-      const transcriptSent = await reply(config.botToken, message, formatVoiceTranscriptBubble(voiceTranscripts));
-      const transcriptMessageId = transcriptSent[0]?.message_id ?? null;
-      if (Number.isInteger(transcriptMessageId)) {
-        replyMessage = { ...message, message_id: transcriptMessageId };
-      }
-      rememberOutbound(binding, transcriptSent);
-      prompt = formatVoiceTranscriptPrompt({
-        text: prompt,
-        transcripts: voiceTranscripts,
-      });
-      logBridgeEvent("telegram_voice_transcribed", {
-        chatId: message.chat.id,
-        messageThreadId: message.message_thread_id ?? null,
-        messageId: message.message_id ?? null,
-        count: voiceTranscripts.length,
-        provider: voiceTranscripts[0]?.provider || null,
-        model: voiceTranscripts[0]?.model || null,
-        transcriptMessageId,
-      });
-    } catch (error) {
-      logBridgeEvent("telegram_voice_transcription_error", {
-        chatId: message.chat.id,
-        messageThreadId: message.message_thread_id ?? null,
-        messageId: message.message_id ?? null,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      await reply(
-        config.botToken,
-        message,
-        "I could not transcribe that voice message. Try again, or send the text version if it is urgent.",
-      );
-      return;
-    }
-  }
-  if (attachmentRefs.length) {
-    try {
-      savedAttachments = await saveTelegramAttachments({
-        token: config.botToken,
-        message,
-        storageDir: config.attachmentStorageDir,
-        maxBytes: config.attachmentMaxBytes,
-        maxCount: config.attachmentMaxCount,
-        getFile,
-        downloadFile: downloadTelegramFile,
-      });
-      prompt = formatAttachmentPrompt({
-        text: prompt,
-        attachments: savedAttachments,
-      });
-      logBridgeEvent("telegram_attachments_saved", {
-        chatId: message.chat.id,
-        messageThreadId: message.message_thread_id ?? null,
-        messageId: message.message_id ?? null,
-        mediaGroupId: message.media_group_id || null,
-        mediaGroupMessageIds: message.mediaGroupMessageIds || null,
-        count: savedAttachments.length,
-        kinds: savedAttachments.map((item) => item.kind),
-      });
-    } catch (error) {
-      logBridgeEvent("telegram_attachment_error", {
-        chatId: message.chat.id,
-        messageThreadId: message.message_thread_id ?? null,
-        messageId: message.message_id ?? null,
-        mediaGroupId: message.media_group_id || null,
-        mediaGroupMessageIds: message.mediaGroupMessageIds || null,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      await reply(
-        config.botToken,
-        replyMessage,
-        "I could not download that attachment. Try a smaller image/file, or send the text part without media.",
-      );
-      return;
-    }
-  }
-
-  if (shouldAutoCreatePrivateTopic) {
-    const target = buildTargetFromMessage(replyMessage);
-    const progressIntro = [
-      voiceTranscripts.length ? formatVoiceTranscriptionReceipt(voiceTranscripts) : null,
-      savedAttachments.length ? formatAttachmentReceipt(savedAttachments) : null,
-    ].filter(Boolean);
-    const initialProgressText = progressIntro.length
-      ? `${progressIntro.join("\n")}\n${getInitialProgressText()}`
-      : getInitialProgressText();
-    const receipt = await replyPlain(config.botToken, replyMessage, initialProgressText);
-    const receiptMessageId = receipt[0]?.message_id ?? null;
-    const progressBubble = startProgressBubble({
-      token: config.botToken,
-      target,
-      messageId: receiptMessageId,
-      onError(error) {
-        logBridgeEvent("progress_bubble_error", {
-          bindingKey,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      },
-    });
-
-    try {
-      binding = await autoCreatePrivateTopicBinding({
-        config,
-        state,
-        message,
-        bindingKey,
-        promptText: prompt,
-        sendPrompt: prompt,
-      });
-      if (!binding) {
-        throw new Error("private topic chat auto-create returned no binding");
-      }
-      await progressBubble.stop();
-      binding.lastInboundMessageId = replyMessage.message_id ?? message.message_id ?? null;
-      binding.currentTurn = {
-        source: "telegram",
-        startedAt: new Date().toISOString(),
-        promptPreview: makePromptPreview(prompt),
-        codexProgressMessageId: Number.isInteger(receiptMessageId) ? receiptMessageId : undefined,
-        sendOnly: true,
-        transportPath: binding.lastTransportPath || "app-server-thread-start",
-      };
-      binding.updatedAt = new Date().toISOString();
-      state.bindings[bindingKey] = binding;
-      rememberOutbound(binding, receipt);
-      rememberOutboundMirrorSuppressionForText(state, bindingKey, prompt, {
-        role: "user",
-        phase: null,
-      });
-      await refreshStatusBars({ config, state, onlyBindingKey: bindingKey });
-      await saveState(config.statePath, state);
-      await subscribeAppServerStream({ config, stream: appServerStream, bindingKey, binding });
-      syncTypingHeartbeats({ config, state, heartbeats: typingHeartbeats, onlyBindingKey: bindingKey });
-      logBridgeEvent("private_topic_initial_turn_started", {
-        threadId: binding.threadId,
-        bindingKey,
-        receiptMessageId,
-        transportPath: binding.lastTransportPath,
-      });
-      return;
-    } catch (error) {
-      await progressBubble.stop();
-      logBridgeEvent("private_topic_initial_turn_error", {
-        bindingKey,
-        chatId: message.chat.id,
-        messageThreadId: message.message_thread_id ?? null,
-        attempts: Array.isArray(error?.attempts) ? error.attempts : undefined,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      const errorText = renderNativeSendError(error);
-      if (receiptMessageId) {
-        await editThenSendRichTextChunks(config.botToken, target, receiptMessageId, errorText);
-      } else {
-        await reply(config.botToken, message, errorText);
-      }
-      return;
-    }
-  }
-
-  const worktreeBaseline = await captureWorktreeBaseline(bindingValidation.thread);
-  binding.lastInboundMessageId = replyMessage.message_id ?? message.message_id ?? null;
-  binding.currentTurn = {
-    source: "telegram",
-    startedAt: new Date().toISOString(),
-    promptPreview: makePromptPreview(prompt),
-    worktreeBaseHead: worktreeBaseline.head,
-    worktreeBaseSummary: worktreeBaseline.summary,
-  };
-  binding.updatedAt = new Date().toISOString();
-  state.bindings[bindingKey] = binding;
-  rememberOutboundMirrorSuppressionForText(state, bindingKey, prompt, {
-    role: "user",
-    phase: null,
-  });
-  await refreshStatusBars({ config, state, onlyBindingKey: bindingKey });
-  await saveState(config.statePath, state);
-
-  if (config.sendTyping && config.typingHeartbeatEnabled !== false && typingHeartbeats) {
-    syncTypingHeartbeats({ config, state, heartbeats: typingHeartbeats, onlyBindingKey: bindingKey });
-  } else if (config.sendTyping) {
-    await sendTyping(config.botToken, buildTargetFromMessage(message)).catch(() => null);
-  }
-  await subscribeAppServerStream({ config, stream: appServerStream, bindingKey, binding });
-
-  const target = buildTargetFromMessage(replyMessage);
-  const progressIntro = [
-    bindingValidation.notice || null,
-    voiceTranscripts.length ? formatVoiceTranscriptionReceipt(voiceTranscripts) : null,
-    savedAttachments.length ? formatAttachmentReceipt(savedAttachments) : null,
-  ].filter(Boolean);
-  const initialProgressText = progressIntro.length
-    ? `${progressIntro.join("\n")}\n${getInitialProgressText()}`
-    : getInitialProgressText();
-  const receipt = await replyPlain(config.botToken, replyMessage, initialProgressText);
-  const receiptMessageId = receipt[0]?.message_id ?? null;
-  rememberOutbound(binding, receipt);
-  const progressBubble = startProgressBubble({
-    token: config.botToken,
-    target,
-    messageId: receiptMessageId,
-    onError(error) {
-      logBridgeEvent("progress_bubble_error", {
-        threadId: binding.threadId,
-        bindingKey,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    },
-  });
-
-  let preferAppServer = false;
-  try {
-    preferAppServer = shouldPreferAppServer(binding, config);
-    if (preferAppServer) {
-      logBridgeEvent("native_send_circuit_breaker", {
-        threadId: binding.threadId,
-        bindingKey,
-        mode: config.nativeIngressTransport === "app-server" ? "app-server-first" : "cooldown",
-        appControlCooldownUntil: binding.appControlCooldownUntil,
-      });
-    }
-    const result = await sendNativeTurn({
-      helperPath: config.nativeHelperPath,
-      fallbackHelperPath: config.nativeFallbackHelperPath,
-      threadId: binding.threadId,
-      prompt,
-      timeoutMs: config.nativeTimeoutMs,
-      debugBaseUrl: config.nativeDebugBaseUrl,
-      appServerUrl: config.appServerUrl,
-      pollIntervalMs: config.nativePollIntervalMs,
-      waitForReply: config.nativeWaitForReply,
-      appControlShowThread: config.appControlShowThread,
-      preferAppServer,
-      appControlSkipReason: preferAppServer
-        ? config.nativeIngressTransport === "app-server"
-          ? "configured app-server-first ingress"
-          : `app-control cooldown active until ${binding.appControlCooldownUntil}`
-        : null,
-    });
-    binding.updatedAt = new Date().toISOString();
-    binding.lastTransportPath = result.transportPath || null;
-    if (result.transportPath === "app-control") {
-      binding.currentTurn = null;
-      delete binding.lastTransportErrorAt;
-      delete binding.lastTransportErrorKind;
-      delete binding.appControlCooldownUntil;
-    } else if (result.primaryError && !preferAppServer) {
-      markAppControlCooldown(binding, config, { kind: "app_control_unavailable" });
-    }
-    logBridgeEvent("native_send_success", {
-      threadId: binding.threadId,
-      bindingKey,
-      transportPath: binding.lastTransportPath,
-      primaryError: result.primaryError || null,
-      mode: result.mode || null,
-    });
-    if (config.nativeWaitForReply === false) {
-      await progressBubble.stop();
-      binding.currentTurn = {
-        ...(binding.currentTurn || {
-          source: "telegram",
-          startedAt: new Date().toISOString(),
-          promptPreview: makePromptPreview(prompt),
-        }),
-        codexProgressMessageId: Number.isInteger(receiptMessageId) ? receiptMessageId : undefined,
-        sendOnly: true,
-        transportPath: result.transportPath || null,
-      };
-      state.bindings[bindingKey] = binding;
-      syncTypingHeartbeats({ config, state, heartbeats: typingHeartbeats, onlyBindingKey: bindingKey });
-      logBridgeEvent("native_send_deferred_reply", {
-        threadId: binding.threadId,
-        bindingKey,
-        transportPath: binding.lastTransportPath,
-        receiptMessageId,
-      });
-      return;
-    }
-    binding.currentTurn = null;
-    state.bindings[bindingKey] = binding;
-    syncTypingHeartbeats({ config, state, heartbeats: typingHeartbeats, onlyBindingKey: bindingKey });
-    await progressBubble.stop();
-    const replyText = normalizeText(result?.reply?.text) || "(empty reply)";
-    const deliveredReplyText = appendTransportNotice(replyText, result);
-    const sent = receiptMessageId
-      ? await editThenSendRichTextChunks(config.botToken, target, receiptMessageId, deliveredReplyText)
-      : await reply(config.botToken, message, deliveredReplyText);
-    rememberOutbound(binding, sent);
-    rememberOutboundMirrorSuppressionForText(state, bindingKey, replyText, {
-      role: "assistant",
-      phase: "final_answer",
-    });
-  } catch (error) {
-    await progressBubble.stop();
-    binding.currentTurn = null;
-    binding.updatedAt = new Date().toISOString();
-    const appControlCooldownUntil = preferAppServer ? null : markAppControlCooldown(binding, config, error);
-    if (!appControlCooldownUntil) {
-      markTransportError(binding, error);
-    }
-    state.bindings[bindingKey] = binding;
-    syncTypingHeartbeats({ config, state, heartbeats: typingHeartbeats, onlyBindingKey: bindingKey });
-    logBridgeEvent("native_send_error", {
-      threadId: binding.threadId,
-      bindingKey,
-      kind: binding.lastTransportErrorKind,
-      appControlCooldownUntil,
-      attempts: Array.isArray(error?.attempts) ? error.attempts : undefined,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    const errorText = renderNativeSendError(error);
-    const sent = receiptMessageId
-      ? await editThenSendRichTextChunks(config.botToken, target, receiptMessageId, errorText)
-      : await reply(config.botToken, message, errorText);
-    rememberOutbound(binding, sent);
-  }
 }
 
 async function processMessage({ config, state, message, appServerStream = null, typingHeartbeats = null }) {

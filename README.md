@@ -170,7 +170,8 @@ These are local runtime files and should not be committed:
 ## Project Map
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - how the bridge is shaped and where refactors should go
-- [bridge.mjs](bridge.mjs) - main polling bridge
+- [bridge.mjs](bridge.mjs) - thin polling bridge and top-level loop
+- [lib/inbound-turn-runner.mjs](lib/inbound-turn-runner.mjs) - Telegram-originated Codex turn orchestration
 - [lib/telegram.mjs](lib/telegram.mjs) - Telegram Bot API helpers
 - [lib/codex-native.mjs](lib/codex-native.mjs) - Codex send wrapper
 - [lib/command-handlers.mjs](lib/command-handlers.mjs) - Telegram slash-command routing
@@ -180,6 +181,7 @@ These are local runtime files and should not be committed:
 - [lib/health-report.mjs](lib/health-report.mjs) - `/status` and `/health` text shaping
 - [lib/project-sync-runner.mjs](lib/project-sync-runner.mjs) - project topic status/sync orchestration
 - [lib/outbound-mirror-runner.mjs](lib/outbound-mirror-runner.mjs) - Codex rollout mirror delivery loop
+- [lib/outbound-memory.mjs](lib/outbound-memory.mjs) - remembered Telegram message ids and mirror suppression helpers
 - [lib/outbound-progress.mjs](lib/outbound-progress.mjs) - Telegram progress bubble content
 - [lib/outbound-progress-message.mjs](lib/outbound-progress-message.mjs) - progress bubble send/edit state
 - [lib/app-server-stream-runner.mjs](lib/app-server-stream-runner.mjs) - optional app-server event stream bridge
