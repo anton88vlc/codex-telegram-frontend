@@ -7,7 +7,7 @@ Model:
 - Telegram folder `codex` = external container
 - Telegram group = Codex project
 - Telegram topic = Codex thread
-- bootstrap plan = explicit choice of projects and threads the user wants in Telegram
+- quickstart bootstrap plan = latest active Codex threads, grouped by project, with a small bounded history tail
 - history import = bounded clean tail, only useful user prompts plus assistant final answers
 
 ## Recommended Path
@@ -19,11 +19,11 @@ Codex should do the boring parts:
 1. Run `npm run onboard:prepare`.
 2. Run `npm run onboard:doctor`.
 3. Guide the few unavoidable Telegram steps.
-4. Scan local Codex projects and ask which projects/threads belong on the phone.
-5. Check the wizard reuse preview so repeat runs reuse known groups/topics instead of creating Telegram confetti.
-6. Bootstrap Telegram folder/groups/topics, put the bot direct chat in the same folder when possible, backfill a bounded clean history tail, start the bridge and run a smoke.
+4. Run quickstart: scan the latest active Codex threads, create a compact project/topic surface and import about 10 clean messages per topic.
+5. Check the reuse preview so repeat runs reuse known groups/topics instead of creating Telegram confetti.
+6. Bootstrap Telegram folder/groups/topics, put the bot direct chat in the same folder when possible, start the bridge and run a smoke.
 
-The user should not have to manually stitch together `scan -> plan -> bootstrap -> backfill` unless something weird happens.
+The user should not have to manually choose projects and topics unless quickstart picked a weird working set. The old `scan -> plan -> bootstrap -> backfill` path is still there, but it is not the happy path.
 
 ## Human Steps
 
@@ -54,7 +54,21 @@ Prepare is the setup preflight. It creates missing local config/admin env files,
 npm run onboard:prepare
 ```
 
-The wizard is the product path:
+Quickstart is the product path:
+
+```bash
+npm run onboard:quickstart
+```
+
+By default it scans the 10 latest active Codex threads across the local Codex DB, groups them by project, writes the bootstrap plan, applies Telegram folder/groups/topics, imports 10 clean messages per topic and runs a smoke. That is the "make my phone usable" button.
+
+Preview without side effects:
+
+```bash
+npm run onboard:quickstart -- --preview
+```
+
+The wizard is the manual escape hatch:
 
 ```bash
 npm run onboard:wizard
@@ -105,8 +119,10 @@ Run without `--dry-run` only after the preview looks sane. Skipping the preview 
 
 ## Good Defaults
 
-- `threads-per-project`: 3
-- `historyMaxMessages`: 40
+- quickstart thread limit: 10 latest active threads total
+- quickstart `historyMaxMessages`: 10
+- manual wizard `threads-per-project`: 3
+- manual wizard `historyMaxMessages`: 40
 - `historyAssistantPhases`: `["final_answer"]`
 - `historyIncludeHeartbeats`: false
 - `sender-mode`: `labeled-bot`

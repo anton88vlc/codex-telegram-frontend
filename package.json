@@ -16,6 +16,7 @@
     "onboard:prepare": "node scripts/onboard.mjs prepare",
     "onboard:doctor": "node scripts/onboard.mjs doctor",
     "onboard:scan": "node scripts/onboard.mjs scan",
+    "onboard:quickstart": "node scripts/onboard.mjs quickstart",
     "onboard:plan": "node scripts/onboard.mjs plan",
     "onboard:rehearsal": "node scripts/onboard.mjs plan --rehearsal",
     "onboard:wizard": "node scripts/onboard.mjs wizard",

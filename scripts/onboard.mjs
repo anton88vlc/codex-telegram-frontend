@@ -24,7 +24,7 @@ import {
   formatScanSummary,
 } from "../lib/onboarding-plan.mjs";
 import { DEFAULT_APP_CONTROL_BASE_URL, checkAppControl } from "../lib/app-control-launcher.mjs";
-import { listProjectThreads, listRecentProjects, parsePositiveInt } from "../lib/thread-db.mjs";
+import { listProjectThreads, listRecentProjects, listRecentThreads, parsePositiveInt } from "../lib/thread-db.mjs";
 
 const PROJECT_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DEFAULT_THREADS_DB_PATH = path.join(os.homedir(), ".codex", "state_5.sqlite");
@@ -42,6 +42,8 @@ const DEFAULT_BRIDGE_STATE_PATH = path.join(PROJECT_ROOT, "state", "state.json")
 const DEFAULT_PROJECT_INDEX_PATH = path.join(PROJECT_ROOT, "state", "bootstrap-result.json");
 const DEFAULT_BOT_TOKEN_KEYCHAIN_SERVICE = "codex-telegram-bridge-bot-token";
 const DEFAULT_NATIVE_DEBUG_BASE_URL = DEFAULT_APP_CONTROL_BASE_URL;
+const DEFAULT_QUICKSTART_THREAD_LIMIT = 10;
+const DEFAULT_QUICKSTART_HISTORY_MAX_MESSAGES = 10;
 const execFileAsync = promisify(execFile);
 
 function fail(message) {
@@ -55,6 +57,7 @@ function parseArgs(argv) {
     command,
     projects: [],
     projectLimit: 8,
+    threadLimit: DEFAULT_QUICKSTART_THREAD_LIMIT,
     threadsPerProject: 3,
     historyMaxMessages: DEFAULT_HISTORY_MAX_MESSAGES,
     historyMaxUserPrompts: DEFAULT_HISTORY_MAX_USER_PROMPTS,
@@ -66,6 +69,7 @@ function parseArgs(argv) {
     threadsDbPath: DEFAULT_THREADS_DB_PATH,
     outputPath: DEFAULT_OUTPUT_PATH,
     json: false,
+    preview: false,
     rehearsal: false,
     write: false,
     yes: false,
@@ -91,6 +95,7 @@ function parseArgs(argv) {
     skipAdminDeps: false,
     loginQr: false,
     _projectLimitExplicit: false,
+    _threadLimitExplicit: false,
     _threadsPerProjectExplicit: false,
     _historyMaxMessagesExplicit: false,
     _historyMaxUserPromptsExplicit: false,
@@ -113,6 +118,10 @@ function parseArgs(argv) {
       case "--project-limit":
         args.projectLimit = parsePositiveInt(rest[++index], args.projectLimit);
         args._projectLimitExplicit = true;
+        break;
+      case "--thread-limit":
+        args.threadLimit = parsePositiveInt(rest[++index], args.threadLimit);
+        args._threadLimitExplicit = true;
         break;
       case "--threads-per-project":
         args.threadsPerProject = parsePositiveInt(rest[++index], args.threadsPerProject);
@@ -158,6 +167,9 @@ function parseArgs(argv) {
         break;
       case "--json":
         args.json = true;
+        break;
+      case "--preview":
+        args.preview = true;
         break;
       case "--rehearsal":
         args.rehearsal = true;
@@ -250,6 +262,24 @@ function parseArgs(argv) {
     if (!args._outputPathExplicit) args.outputPath = DEFAULT_REHEARSAL_OUTPUT_PATH;
   }
 
+  if (args.command === "quickstart") {
+    if (!args._threadLimitExplicit) {
+      args.threadLimit = DEFAULT_QUICKSTART_THREAD_LIMIT;
+    }
+    if (!args._historyMaxMessagesExplicit) {
+      args.historyMaxMessages = DEFAULT_QUICKSTART_HISTORY_MAX_MESSAGES;
+      args._historyMaxMessagesExplicit = true;
+    }
+    if (!args.preview) {
+      args.prepare = true;
+      args.write = true;
+      args.apply = true;
+      args.backfill = true;
+      args.smoke = true;
+      args.yes = true;
+    }
+  }
+
   return args;
 }
 
@@ -259,19 +289,21 @@ function renderHelp() {
     "  node scripts/onboard.mjs prepare [--skip-admin-deps] [--login-qr]",
     "  node scripts/onboard.mjs doctor [--json]",
     "  node scripts/onboard.mjs scan [--project-limit 8] [--threads-per-project 3] [--json]",
+    "  node scripts/onboard.mjs quickstart [--thread-limit 10] [--history-max-messages 10] [--preview]",
     "  node scripts/onboard.mjs plan --project /path/to/repo [--project /path/to/other] [--threads-per-project 3] [--history-max-messages 40] [--history-assistant-phase final_answer] [--group-prefix 'Codex - '] [--folder-title codex] [--topic-display tabs|list] [--write]",
     "  node scripts/onboard.mjs plan --rehearsal --project /path/to/repo [--write]",
     "  node scripts/onboard.mjs wizard [--rehearsal] [--write] [--apply] [--cleanup-dry-run|--cleanup] [--backfill-dry-run|--backfill] [--smoke]",
     "  npm run codex:launch",
     "",
     "Notes:",
-    "  preferred public setup is agent-led: ask Codex to run doctor, prepare local config, then drive the wizard.",
+    "  preferred public setup is agent-led quickstart: ask Codex to prepare local config, then run quickstart.",
     "  prepare creates missing local config/admin env files, can create the admin venv, and can guide credential/session setup.",
     "  doctor checks local prerequisites before the wizard gets creative.",
     "  codex:launch starts Codex.app with the app-control debug port when it is not already open.",
     "  scan is read-only and shows candidate Codex projects/threads.",
+    "  quickstart is automatic: latest active Codex threads, bounded clean history, bootstrap, backfill and smoke.",
     "  plan is a preview by default; add --write to update admin/bootstrap-plan.json.",
-    "  wizard is interactive by default and can write/apply/backfill/smoke with explicit confirmation or flags.",
+    "  wizard is the manual escape hatch and can write/apply/backfill/smoke with explicit confirmation or flags.",
     "  history import defaults come from config.local.json unless a history flag overrides them.",
     "  --cleanup-dry-run previews a clean rebuild for bootstrapped topics; --cleanup deletes visible topic messages except protected root/status ids.",
     "  --rehearsal writes admin/bootstrap-plan.rehearsal.json by default and uses codex-lab/Codex Lab naming.",
@@ -1210,6 +1242,56 @@ async function loadProjectsWithThreads(args) {
   return withThreads;
 }
 
+async function loadQuickstartProjectsWithThreads(args) {
+  const threads = await listRecentThreads(args.threadsDbPath, { limit: args.threadLimit });
+  const projectsByRoot = new Map();
+  for (const thread of threads) {
+    const projectRoot = String(thread.cwd ?? "").trim();
+    if (!projectRoot) {
+      continue;
+    }
+    if (!projectsByRoot.has(projectRoot)) {
+      projectsByRoot.set(projectRoot, {
+        projectRoot,
+        threadCount: 0,
+        latestUpdatedAt: thread.updated_at ?? null,
+        latestUpdatedAtMs: thread.updated_at_ms ?? null,
+        threads: [],
+      });
+    }
+    const project = projectsByRoot.get(projectRoot);
+    project.threads.push(thread);
+    project.threadCount += 1;
+    const updatedAtMs = normalizeTimestampMs(thread.updated_at_ms ?? thread.updated_at) ?? 0;
+    const latestAtMs = normalizeTimestampMs(project.latestUpdatedAtMs ?? project.latestUpdatedAt) ?? 0;
+    if (updatedAtMs > latestAtMs) {
+      project.latestUpdatedAt = thread.updated_at ?? project.latestUpdatedAt;
+      project.latestUpdatedAtMs = thread.updated_at_ms ?? project.latestUpdatedAtMs;
+    }
+  }
+  return [...projectsByRoot.values()];
+}
+
+function buildBootstrapPlanForProjects(projectsWithThreads, args, { threadsPerProject = args.threadsPerProject } = {}) {
+  const projectPlans = projectsWithThreads.map((project) =>
+    buildProjectPlan(project.projectRoot, project.threads ?? [], {
+      threadsPerProject,
+      groupPrefix: args.groupPrefix ?? undefined,
+    }),
+  );
+  return buildBootstrapPlan(projectPlans, {
+    threadsPerProject,
+    historyMaxMessages: args.historyMaxMessages,
+    historyMaxUserPrompts: args.historyMaxUserPrompts,
+    historyAssistantPhases: args.historyAssistantPhases,
+    historyIncludeHeartbeats: args.historyIncludeHeartbeats,
+    groupPrefix: args.groupPrefix ?? undefined,
+    folderTitle: args.folderTitle ?? undefined,
+    topicDisplay: args.topicDisplay,
+    rehearsal: args.rehearsal,
+  });
+}
+
 async function commandDoctor(args) {
   const checks = await buildOnboardingChecks(args);
   const ok = checks.filter((check) => check.required).every((check) => check.ok);
@@ -1291,6 +1373,112 @@ async function commandPlan(args) {
     process.stdout.write(`\nWrote ${args.outputPath}\n`);
   } else {
     process.stdout.write(`\nPreview only. Add --write to update ${args.outputPath}.\n`);
+  }
+}
+
+async function commandQuickstart(args) {
+  const rl = args.noInput ? null : createPrompt();
+  try {
+    if (!args.preview && args.prepare && !args.noPrepare) {
+      const messages = await prepareLocalSetup(args, rl, { force: true });
+      process.stdout.write(`Local setup prepare:\n${messages.map((message) => `- ${message}`).join("\n")}\n\n`);
+    } else if (!args.preview) {
+      await maybePrepareForWizard(args, rl);
+    }
+
+    await applyConfigDefaults(args);
+    const checks = await buildOnboardingChecks(args);
+    process.stdout.write("Onboarding checklist:\n");
+    process.stdout.write(`${checks.map(renderChecklistItem).map((item) => `- ${item}`).join("\n")}\n\n`);
+    const recoveryPlan = renderRecoveryPlan(checks);
+    if (recoveryPlan) {
+      process.stdout.write(`${recoveryPlan}\n\n`);
+    }
+
+    const projectsWithThreads = await loadQuickstartProjectsWithThreads(args);
+    const selectedThreadCount = projectsWithThreads.reduce((sum, project) => sum + (project.threads?.length ?? 0), 0);
+    if (!selectedThreadCount) {
+      fail("No active Codex threads found. Open Codex Desktop once, then run quickstart again.");
+    }
+
+    const plan = buildBootstrapPlanForProjects(projectsWithThreads, args, {
+      threadsPerProject: Math.max(1, args.threadLimit),
+    });
+    process.stdout.write(
+      `Quickstart selected ${selectedThreadCount} latest active thread(s) across ${plan.projects.length} project(s).\n\n`,
+    );
+    process.stdout.write(`${formatBootstrapPlanSummary(plan)}\n`);
+    process.stdout.write(`\n${await buildReusePreview(args, plan)}\n`);
+    if (args.json) {
+      process.stdout.write(`${JSON.stringify(plan, null, 2)}\n`);
+    }
+
+    const requiredOk = checks.filter((check) => check.required).every((check) => check.ok);
+    if (!requiredOk && (args.apply || args.backfill || args.smoke)) {
+      fail("Quickstart is blocked by missing required setup. Fix the recovery plan above, then rerun.");
+    }
+
+    const shouldWrite = args.write || (await shouldRunStep(args, rl, false, `Write plan to ${args.outputPath}?`));
+    if (!shouldWrite) {
+      process.stdout.write(`\nPreview only. Add --write to update ${args.outputPath}.\n`);
+      return;
+    }
+
+    await fs.mkdir(path.dirname(args.outputPath), { recursive: true });
+    await fs.writeFile(args.outputPath, `${JSON.stringify(plan, null, 2)}\n`, "utf8");
+    process.stdout.write(`\nWrote ${args.outputPath}\n`);
+
+    const python = await resolveAdminPython(args);
+    let bootstrapSummary = null;
+    if (await shouldRunStep(args, rl, args.apply, "Run Telegram bootstrap now?")) {
+      bootstrapSummary = await runBootstrap(args, python);
+    }
+
+    if (await shouldRunStep(args, rl, args.cleanupDryRun, "Run clean rebuild cleanup dry-run now?")) {
+      if (!bootstrapSummary) {
+        process.stdout.write("Skipping cleanup dry-run: bootstrap was not run in this quickstart session.\n");
+      } else {
+        await runCleanupForSummary(args, python, bootstrapSummary, { dryRun: true });
+      }
+    }
+
+    if (await shouldRunStep(args, rl, args.cleanup, "Delete visible topic messages for clean rebuild now?")) {
+      if (!bootstrapSummary) {
+        process.stdout.write("Skipping cleanup: bootstrap was not run in this quickstart session.\n");
+      } else {
+        process.stdout.write("Running cleanup dry-run first because deleting Telegram messages deserves one last look.\n");
+        await runCleanupForSummary(args, python, bootstrapSummary, { dryRun: true });
+        await runCleanupForSummary(args, python, bootstrapSummary, { dryRun: false });
+      }
+    }
+
+    if (await shouldRunStep(args, rl, args.backfillDryRun, "Run clean history backfill dry-run now?")) {
+      if (!bootstrapSummary) {
+        process.stdout.write("Skipping backfill dry-run: bootstrap was not run in this quickstart session.\n");
+      } else {
+        await runBackfillForSummary(args, python, bootstrapSummary, { dryRun: true });
+      }
+    }
+
+    if (await shouldRunStep(args, rl, args.backfill, "Send clean history backfill now?")) {
+      if (!bootstrapSummary) {
+        process.stdout.write("Skipping backfill: bootstrap was not run in this quickstart session.\n");
+      } else {
+        await runBackfillForSummary(args, python, bootstrapSummary, { dryRun: false });
+      }
+    }
+
+    if (await shouldRunStep(args, rl, args.smoke, "Send and wait for Telegram smoke now?")) {
+      if (!bootstrapSummary) {
+        process.stdout.write("Skipping smoke: bootstrap was not run in this quickstart session.\n");
+      } else {
+        await runSmoke(args, python, bootstrapSummary);
+      }
+    }
+
+    process.stdout.write("\nOnboarding quickstart finished.\n");
+  } finally {
+    rl?.close();
   }
 }
 
@@ -1496,6 +1684,10 @@ async function main() {
   }
   if (args.command === "plan") {
     await commandPlan(args);
+    return;
+  }
+  if (args.command === "quickstart") {
+    await commandQuickstart(args);
     return;
   }
   if (args.command === "wizard") {

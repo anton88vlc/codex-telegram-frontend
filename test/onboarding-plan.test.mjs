@@ -83,6 +83,7 @@ test("onboard CLI supports top-level help", () => {
   assert.equal(result.status, 0);
   assert.match(result.stdout, /doctor/);
   assert.match(result.stdout, /wizard/);
+  assert.match(result.stdout, /quickstart/);
   assert.match(result.stdout, /--rehearsal/);
   assert.match(result.stdout, /--cleanup-dry-run/);
   assert.match(result.stdout, /prepare/);
@@ -246,6 +247,78 @@ test("onboard wizard can write a non-interactive rehearsal plan", () => {
   assert.deepEqual(
     plan.projects[0].topics.map((topic) => topic.threadId),
     ["t1", "t2"],
+  );
+});
+
+test("onboard quickstart writes latest active threads without manual selection", () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codex-onboard-quickstart-"));
+  const dbPath = path.join(tmpDir, "state.sqlite");
+  const outputPath = path.join(tmpDir, "bootstrap-plan.json");
+  const sql = `
+    create table threads (
+      id text,
+      title text,
+      cwd text,
+      archived integer,
+      updated_at integer,
+      updated_at_ms integer,
+      source text,
+      rollout_path text,
+      model_provider text,
+      model text,
+      reasoning_effort text,
+      tokens_used integer,
+      agent_nickname text,
+      agent_role text
+    );
+    insert into threads values ('t1', 'Latest A', '/tmp/project-a', 0, 40, 40000, 'local', '/tmp/rollout-a.jsonl', '', 'gpt-5.4', 'xhigh', 40, '', '');
+    insert into threads values ('t2', 'Latest B', '/tmp/project-b', 0, 30, 30000, 'local', '/tmp/rollout-b.jsonl', '', 'gpt-5.4', 'high', 30, '', '');
+    insert into threads values ('t3', 'Older A', '/tmp/project-a', 0, 20, 20000, 'local', '/tmp/rollout-c.jsonl', '', 'gpt-5.4', 'high', 20, '', '');
+    insert into threads values ('t4', 'Too old C', '/tmp/project-c', 0, 10, 10000, 'local', '/tmp/rollout-d.jsonl', '', 'gpt-5.4', 'high', 10, '', '');
+  `;
+  const sqlite = spawnSync("sqlite3", [dbPath, sql], {
+    cwd: PROJECT_ROOT,
+    encoding: "utf8",
+  });
+  assert.equal(sqlite.status, 0, sqlite.stderr);
+
+  const result = spawnSync(
+    process.execPath,
+    [
+      "scripts/onboard.mjs",
+      "quickstart",
+      "--preview",
+      "--write",
+      "--thread-limit",
+      "3",
+      "--no-input",
+      "--threads-db",
+      dbPath,
+      "--output",
+      outputPath,
+    ],
+    {
+      cwd: PROJECT_ROOT,
+      encoding: "utf8",
+    },
+  );
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Quickstart selected 3 latest active thread/);
+  const plan = JSON.parse(fs.readFileSync(outputPath, "utf8"));
+  assert.equal(plan.onboarding.historyMaxMessages, 10);
+  assert.equal(plan.onboarding.threadsPerProject, 3);
+  assert.deepEqual(
+    plan.projects.map((project) => project.projectRoot),
+    ["/tmp/project-a", "/tmp/project-b"],
+  );
+  assert.deepEqual(
+    plan.projects[0].topics.map((topic) => topic.threadId),
+    ["t1", "t3"],
+  );
+  assert.deepEqual(
+    plan.projects[1].topics.map((topic) => topic.threadId),
+    ["t2"],
   );
 });
 

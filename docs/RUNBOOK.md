@@ -177,6 +177,12 @@ This is what good looks like:
 Preferred guided flow:
 
 ```bash
+npm run onboard:quickstart
+```
+
+This is the normal install story now: latest 10 active Codex threads, grouped into project groups, about 10 clean messages per topic, then bootstrap/backfill/smoke. If that working set looks wrong, drop to the manual wizard:
+
+```bash
 npm run onboard:wizard
 ```
 

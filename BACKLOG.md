@@ -86,3 +86,4 @@
 31. Mobile General/All rescue: plain messages accidentally sent to an unbound group surface are moved into the last active bound topic with a bot-side surrogate user bubble; commands still stay local.
 32. Local state doctor base: detects stale topic bindings, dead Telegram topic errors, orphan mirror state and bootstrap-index drift; dry-run/apply repairs only local state files, and `/health` plus self-check surface the warning.
 33. Curated topic auto-sync base: optionally scans bootstrapped project groups for fresh active Codex threads, creates/reopens/renames/parks only sync-managed Telegram topics within a small working-set limit and leaves manual topics alone.
+34. Quickstart onboarding path: scan the latest active Codex threads, group them by project, create/reuse the Telegram surface, import a 10-message clean tail and run the smoke without forcing manual project/topic selection.

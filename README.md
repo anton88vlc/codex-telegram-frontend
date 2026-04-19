@@ -21,11 +21,11 @@ Open this repo in Codex and paste this into a fresh thread from the repo root:
 ```text
 Install codex-telegram-frontend on this Mac.
 
-Run the onboarding doctor, prepare local config from examples, guide me through the unavoidable Telegram steps, then scan my Codex projects and ask me which projects and threads I want mirrored into Telegram.
+Run the onboarding doctor, prepare local config from examples, guide me through the unavoidable Telegram steps, then run the quickstart onboarding path.
 
-Create or reuse the Telegram folder `codex`, create one group per selected Codex project, create one topic per selected Codex thread, import only a clean bounded history tail, start the bridge, run a real Telegram smoke test, and leave the repo in a clean documented state.
+Create or reuse the Telegram folder `codex`, scan my latest active Codex threads, create one group per detected Codex project, create one topic per selected Codex thread, import about 10 clean messages into each topic, start the bridge, run a real Telegram smoke test, and leave the repo in a clean documented state.
 
-Do not mirror every thread. Keep Telegram as a clean remote Codex working set, not a landfill.
+Default to about 10 latest active threads total. Do not ask me to choose projects unless the quickstart preview looks wrong. Keep Telegram as a clean remote Codex working set, not a landfill.
 ```
 
 What still needs a human:
@@ -66,6 +66,7 @@ This project is a frontend. It does not replace Codex.
 - Attachments: photos/documents, including media albums, are saved to ignored local storage and forwarded to Codex as file paths.
 - Voice/audio: Telegram voice is transcribed first, shown as an italic quoted transcript, then sent to Codex as text.
 - Clean bounded history backfill: user prompts plus assistant final answers by default.
+- Quickstart onboarding: latest active Codex threads become Telegram groups/topics with a small clean history tail.
 - Bootstrap can create/reuse Telegram folder, project groups, topics, bot folder entry and status bars.
 - Optional curated topic auto-sync for fresh Codex threads in already bootstrapped project groups.
 - Bot polish: command menu, profile text, suggested admin rights and bundled avatar.
@@ -91,6 +92,7 @@ npm run onboard:doctor
 Guided setup:
 
 ```bash
+npm run onboard:quickstart
 npm run onboard:wizard
 npm run onboard:wizard:rehearsal
 ```
