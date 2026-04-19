@@ -119,7 +119,7 @@ Current boundary:
 - photos and documents: supported
 - image documents: treated as images
 - voice/audio/video/stickers: not yet
-- default limit: 4 files per message, 20 MB per file
+- default limit: 10 files per message/media album, 20 MB per file
 
 If an attachment fails, check `logs/bridge.events.ndjson` for `telegram_attachment_error`. The file itself is runtime state, so do not commit it.
 It means the bridge is using fallback transport and some UI-aware behavior may be weaker.

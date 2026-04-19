@@ -33,7 +33,7 @@ Use this for things that should survive restarts and should not be changed from 
 | `attachmentsEnabled` | `true` | Allows Telegram photos and documents to be downloaded locally and forwarded to Codex as local file paths in the prompt. |
 | `attachmentStorageDir` | `state/attachments` | Local ignored storage for downloaded Telegram media. Do not commit it. |
 | `attachmentMaxBytes` | `20971520` | Per-file attachment limit. Default is 20 MB; enough for screenshots without inviting chaos. |
-| `attachmentMaxCount` | `4` | Max attachments processed from one Telegram message. Current Bot API happy path is usually one photo/document anyway. |
+| `attachmentMaxCount` | `10` | Max attachments processed from one Telegram message or media album. Telegram albums top out at 10, so the default keeps the whole user intent together. |
 | `historyMaxMessages` | `40` | Default clean history tail size for onboarding/backfill. |
 | `historyMaxUserPrompts` | `null` | Optional cap by recent user prompts. Leave `null` unless the message tail is too noisy. |
 | `historyAssistantPhases` | `["final_answer"]` | Assistant phases imported during clean history backfill. Keep commentary out by default. |

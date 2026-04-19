@@ -21,7 +21,7 @@
   "attachmentsEnabled": true,
   "attachmentStorageDir": "state/attachments",
   "attachmentMaxBytes": 20971520,
-  "attachmentMaxCount": 4,
+  "attachmentMaxCount": 10,
   "historyMaxMessages": 40,
   "historyMaxUserPrompts": null,
   "historyAssistantPhases": ["final_answer"],

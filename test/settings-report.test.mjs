@@ -37,7 +37,7 @@ test("buildSettingsReport shows safe runtime settings without secrets", () => {
       attachmentsEnabled: true,
       attachmentStorageDir: "state/attachments",
       attachmentMaxBytes: 20 * 1024 * 1024,
-      attachmentMaxCount: 4,
+      attachmentMaxCount: 10,
       historyMaxMessages: 12,
       historyMaxUserPrompts: 4,
       historyAssistantPhases: ["final_answer", "commentary"],
@@ -74,7 +74,7 @@ test("buildSettingsReport shows safe runtime settings without secrets", () => {
   assert.match(text, /app-server stream: on; connect 1200ms; reconnect 5s/);
   assert.match(text, /mirror: on; phases commentary, final_answer; progress updates; poll 2s/);
   assert.match(text, /worktree: changed files on; max all/);
-  assert.match(text, /attachments: on; max 4; size 20mb; dir `state\/attachments`/);
+  assert.match(text, /attachments: on; max 10; size 20mb; dir `state\/attachments`/);
   assert.match(text, /history import: max messages 12; max user prompts 4; phases final_answer, commentary; heartbeats on/);
   assert.match(text, /event log `logs\/bridge\.events\.ndjson`; stderr `logs\/bridge\.stderr\.log`/);
   assert.match(text, /current binding: `group:-100:topic:3`; thread `thread-1`; status bar `5`/);

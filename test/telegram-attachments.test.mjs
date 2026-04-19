@@ -8,6 +8,7 @@ import {
   collectTelegramAttachments,
   formatAttachmentPrompt,
   formatAttachmentReceipt,
+  groupTelegramMediaGroupUpdates,
   getMessageIngressText,
   hasUnsupportedTelegramMedia,
   saveTelegramAttachments,
@@ -48,6 +49,79 @@ test("message ingress text prefers text, then caption", () => {
   assert.equal(getMessageIngressText({ text: "hello", caption: "caption" }), "hello");
   assert.equal(getMessageIngressText({ caption: "caption" }), "caption");
   assert.equal(getMessageIngressText({}), "");
+});
+
+test("collectTelegramAttachments keeps a Telegram media group together", () => {
+  const message = {
+    message_id: 10,
+    media_group_id: "album-1",
+    telegramMediaGroupMessages: [
+      {
+        message_id: 10,
+        photo: [{ file_id: "photo-10", width: 100, height: 100, file_size: 10 }],
+        caption: "Look at these",
+      },
+      {
+        message_id: 11,
+        photo: [{ file_id: "photo-11", width: 100, height: 100, file_size: 11 }],
+      },
+    ],
+  };
+
+  const attachments = collectTelegramAttachments(message);
+
+  assert.equal(getMessageIngressText(message), "Look at these");
+  assert.equal(attachments.length, 2);
+  assert.deepEqual(
+    attachments.map((item) => [item.fileId, item.fileName, item.sourceMessageId]),
+    [
+      ["photo-10", "telegram-photo-10.jpg", 10],
+      ["photo-11", "telegram-photo-11.jpg", 11],
+    ],
+  );
+});
+
+test("groupTelegramMediaGroupUpdates turns an album batch into one processable item", () => {
+  const grouped = groupTelegramMediaGroupUpdates([
+    {
+      update_id: 1,
+      message: {
+        chat: { id: -100 },
+        message_thread_id: 3,
+        message_id: 10,
+        media_group_id: "album-1",
+        photo: [{ file_id: "photo-10", width: 100, height: 100 }],
+        caption: "Album caption",
+      },
+    },
+    {
+      update_id: 2,
+      message: {
+        chat: { id: -100 },
+        message_thread_id: 3,
+        message_id: 11,
+        media_group_id: "album-1",
+        photo: [{ file_id: "photo-11", width: 100, height: 100 }],
+      },
+    },
+    {
+      update_id: 3,
+      message: {
+        chat: { id: -100 },
+        message_thread_id: 4,
+        message_id: 12,
+        text: "plain",
+      },
+    },
+  ]);
+
+  assert.equal(grouped.length, 2);
+  assert.equal(grouped[0].updates.length, 2);
+  assert.equal(grouped[0].message.message_id, 10);
+  assert.deepEqual(grouped[0].message.mediaGroupMessageIds, [10, 11]);
+  assert.equal(grouped[0].message.caption, "Album caption");
+  assert.equal(collectTelegramAttachments(grouped[0].message).length, 2);
+  assert.equal(grouped[1].message.text, "plain");
 });
 
 test("hasUnsupportedTelegramMedia catches voice and video messages", () => {

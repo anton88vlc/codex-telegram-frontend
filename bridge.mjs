@@ -68,6 +68,7 @@ import {
   formatAttachmentPrompt,
   formatAttachmentReceipt,
   getMessageIngressText,
+  groupTelegramMediaGroupUpdates,
   hasUnsupportedTelegramMedia,
   saveTelegramAttachments,
 } from "./lib/telegram-attachments.mjs";
@@ -1850,6 +1851,8 @@ async function handlePlainText({
         chatId: message.chat.id,
         messageThreadId: message.message_thread_id ?? null,
         messageId: message.message_id ?? null,
+        mediaGroupId: message.media_group_id || null,
+        mediaGroupMessageIds: message.mediaGroupMessageIds || null,
         count: savedAttachments.length,
         kinds: savedAttachments.map((item) => item.kind),
       });
@@ -1858,6 +1861,8 @@ async function handlePlainText({
         chatId: message.chat.id,
         messageThreadId: message.message_thread_id ?? null,
         messageId: message.message_id ?? null,
+        mediaGroupId: message.media_group_id || null,
+        mediaGroupMessageIds: message.mediaGroupMessageIds || null,
         error: error instanceof Error ? error.message : String(error),
       });
       await reply(
@@ -2464,15 +2469,22 @@ async function main() {
       continue;
     }
 
-    for (const update of updates) {
-      if (update?.message) {
-        const checkpoint = await checkpointMessage(config.statePath, state, update);
-        if (checkpoint.alreadyProcessed) {
+    for (const item of groupTelegramMediaGroupUpdates(updates)) {
+      if (item?.message) {
+        let allAlreadyProcessed = true;
+        for (const update of item.updates) {
+          const checkpoint = await checkpointMessage(config.statePath, state, update);
+          if (!checkpoint.alreadyProcessed) {
+            allAlreadyProcessed = false;
+          }
+        }
+        if (allAlreadyProcessed) {
           continue;
         }
-        await processMessage({ config, state, message: update.message, appServerStream, typingHeartbeats });
+        await processMessage({ config, state, message: item.message, appServerStream, typingHeartbeats });
         await saveState(config.statePath, state);
       } else {
+        const update = item.updates[0];
         state.lastUpdateId = Number.isInteger(update.update_id) ? update.update_id : state.lastUpdateId;
         await saveState(config.statePath, state);
       }
