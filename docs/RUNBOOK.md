@@ -206,6 +206,14 @@ It merges groups into `state/bootstrap-result.json`; pass `--replace-result` onl
 Use `--skip-folder` only when debugging folder automation. Use `--skip-bot-folder` if the bot direct chat should stay out of the folder for a one-off test.
 Bot username is read from `config.local.json -> botUsername`, `CODEX_TELEGRAM_BOT_USERNAME`, or `--bot-username`.
 
+Apply the bundled bot avatar after the user-side Telegram session is authorized:
+
+```bash
+npm run bot:avatar
+```
+
+This calls `photos.uploadProfilePhoto(bot=...)` through MTProto, so the logged-in Telegram user must own the bot. BotFather/Bot API cannot do this cleanly.
+
 ## Telegram Ops Commands
 
 - `/health` - quick health for the current chat/topic: binding, project mapping, transport endpoints, delivery clues and recent failures

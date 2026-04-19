@@ -39,7 +39,7 @@ What you may still need to do manually:
 
 After that, the wizard can create/reuse the Telegram folder, project groups, thread topics, bindings, status bars, clean history backfill and smoke checks. BotFather has no proper public API, so pretending the bot itself can be created magically would be cute and false.
 
-Optional but nice: once the token is wired, Codex can polish the bot command menu, short description, menu button and suggested admin rights with `npm run bot:polish -- --apply`. Dry-run is the default, because Telegram setup commands should not surprise anyone.
+Optional but nice: once the token is wired, Codex can polish the bot command menu, short description, menu button and suggested admin rights with `npm run bot:polish -- --apply`. It can also set the bundled default avatar with `npm run bot:avatar`. Dry-run is the default for profile text changes, because Telegram setup commands should not surprise anyone.
 
 ## Runtime Boundary
 
@@ -88,6 +88,7 @@ Docs should sound like a competent teammate at 2am: direct, practical, and a lit
 - `sync-project dry-run` and CLI `--self-check`
 - npm scripts for running, self-checks, tests and guided onboarding
 - `bot:polish` for Telegram command menu, profile text, menu button and suggested bot admin rights
+- bundled default bot avatar asset plus `bot:avatar` to apply it to a bot you own
 - `onboard:prepare` creates missing local config/admin env files and can set up the admin Python venv before the wizard runs
 - onboarding wizard with interactive project/thread selection, checklist, reuse preview, plan write, optional bootstrap, clean backfill dry-run/send and Telegram smoke
 - `/project-status` shows desired thread column, active topics, parked sync topics and sync preview
@@ -188,6 +189,14 @@ npm run bot:polish -- --apply
 ```
 
 The first command previews the Bot API calls. The second applies them.
+
+Set the bundled bot avatar:
+
+```bash
+npm run bot:avatar
+```
+
+This uses the user-side Telegram helper, because the Bot API still does not expose a simple `setMyPhoto`. The Telegram user session must own the bot.
 
 Local checks before committing:
 

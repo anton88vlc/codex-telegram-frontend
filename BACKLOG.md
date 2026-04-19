@@ -43,7 +43,7 @@
 7. ~~Telegram `date_time` entity base for compact rate-limit resets in the pinned status bar.~~ Live visual polish can still tune the exact format after mobile review.
 8. ~~Bot profile/install polish base: default administrator rights, command menu, menu button and profile descriptions.~~ Cleaner topic/project icons still need a visual pass.
 9. ~~Add the bot direct chat to the `codex` Telegram folder during bootstrap when possible.~~
-10. Bot avatar polish: use the official Codex app icon if licensing/asset path is clean. Telegram MTProto supports changing a bot we own via `photos.uploadProfilePhoto(bot=...)`; the Bot API alone does not expose a simple `setMyPhoto`.
+10. ~~Bot avatar polish: bundled default avatar plus `bot:avatar` command using Telegram MTProto `photos.uploadProfilePhoto(bot=...)`.~~ Future pass can make project-specific icons if that becomes useful.
 
 ## P4 - UX Modes
 

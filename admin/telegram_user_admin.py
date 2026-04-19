@@ -30,6 +30,7 @@ DEFAULT_PLAN_PATH = ROOT / "bootstrap-plan.json"
 DEFAULT_RESULT_PATH = PROJECT_ROOT / "state" / "bootstrap-result.json"
 DEFAULT_BRIDGE_STATE_PATH = PROJECT_ROOT / "state" / "state.json"
 DEFAULT_RENDER_HELPER_PATH = PROJECT_ROOT / "scripts" / "render_telegram_text.mjs"
+DEFAULT_BOT_AVATAR_PATH = PROJECT_ROOT / "assets" / "bot-avatar.png"
 DEFAULT_FOLDER_TITLE = "codex"
 DEFAULT_TOPIC_DISPLAY = "tabs"
 DEFAULT_THREADS_DB_PATH = Path.home() / ".codex" / "state_5.sqlite"
@@ -1429,6 +1430,44 @@ async def command_send_topic_message(args):
     )
 
 
+async def command_set_bot_avatar(args):
+    env = load_env(args.env_file)
+    image_path = args.image.expanduser().resolve()
+    bot_username = resolve_bot_username(args)
+    if not bot_username:
+        raise SystemExit(
+            "Bot username is required. Pass --bot-username, set CODEX_TELEGRAM_BOT_USERNAME, or set botUsername in config.local.json."
+        )
+    if not image_path.exists():
+        raise SystemExit(f"bot avatar image not found: {image_path}")
+    if image_path.suffix.lower() not in {".jpg", ".jpeg", ".png"}:
+        raise SystemExit("bot avatar image must be a .png, .jpg or .jpeg file")
+
+    client = make_client(args.session, env)
+    await client.connect()
+    try:
+        if not await client.is_user_authorized():
+            raise SystemExit("Session is not authorized. Run login-qr first.")
+        bot = await client.get_input_entity(bot_username)
+        uploaded = await client.upload_file(str(image_path))
+        result = await client(functions.photos.UploadProfilePhotoRequest(bot=bot, file=uploaded))
+    finally:
+        await client.disconnect()
+
+    print(
+        json.dumps(
+            {
+                "status": "ok",
+                "botUsername": bot_username,
+                "image": str(image_path),
+                "resultType": result.__class__.__name__,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
+
 async def command_wait_topic_text(args):
     env = load_env(args.env_file)
     client = make_client(args.session, env)
@@ -1554,6 +1593,11 @@ def build_parser():
     send_topic_message.add_argument("--topic-id", type=int, required=True)
     send_topic_message.add_argument("--text", required=True)
     send_topic_message.set_defaults(handler=command_send_topic_message)
+
+    set_bot_avatar = subparsers.add_parser("set-bot-avatar")
+    set_bot_avatar.add_argument("--bot-username", default=None)
+    set_bot_avatar.add_argument("--image", type=Path, default=DEFAULT_BOT_AVATAR_PATH)
+    set_bot_avatar.set_defaults(handler=command_set_bot_avatar)
 
     wait_topic_text = subparsers.add_parser("wait-topic-text")
     wait_topic_text.add_argument("--chat-id", type=int, required=True)

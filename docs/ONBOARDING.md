@@ -40,6 +40,12 @@ npm run codex:launch
 
 Codex should handle where token/API values are stored locally. Do not make the user cosplay as a secrets manager unless the automatic path fails.
 
+If the bot is yours, Codex can also apply the bundled project avatar:
+
+```bash
+npm run bot:avatar
+```
+
 ## Main Command
 
 Prepare is the setup preflight. It creates missing local config/admin env files, can create the admin Python venv and can guide credential/session setup.
