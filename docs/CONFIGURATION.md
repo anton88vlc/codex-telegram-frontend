@@ -68,6 +68,11 @@ Use this for things that should survive restarts and should not be changed from 
 | `projectIndexPath` | `state/bootstrap-result.json` | Project/group/topic index produced by bootstrap. |
 | `threadsDbPath` | `~/.codex/state_5.sqlite` | Local Codex Desktop threads DB. |
 | `syncDefaultLimit` | `3` | Default project working-set size for `/project-status` and `/sync-project`. |
+| `topicAutoSyncEnabled` | `false` | Optional curated auto-sync. When enabled, the bridge periodically syncs fresh active Codex threads into already bootstrapped Telegram project groups. Off by default because surprise topic creation is annoying. |
+| `topicAutoSyncLimit` | `3` | Max active sync-managed topics per project group for auto-sync. Manual bindings do not count as disposable trash. |
+| `topicAutoSyncPollIntervalMs` | `60000` | How often auto-sync scans the local Codex DB. |
+| `topicAutoSyncMaxThreadAgeMs` | `604800000` | Freshness window for auto-created topics. Default is 7 days; `0` disables the age cutoff. |
+| `topicAutoSyncMaxActionsPerTick` | `8` | Safety cap for one auto-sync pass. If a project needs more, run `/sync-project` manually and look at the preview. |
 
 Hard take: keep this file boring. If a setting can make the bridge unusable, do not expose it casually in Telegram until there is validation and rollback.
 
@@ -107,6 +112,8 @@ Working commands today:
 - `/sync-project [count] dry-run` - safe preview for topic rename/reopen/create/park.
 - `/sync-project [count]` - applies that working-set sync.
 - `/mode native` - pins the binding transport to native. It is the only supported v1 mode.
+
+Auto-sync uses the same sync plan as `/project-status` and `/sync-project`, but only when `topicAutoSyncEnabled` is explicitly true. It creates/reopens/renames/parks sync-managed topics inside the configured working-set limit. It does not delete topics and does not mutate manual bindings.
 
 Telegram's command menu prefers underscores, so the bridge also accepts `/attach_latest`, `/project_status`, `/sync_project` and `/mode_native`. The old hyphen commands still work; the menu-safe aliases are just less annoying in real Telegram clients.
 

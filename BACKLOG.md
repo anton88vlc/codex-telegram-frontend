@@ -36,7 +36,7 @@
 
 1. ~~Attachments and images base.~~ Telegram photos/documents are downloaded into ignored local storage and forwarded to Codex as local file paths. Native binary attachment transport can still get better later.
 2. ~~Voice / audio ingress base.~~ Telegram voice/audio is transcribed first, shown as an italic quoted transcript, then forwarded to Codex as text. Next polish is provider UX, live partial transcripts and confidence display.
-3. Auto-create topic rules for fresh threads without turning Telegram into a dump.
+3. ~~Auto-create topic rules for fresh threads without turning Telegram into a dump.~~ Base is optional curated topic auto-sync: off by default, limited per project, freshness-gated and only touches sync-managed topics.
 4. Heartbeat transport as an alternative mode for UI-visible jobs.
 5. Managed-bot onboarding spike: Bot API 9.6 added managed bots and `t.me/newbot/...` links. Investigate whether a manager bot can make first install less BotFather-heavy without adding a creepy SaaS control plane.
 6. Native Telegram Checklist spike for Codex Todo blocks. Likely not default yet because Bot API checklist sending is business-account-shaped, but it is worth validating before we keep hand-rendering Todo forever.
@@ -85,3 +85,4 @@
 30. Public-readiness cleanup pass: secret/local-artifact scan, neutral repo examples, agent notes without personal user context and onboarding doctor validation for placeholder Telegram API credentials.
 31. Mobile General/All rescue: plain messages accidentally sent to an unbound group surface are moved into the last active bound topic with a bot-side surrogate user bubble; commands still stay local.
 32. Local state doctor base: detects stale topic bindings, dead Telegram topic errors, orphan mirror state and bootstrap-index drift; dry-run/apply repairs only local state files, and `/health` plus self-check surface the warning.
+33. Curated topic auto-sync base: optionally scans bootstrapped project groups for fresh active Codex threads, creates/reopens/renames/parks only sync-managed Telegram topics within a small working-set limit and leaves manual topics alone.

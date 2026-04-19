@@ -55,6 +55,11 @@ test("buildSettingsReport shows safe runtime settings without secrets", () => {
       statusBarPin: true,
       statusBarTailBytes: 524288,
       syncDefaultLimit: 3,
+      topicAutoSyncEnabled: true,
+      topicAutoSyncLimit: 5,
+      topicAutoSyncPollIntervalMs: 60000,
+      topicAutoSyncMaxThreadAgeMs: 7 * 24 * 60 * 60 * 1000,
+      topicAutoSyncMaxActionsPerTick: 8,
       projectIndexPath: "state/bootstrap-result.json",
       statePath: "state/state.json",
       eventLogPath: "logs/bridge.events.ndjson",
@@ -87,6 +92,7 @@ test("buildSettingsReport shows safe runtime settings without secrets", () => {
   assert.match(text, /attachments: on; max 10; size 20mb; dir `state\/attachments`/);
   assert.match(text, /voice: on; provider auto; model auto; language multi; max 25mb; keys deepgram env DEEPGRAM_API_KEY, openai missing/);
   assert.match(text, /history import: max messages 12; max user prompts 4; phases final_answer, commentary; heartbeats on/);
+  assert.match(text, /topic auto-sync: on; limit 5; poll 1m; max age 7d; max actions 8/);
   assert.match(text, /event log `logs\/bridge\.events\.ndjson`; stderr `logs\/bridge\.stderr\.log`/);
   assert.match(text, /current binding: `group:-100:topic:3`; thread `thread-1`; status bar `5`/);
   assert.doesNotMatch(text, /123456:secret-token/);

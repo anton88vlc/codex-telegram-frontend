@@ -170,6 +170,7 @@ This is what good looks like:
 4. Run `/project-status` or `/sync-project dry-run` and confirm details appear in the same chat/topic.
 5. Send a short turn directly from Codex Desktop and confirm Telegram receives the surrogate user message plus assistant updates.
 6. Confirm each active topic has one pinned compact status bar.
+7. If `topicAutoSyncEnabled` is true, create or open a fresh Codex thread in a bootstrapped project and confirm the group gets a sync-managed topic without creating a topic flood.
 
 ## Bootstrap / Telegram Admin
 
@@ -256,6 +257,17 @@ This calls `photos.uploadProfilePhoto(bot=...)` through MTProto, so the logged-i
 - `/sync-project [count] dry-run` - safe preview before rename/reopen/create/park
 
 Full config map lives in [CONFIGURATION.md](CONFIGURATION.md). Short version: persistent app config is `config.local.json`/env/Keychain; Telegram commands mostly mutate bindings and topic sync state, not global settings.
+
+Optional auto-sync:
+
+```json
+{
+  "topicAutoSyncEnabled": true,
+  "topicAutoSyncLimit": 3
+}
+```
+
+It uses the same plan as `/sync-project`, only for already bootstrapped project groups. It creates/reopens/renames/parks sync-managed topics inside the limit, ignores manual topics and never deletes Telegram history. If the preview looks weird, keep it off. Being automatic is not a virtue by itself.
 
 ## History Backfill
 

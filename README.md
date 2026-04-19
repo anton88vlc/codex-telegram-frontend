@@ -67,6 +67,7 @@ This project is a frontend. It does not replace Codex.
 - Voice/audio: Telegram voice is transcribed first, shown as an italic quoted transcript, then sent to Codex as text.
 - Clean bounded history backfill: user prompts plus assistant final answers by default.
 - Bootstrap can create/reuse Telegram folder, project groups, topics, bot folder entry and status bars.
+- Optional curated topic auto-sync for fresh Codex threads in already bootstrapped project groups.
 - Bot polish: command menu, profile text, suggested admin rights and bundled avatar.
 - Structured event log at `logs/bridge.events.ndjson`; `/health` samples it.
 - Local state doctor for stale topic bindings, orphan mirror state and bootstrap-index drift.
@@ -75,7 +76,6 @@ This project is a frontend. It does not replace Codex.
 
 - Cross-platform runtime. v1 is macOS plus local Codex Desktop.
 - Raw token-by-token Telegram streaming. Current progress is coalesced into readable bubbles on purpose.
-- Auto-create rules for fresh Codex threads.
 - Rich voice controls such as provider picker, live partial transcripts or confidence display.
 - Dedicated ops topic/router for noisy admin flows.
 

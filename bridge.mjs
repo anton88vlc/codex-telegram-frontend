@@ -135,6 +135,9 @@ const DEFAULT_HISTORY_MAX_MESSAGES = 40;
 const DEFAULT_HISTORY_ASSISTANT_PHASES = ["final_answer"];
 const DEFAULT_BOT_TOKEN_KEYCHAIN_SERVICE = "codex-telegram-bridge-bot-token";
 const DEFAULT_APP_CONTROL_COOLDOWN_MS = 5 * 60 * 1000;
+const DEFAULT_TOPIC_AUTO_SYNC_POLL_INTERVAL_MS = 60 * 1000;
+const DEFAULT_TOPIC_AUTO_SYNC_MAX_THREAD_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const DEFAULT_TOPIC_AUTO_SYNC_MAX_ACTIONS_PER_TICK = 8;
 const execFileAsync = promisify(execFile);
 
 const TELEGRAM_SERVICE_MESSAGE_KEYS = [
@@ -238,6 +241,8 @@ async function loadConfig(configPath) {
       (voiceTranscriptionProvider === "deepgram" ? fromFile?.voiceTranscriptionKeychainService : null) ||
       "codex-telegram-bridge-deepgram-api-key",
   });
+  const syncDefaultLimit = clamp(parsePositiveInt(fromFile?.syncDefaultLimit, 3), 1, 10);
+  const topicAutoSyncLimit = clamp(parsePositiveInt(fromFile?.topicAutoSyncLimit, syncDefaultLimit), 1, 10);
 
   return {
     botToken,
@@ -354,7 +359,18 @@ async function loadConfig(configPath) {
     bridgeLogPath: fromFile?.bridgeLogPath || DEFAULT_BRIDGE_LOG_PATH,
     eventLogPath: fromFile?.eventLogPath || DEFAULT_EVENT_LOG_PATH,
     threadsDbPath: fromFile?.threadsDbPath || DEFAULT_THREADS_DB_PATH,
-    syncDefaultLimit: Number.isFinite(fromFile?.syncDefaultLimit) ? fromFile.syncDefaultLimit : 3,
+    syncDefaultLimit,
+    topicAutoSyncEnabled: fromFile?.topicAutoSyncEnabled === true,
+    topicAutoSyncLimit,
+    topicAutoSyncPollIntervalMs: Number.isFinite(fromFile?.topicAutoSyncPollIntervalMs)
+      ? Math.max(10_000, Number(fromFile.topicAutoSyncPollIntervalMs))
+      : DEFAULT_TOPIC_AUTO_SYNC_POLL_INTERVAL_MS,
+    topicAutoSyncMaxThreadAgeMs: Number.isFinite(fromFile?.topicAutoSyncMaxThreadAgeMs)
+      ? Math.max(0, Number(fromFile.topicAutoSyncMaxThreadAgeMs))
+      : DEFAULT_TOPIC_AUTO_SYNC_MAX_THREAD_AGE_MS,
+    topicAutoSyncMaxActionsPerTick: Number.isFinite(fromFile?.topicAutoSyncMaxActionsPerTick)
+      ? Math.max(1, Math.min(50, Number(fromFile.topicAutoSyncMaxActionsPerTick)))
+      : DEFAULT_TOPIC_AUTO_SYNC_MAX_ACTIONS_PER_TICK,
   };
 }
 
@@ -1440,18 +1456,35 @@ async function buildSyncContext(config, state, message, requestedLimit) {
     };
   }
 
-  const diagnostics = await collectChatBindingDiagnostics(config, state, message.chat.id);
+  const context = await buildSyncContextForProjectGroup(config, state, projectGroup, requestedLimit);
+
+  return {
+    projectGroup,
+    diagnostics: context.diagnostics,
+    plan: context.plan,
+  };
+}
+
+async function buildSyncContextForProjectGroup(
+  config,
+  state,
+  projectGroup,
+  requestedLimit,
+  { maxThreadAgeMs = 0, nowMs = Date.now(), threadScanLimit = null } = {},
+) {
+  const diagnostics = await collectChatBindingDiagnostics(config, state, projectGroup.chatId);
   const threads = await listProjectThreads(config.threadsDbPath, projectGroup.projectRoot, {
-    limit: requestedLimit,
+    limit: threadScanLimit || requestedLimit,
   });
   const plan = buildProjectSyncPlan({
     entries: diagnostics.entries,
     threads,
     requestedLimit,
+    maxThreadAgeMs,
+    nowMs,
   });
 
   return {
-    projectGroup,
     diagnostics,
     plan,
   };
@@ -1575,6 +1608,294 @@ async function renderProjectStatus(config, state, message, requestedLimit) {
   lines.push(renderSyncPreview(plan));
 
   return lines.join("\n");
+}
+
+function countSyncPlanActions(plan) {
+  return (
+    (plan?.rename?.length || 0) +
+    (plan?.reopen?.length || 0) +
+    (plan?.create?.length || 0) +
+    (plan?.park?.length || 0)
+  );
+}
+
+function formatSyncApplyResult({ projectGroup, changed, plan }) {
+  const lines = [
+    `Synced the working set for ${projectGroup.groupTitle}.`,
+    `rename ${changed.renamed.length}, reopen ${changed.reopened.length}, create ${changed.created.length}, park ${plan.park.length}`,
+  ];
+  if (changed.renamed.length) {
+    lines.push("", "**Renamed**");
+    lines.push(...changed.renamed.map((item) => `- topic ${item.topicId}: ${item.title} -> ${item.threadId}`));
+  }
+  if (changed.reopened.length) {
+    lines.push("", "**Reopened**");
+    lines.push(...changed.reopened.map((item) => `- topic ${item.topicId}: ${item.title} -> ${item.threadId}`));
+  }
+  if (changed.created.length) {
+    lines.push("", "**Created**");
+    lines.push(...changed.created.map((item) => `- topic ${item.topicId}: ${item.title} -> ${item.threadId}`));
+  }
+  if (plan.park.length) {
+    lines.push("", "**Parked**");
+    const parkedLines = [
+      ...changed.parked,
+      ...changed.parkPending.map((item) => ({
+        topicId: item.entry.binding.messageThreadId,
+        title: sanitizeTopicTitle(item.entry.binding.threadTitle, item.entry.binding.threadId),
+        threadId: String(item.entry.binding.threadId),
+        reason: item.reason,
+      })),
+    ];
+    lines.push(...parkedLines.map((item) => `- topic ${item.topicId}: ${item.title} -> ${item.threadId} [${item.reason}]`));
+  }
+  if (
+    changed.renamed.length === 0 &&
+    changed.reopened.length === 0 &&
+    changed.created.length === 0 &&
+    plan.park.length === 0
+  ) {
+    lines.push("", "Already aligned. Nothing had to change.");
+  }
+  return lines.join("\n");
+}
+
+async function applyProjectSyncPlan({
+  config,
+  state,
+  chatId,
+  projectGroup,
+  plan,
+  currentBindingKey = null,
+  sendResponse = null,
+}) {
+  const now = new Date().toISOString();
+  const parkCurrentTopic = new Set(
+    plan.park
+      .filter((item) => currentBindingKey && item.entry.bindingKey === currentBindingKey)
+      .map((item) => item.entry.bindingKey),
+  );
+  const parkBeforeReply = plan.park.filter((item) => !parkCurrentTopic.has(item.entry.bindingKey));
+  const parkAfterReply = plan.park.filter((item) => parkCurrentTopic.has(item.entry.bindingKey));
+  const changed = {
+    renamed: [],
+    reopened: [],
+    created: [],
+    parked: [],
+    parkPending: parkAfterReply,
+  };
+
+  for (const item of plan.rename) {
+    const nextTitle = sanitizeTopicTitle(item.thread.title, item.thread.id);
+    await editForumTopic(config.botToken, {
+      chatId,
+      messageThreadId: item.entry.binding.messageThreadId,
+      name: nextTitle,
+    });
+    state.bindings[item.entry.bindingKey] = {
+      ...item.entry.binding,
+      threadTitle: nextTitle,
+      syncManaged: true,
+      syncState: "active",
+      topicStatus: "open",
+      updatedAt: now,
+      lastSyncedAt: now,
+    };
+    changed.renamed.push({
+      topicId: item.entry.binding.messageThreadId,
+      title: nextTitle,
+      threadId: String(item.thread.id),
+    });
+  }
+
+  for (const item of plan.reopen) {
+    await reopenForumTopic(config.botToken, {
+      chatId,
+      messageThreadId: item.entry.binding.messageThreadId,
+    });
+    const nextTitle = sanitizeTopicTitle(item.thread.title, item.thread.id);
+    if (item.renameNeeded) {
+      await editForumTopic(config.botToken, {
+        chatId,
+        messageThreadId: item.entry.binding.messageThreadId,
+        name: nextTitle,
+      });
+    }
+    state.bindings[item.entry.bindingKey] = {
+      ...item.entry.binding,
+      threadTitle: nextTitle,
+      syncManaged: true,
+      syncState: "active",
+      topicStatus: "open",
+      updatedAt: now,
+      lastSyncedAt: now,
+    };
+    changed.reopened.push({
+      topicId: item.entry.binding.messageThreadId,
+      title: nextTitle,
+      threadId: String(item.thread.id),
+    });
+  }
+
+  for (const item of plan.create) {
+    const { thread } = item;
+    const topicTitle = sanitizeTopicTitle(thread.title, thread.id);
+    const topic = await createForumTopic(config.botToken, {
+      chatId,
+      name: topicTitle,
+    });
+    const topicId = Number(topic?.message_thread_id);
+    if (!Number.isInteger(topicId)) {
+      throw new Error(`createForumTopic returned invalid message_thread_id for ${thread.id}`);
+    }
+    const topicBindingKey = makeBindingKey({
+      chatId,
+      messageThreadId: topicId,
+    });
+    setBinding(state, topicBindingKey, {
+      ...buildBindingPayload({
+        message: {
+          chat: { id: chatId, title: projectGroup.groupTitle },
+          message_thread_id: topicId,
+        },
+        thread,
+        chatTitle: projectGroup.groupTitle,
+      }),
+      createdBy: SYNC_PROJECT_CREATOR,
+      syncManaged: true,
+      syncState: "active",
+      topicStatus: "open",
+      lastSyncedAt: now,
+    });
+    changed.created.push({
+      topicId,
+      title: topicTitle,
+      threadId: String(thread.id),
+    });
+  }
+
+  for (const item of parkBeforeReply) {
+    await closeForumTopic(config.botToken, {
+      chatId,
+      messageThreadId: item.entry.binding.messageThreadId,
+    });
+    state.bindings[item.entry.bindingKey] = {
+      ...item.entry.binding,
+      syncManaged: true,
+      syncState: "closed",
+      topicStatus: "closed",
+      updatedAt: now,
+      lastSyncedAt: now,
+    };
+    changed.parked.push({
+      topicId: item.entry.binding.messageThreadId,
+      title: sanitizeTopicTitle(item.entry.binding.threadTitle, item.entry.binding.threadId),
+      threadId: String(item.entry.binding.threadId),
+      reason: item.reason,
+    });
+  }
+
+  if (sendResponse) {
+    await sendResponse(formatSyncApplyResult({ projectGroup, changed, plan }));
+  }
+
+  for (const item of parkAfterReply) {
+    try {
+      await closeForumTopic(config.botToken, {
+        chatId,
+        messageThreadId: item.entry.binding.messageThreadId,
+      });
+      state.bindings[item.entry.bindingKey] = {
+        ...item.entry.binding,
+        syncManaged: true,
+        syncState: "closed",
+        topicStatus: "closed",
+        updatedAt: now,
+        lastSyncedAt: now,
+      };
+      changed.parked.push({
+        topicId: item.entry.binding.messageThreadId,
+        title: sanitizeTopicTitle(item.entry.binding.threadTitle, item.entry.binding.threadId),
+        threadId: String(item.entry.binding.threadId),
+        reason: item.reason,
+      });
+    } catch (error) {
+      logBridgeEvent("sync_project_park_after_reply_error", {
+        chatId,
+        messageThreadId: item.entry.binding.messageThreadId,
+        threadId: item.entry.binding.threadId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  const actionCount = countSyncPlanActions(plan);
+  return {
+    changed: actionCount > 0,
+    actionCount,
+    details: changed,
+  };
+}
+
+async function syncAutoProjectTopics({ config, state, nowMs = Date.now() } = {}) {
+  if (config.topicAutoSyncEnabled !== true) {
+    return { changed: false, checked: 0, actionCount: 0 };
+  }
+
+  const groups = await loadProjectIndex(config.projectIndexPath);
+  const requestedLimit = clamp(parsePositiveInt(config.topicAutoSyncLimit, config.syncDefaultLimit), 1, 10);
+  const maxActions = Math.max(1, Number(config.topicAutoSyncMaxActionsPerTick) || 1);
+  let checked = 0;
+  let actionCount = 0;
+  let changed = false;
+
+  for (const projectGroup of groups) {
+    if (actionCount >= maxActions) {
+      break;
+    }
+    if (!projectGroup.chatId || !projectGroup.projectRoot) {
+      continue;
+    }
+    checked += 1;
+    const { plan } = await buildSyncContextForProjectGroup(config, state, projectGroup, requestedLimit, {
+      maxThreadAgeMs: config.topicAutoSyncMaxThreadAgeMs,
+      nowMs,
+      threadScanLimit: Math.min(50, Math.max(requestedLimit * 4, requestedLimit)),
+    });
+    const planActions = countSyncPlanActions(plan);
+    if (planActions === 0) {
+      continue;
+    }
+    if (actionCount + planActions > maxActions) {
+      logBridgeEvent("topic_auto_sync_skipped_project", {
+        chatId: projectGroup.chatId,
+        projectRoot: projectGroup.projectRoot,
+        actionCount: planActions,
+        remainingActionBudget: maxActions - actionCount,
+      });
+      continue;
+    }
+    const result = await applyProjectSyncPlan({
+      config,
+      state,
+      chatId: projectGroup.chatId,
+      projectGroup,
+      plan,
+    });
+    actionCount += result.actionCount;
+    changed = changed || result.changed;
+    logBridgeEvent("topic_auto_sync_project_applied", {
+      chatId: projectGroup.chatId,
+      projectRoot: projectGroup.projectRoot,
+      desiredCount: plan.summary.desiredCount,
+      renameCount: plan.summary.renameCount,
+      reopenCount: plan.summary.reopenCount,
+      createCount: plan.summary.createCount,
+      parkCount: plan.summary.parkCount,
+    });
+  }
+
+  return { changed, checked, actionCount };
 }
 
 async function validateBindingForSend(config, binding) {
@@ -1774,202 +2095,20 @@ async function handleCommand({ config, state, message, bindingKey, binding, pars
         return true;
       }
 
-      const now = new Date().toISOString();
-      const parkCurrentTopic = new Set(
-        plan.park
-          .filter((item) => item.entry.bindingKey === bindingKey)
-          .map((item) => item.entry.bindingKey),
-      );
-      const parkBeforeReply = plan.park.filter((item) => !parkCurrentTopic.has(item.entry.bindingKey));
-      const parkAfterReply = plan.park.filter((item) => parkCurrentTopic.has(item.entry.bindingKey));
-      const changed = {
-        renamed: [],
-        reopened: [],
-        created: [],
-        parked: [],
-      };
-
-      for (const item of plan.rename) {
-        const nextTitle = sanitizeTopicTitle(item.thread.title, item.thread.id);
-        await editForumTopic(config.botToken, {
-          chatId: message.chat.id,
-          messageThreadId: item.entry.binding.messageThreadId,
-          name: nextTitle,
-        });
-        state.bindings[item.entry.bindingKey] = {
-          ...item.entry.binding,
-          threadTitle: nextTitle,
-          syncManaged: true,
-          syncState: "active",
-          topicStatus: "open",
-          updatedAt: now,
-          lastSyncedAt: now,
-        };
-        changed.renamed.push({
-          topicId: item.entry.binding.messageThreadId,
-          title: nextTitle,
-          threadId: String(item.thread.id),
-        });
-      }
-
-      for (const item of plan.reopen) {
-        await reopenForumTopic(config.botToken, {
-          chatId: message.chat.id,
-          messageThreadId: item.entry.binding.messageThreadId,
-        });
-        const nextTitle = sanitizeTopicTitle(item.thread.title, item.thread.id);
-        if (item.renameNeeded) {
-          await editForumTopic(config.botToken, {
-            chatId: message.chat.id,
-            messageThreadId: item.entry.binding.messageThreadId,
-            name: nextTitle,
-          });
-        }
-        state.bindings[item.entry.bindingKey] = {
-          ...item.entry.binding,
-          threadTitle: nextTitle,
-          syncManaged: true,
-          syncState: "active",
-          topicStatus: "open",
-          updatedAt: now,
-          lastSyncedAt: now,
-        };
-        changed.reopened.push({
-          topicId: item.entry.binding.messageThreadId,
-          title: nextTitle,
-          threadId: String(item.thread.id),
-        });
-      }
-
-      for (const item of plan.create) {
-        const { thread } = item;
-        const topic = await createForumTopic(config.botToken, {
-          chatId: message.chat.id,
-          name: sanitizeTopicTitle(thread.title, thread.id),
-        });
-        const topicId = Number(topic?.message_thread_id);
-        if (!Number.isInteger(topicId)) {
-          throw new Error(`createForumTopic returned invalid message_thread_id for ${thread.id}`);
-        }
-        const topicBindingKey = makeBindingKey({
-          chatId: message.chat.id,
-          messageThreadId: topicId,
-        });
-        setBinding(state, topicBindingKey, {
-          ...buildBindingPayload({
-            message: {
-              ...message,
-              message_thread_id: topicId,
-            },
-            thread,
-            chatTitle: projectGroup.groupTitle,
-          }),
-          createdBy: SYNC_PROJECT_CREATOR,
-          syncManaged: true,
-          syncState: "active",
-          topicStatus: "open",
-          lastSyncedAt: now,
-        });
-        changed.created.push({
-          topicId,
-          title: sanitizeTopicTitle(thread.title, thread.id),
-          threadId: String(thread.id),
-        });
-      }
-
-      for (const item of parkBeforeReply) {
-        await closeForumTopic(config.botToken, {
-          chatId: message.chat.id,
-          messageThreadId: item.entry.binding.messageThreadId,
-        });
-        state.bindings[item.entry.bindingKey] = {
-          ...item.entry.binding,
-          syncManaged: true,
-          syncState: "closed",
-          topicStatus: "closed",
-          updatedAt: now,
-          lastSyncedAt: now,
-        };
-        changed.parked.push({
-          topicId: item.entry.binding.messageThreadId,
-          title: sanitizeTopicTitle(item.entry.binding.threadTitle, item.entry.binding.threadId),
-          threadId: String(item.entry.binding.threadId),
-          reason: item.reason,
-        });
-      }
-
-      const lines = [
-        `Synced the working set for ${projectGroup.groupTitle}.`,
-        `rename ${changed.renamed.length}, reopen ${changed.reopened.length}, create ${changed.created.length}, park ${plan.park.length}`,
-      ];
-      if (changed.renamed.length) {
-        lines.push("", "**Renamed**");
-        lines.push(...changed.renamed.map((item) => `- topic ${item.topicId}: ${item.title} -> ${item.threadId}`));
-      }
-      if (changed.reopened.length) {
-        lines.push("", "**Reopened**");
-        lines.push(...changed.reopened.map((item) => `- topic ${item.topicId}: ${item.title} -> ${item.threadId}`));
-      }
-      if (changed.created.length) {
-        lines.push("", "**Created**");
-        lines.push(...changed.created.map((item) => `- topic ${item.topicId}: ${item.title} -> ${item.threadId}`));
-      }
-      if (plan.park.length) {
-        lines.push("", "**Parked**");
-        const parkedLines = [
-          ...changed.parked,
-          ...parkAfterReply.map((item) => ({
-            topicId: item.entry.binding.messageThreadId,
-            title: sanitizeTopicTitle(item.entry.binding.threadTitle, item.entry.binding.threadId),
-            threadId: String(item.entry.binding.threadId),
-            reason: item.reason,
-          })),
-        ];
-        lines.push(...parkedLines.map((item) => `- topic ${item.topicId}: ${item.title} -> ${item.threadId} [${item.reason}]`));
-      }
-      if (
-        changed.renamed.length === 0 &&
-        changed.reopened.length === 0 &&
-        changed.created.length === 0 &&
-        plan.park.length === 0
-      ) {
-        lines.push("", "Already aligned. Nothing had to change.");
-      }
-      await sendCommandResponse({
+      await applyProjectSyncPlan({
         config,
-        message,
-        text: lines.join("\n"),
+        state,
+        chatId: message.chat.id,
+        projectGroup,
+        plan,
+        currentBindingKey: bindingKey,
+        sendResponse: (text) =>
+          sendCommandResponse({
+            config,
+            message,
+            text,
+          }),
       });
-
-      for (const item of parkAfterReply) {
-        try {
-          await closeForumTopic(config.botToken, {
-            chatId: message.chat.id,
-            messageThreadId: item.entry.binding.messageThreadId,
-          });
-          state.bindings[item.entry.bindingKey] = {
-            ...item.entry.binding,
-            syncManaged: true,
-            syncState: "closed",
-            topicStatus: "closed",
-            updatedAt: now,
-            lastSyncedAt: now,
-          };
-          changed.parked.push({
-            topicId: item.entry.binding.messageThreadId,
-            title: sanitizeTopicTitle(item.entry.binding.threadTitle, item.entry.binding.threadId),
-            threadId: String(item.entry.binding.threadId),
-            reason: item.reason,
-          });
-        } catch (error) {
-          logBridgeEvent("sync_project_park_after_reply_error", {
-            chatId: message.chat.id,
-            messageThreadId: item.entry.binding.messageThreadId,
-            threadId: item.entry.binding.threadId,
-            error: error instanceof Error ? error.message : String(error),
-          });
-        }
-      }
       return true;
     }
 
@@ -2754,6 +2893,7 @@ async function main() {
   }
 
   let consecutivePollErrors = 0;
+  let lastTopicAutoSyncAt = 0;
   while (true) {
     let updates = [];
     try {
@@ -2798,6 +2938,21 @@ async function main() {
       }
     }
 
+    let topicAutoSyncResult = { changed: false };
+    if (
+      config.topicAutoSyncEnabled === true &&
+      Date.now() - lastTopicAutoSyncAt >= config.topicAutoSyncPollIntervalMs
+    ) {
+      lastTopicAutoSyncAt = Date.now();
+      try {
+        topicAutoSyncResult = await syncAutoProjectTopics({ config, state, nowMs: lastTopicAutoSyncAt });
+      } catch (error) {
+        logBridgeEvent("topic_auto_sync_error", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
     let appServerStreamResult = { changed: false };
     try {
       await syncAppServerStreamSubscriptions({ config, state, stream: appServerStream });
@@ -2834,7 +2989,7 @@ async function main() {
       });
     }
 
-    if (appServerStreamResult.changed || syncResult.changed || statusBarResult.changed) {
+    if (topicAutoSyncResult.changed || appServerStreamResult.changed || syncResult.changed || statusBarResult.changed) {
       await saveState(config.statePath, state);
     }
 

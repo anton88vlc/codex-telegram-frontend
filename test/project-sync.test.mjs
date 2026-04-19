@@ -34,6 +34,26 @@ test("buildProjectSyncPlan creates topics for desired threads when nothing is bo
   );
 });
 
+test("buildProjectSyncPlan can keep auto-created topics inside a freshness window", () => {
+  const nowMs = Date.parse("2026-04-19T12:00:00.000Z");
+  const plan = buildProjectSyncPlan({
+    entries: [],
+    threads: [
+      { ...makeThread("fresh", "Fresh thread"), updated_at_ms: nowMs - 60_000 },
+      { ...makeThread("old", "Old thread"), updated_at_ms: nowMs - 10 * 24 * 60 * 60 * 1000 },
+    ],
+    requestedLimit: 3,
+    maxThreadAgeMs: 24 * 60 * 60 * 1000,
+    nowMs,
+  });
+
+  assert.deepEqual(
+    plan.create.map((item) => item.thread.id),
+    ["fresh"],
+  );
+  assert.equal(plan.summary.desiredCount, 1);
+});
+
 test("buildProjectSyncPlan prefers manual binding and parks duplicate sync topic", () => {
   const plan = buildProjectSyncPlan({
     entries: [

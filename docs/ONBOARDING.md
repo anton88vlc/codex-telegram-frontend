@@ -111,7 +111,7 @@ Run without `--dry-run` only after the preview looks sane. Skipping the preview 
 - `historyIncludeHeartbeats`: false
 - `sender-mode`: `labeled-bot`
 - topic display: `Tabs`
-- auto-create new topics: off until rules are explicit
+- auto-create new topics: off by default; optional curated auto-sync can be enabled later per local config
 
 These defaults keep Telegram close to Codex Desktop: curated project/thread surface, not notification soup.
 
