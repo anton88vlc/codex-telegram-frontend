@@ -35,14 +35,9 @@ import {
   saveStateMerged as saveState,
 } from "./lib/state.mjs";
 import { clamp } from "./lib/thread-db.mjs";
-import {
-  normalizeTypingHeartbeatIntervalMs,
-  stopTypingHeartbeats,
-} from "./lib/typing-heartbeat.mjs";
+import { stopTypingHeartbeats } from "./lib/typing-heartbeat.mjs";
 import { syncTypingHeartbeats } from "./lib/typing-heartbeat-runner.mjs";
-import {
-  reply,
-} from "./lib/telegram-targets.mjs";
+import { reply } from "./lib/telegram-targets.mjs";
 import { rerouteUnboundGroupMessageToFallbackTopic } from "./lib/unbound-group-rescue.mjs";
 import { collectTelegramVoiceRefs } from "./lib/voice-transcription.mjs";
 import {
@@ -52,10 +47,7 @@ import {
   hasUnsupportedTelegramMedia,
 } from "./lib/telegram-attachments.mjs";
 import { captureWorktreeBaseline, loadChangedFilesTextForThread } from "./lib/worktree-summary.mjs";
-import {
-  getMe,
-  getUpdates,
-} from "./lib/telegram.mjs";
+import { getMe, getUpdates } from "./lib/telegram.mjs";
 
 const TELEGRAM_SERVICE_MESSAGE_KEYS = [
   "forum_topic_created",
