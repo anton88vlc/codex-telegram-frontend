@@ -12,6 +12,33 @@ This is not "one more bot". The intended shape is a clean bridge:
 - `Codex Desktop` stays the backend and source of truth
 - the bridge lives outside `~/.codex` as a normal project
 
+## Install With Codex
+
+The intended install path is agent-led: open this repo in Codex, paste one prompt, and let Codex do the boring setup work while you handle the few Telegram steps that cannot be automated cleanly.
+
+> **Current v1 target:** macOS with local `Codex.app`. Linux and Windows are not the contract yet.
+
+Paste this into a fresh Codex thread from the repo root:
+
+```text
+Install codex-telegram-frontend on this Mac.
+
+Run the onboarding doctor, prepare local config from examples, guide me through the unavoidable Telegram steps, then scan my Codex projects and ask me which projects and threads I want mirrored into Telegram.
+
+Create or reuse the Telegram folder `codex`, create one group per selected Codex project, create one topic per selected Codex thread, import only a clean bounded history tail, start the bridge, run a real Telegram smoke test, and leave the repo in a clean documented state.
+
+Do not mirror every thread. Keep Telegram as a clean remote Codex working set, not a landfill.
+```
+
+What you still need to do manually:
+
+1. Create a Telegram bot with [@BotFather](https://t.me/BotFather) and give Codex the token through env, config, or macOS Keychain.
+2. Create Telegram `API_ID` / `API_HASH` at [my.telegram.org](https://my.telegram.org/) for the user-side admin helper.
+3. Authorize one local Telegram user session with the helper when Codex asks.
+4. Keep `Codex.app` open; for the best UX let Codex launch it with `npm run codex:launch`.
+
+After that, the wizard can create/reuse the Telegram folder, project groups, thread topics, bindings, status bars, clean history backfill and smoke checks. BotFather has no proper public API, so pretending the bot itself can be created magically would be cute and false.
+
 ## Runtime Boundary
 
 Frontend, not a standalone Codex brain. The Mac still does the real work.
