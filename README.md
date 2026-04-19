@@ -50,6 +50,13 @@ This project is a frontend. It does not replace Codex.
 - `app-server` fallback is resilience, not the happy path.
 - If `Codex.app` is closed or crashed, the bridge should say that plainly in Telegram.
 
+There are two real runtime moods:
+
+- `app-control` is the live desk mode. Use it when you are near the Mac and want Telegram and Codex Desktop to move together. It gives the best "holy shit, this feels like Codex on my phone" UX, but it depends on the Desktop debug endpoint and can be touchy if Codex Desktop is already unstable.
+- `app-server` is the safer away-from-desk mode. Use it when you care more about getting work through from the street than seeing the visible Desktop UI update instantly. It is less magical, but less fragile.
+
+The default stays `app-control` because this product is trying to feel like a remote Codex surface, not a detached queue. If that mode misbehaves on a machine, switch `nativeIngressTransport` to `app-server` and keep working.
+
 ## What Works
 
 - Telegram Bot API long polling for direct chats and forum topics.

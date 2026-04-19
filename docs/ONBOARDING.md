@@ -47,6 +47,26 @@ If the bot is yours, Codex can also apply the bundled project avatar:
 npm run bot:avatar
 ```
 
+## Pick The Runtime Mood
+
+Start with the live Codex Desktop mode:
+
+```bash
+npm run codex:launch
+```
+
+That gives the best UX: Telegram sends the turn into the visible Codex Desktop thread, progress mirrors back into the topic, and you can watch the same work from the Mac or the phone.
+
+If you are leaving the Mac, or Desktop app-control is acting flaky, switch the bridge to the safer app-server path:
+
+```json
+{
+  "nativeIngressTransport": "app-server"
+}
+```
+
+That mode is less flashy. The visible Desktop UI may not jump in real time. But it is the right tool when the laptop is asleep-ish, the renderer is cranky, or you just want Telegram to keep moving without babysitting the app.
+
 ## Main Command
 
 Prepare is the setup preflight. It creates missing local config/admin env files, can create the admin Python venv and can guide credential/session setup.
