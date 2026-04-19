@@ -8,6 +8,21 @@
 4. Do not turn the working surface into an admin panel. Ops/admin noise must support the chat-like work experience, not dominate it.
 5. Telegram frontend copy should be English-first for open-source readiness. User prompts and final answers should keep the original thread language.
 
+## Telegram Platform Radar
+
+These are the useful Telegram platform leads found during the April 2026 API pass. Treat this as a ranked implementation queue, not a shiny-object shopping list.
+
+1. Private bot topics for Codex Desktop `Chats`. Base onboarding support exists, but the current live bot reports no private-topic/forum mode yet. Next step is to document and/or automate the BotFather Mini App setting, then run a live `Chats` smoke.
+2. `sendMessageDraft` for native "assistant is writing" UX. It streams animated drafts in private chats and private bot topics, so it is perfect for Codex `Chats`; it should not replace project-group progress bubbles unless Telegram opens drafts for supergroups.
+3. Managed bots and `t.me/newbot/...` links. This is the big onboarding simplifier: fewer BotFather gymnastics, cleaner token handoff, maybe a future manager-bot flow. Keep it local/user-owned; do not turn the project into a weird SaaS control plane.
+4. Official bot avatar API. Bot API now has `setMyProfilePhoto`, so replace the MTProto avatar workaround with the official path when practical.
+5. Native Telegram checklists for Codex Todo. Tempting, but `sendChecklist`/`editMessageChecklist` are business-account-shaped right now. Spike before committing; text Todo is still the sane default.
+6. Member/sender tags. Potentially useful for visual role clarity (`codex`, `owner`, `operator`) in groups, but low priority and easy to overdo.
+7. Reply/quote/entity polish. Keep using compact `date_time` status entities; validate whether `ReplyParameters` quotes can make imported history and surrogate user prompts cleaner.
+8. `copyMessages`/album preservation for history/backfill. Useful later if we want richer Telegram-native history import without rebuilding every media group by hand.
+9. Local Bot API server for large media. Not needed for the normal install, but worth remembering if attachments move beyond casual screenshots/docs.
+10. Skip for now: paid broadcast, message effects, quizzes/polls, channel direct-message suggested posts. Fun API confetti, wrong product surface.
+
 ## P1 - Bring Telegram UX Closer To Codex
 
 1. ~~In-place commentary/progress bubbles instead of silence followed by one final answer.~~
@@ -28,7 +43,7 @@
 2. ~~Structured event/audit log at `logs/bridge.events.ndjson`, sampled by `/health`.~~
 3. Event log retention and nicer operator views once the structured log gets real usage.
 4. Codex Hooks spike: evaluate experimental `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse` and `Stop` hooks for lifecycle logging, completion checks and local guardrails. Do not treat hooks as the main streaming transport yet: current tool hooks mostly see Bash and do not cover MCP, WebSearch or other non-shell tools.
-5. Telegram native streaming/draft spike: `sendMessageDraft` is interesting for private chats with topics, but it is not the project-group happy path because Bot API targets private chats for drafts.
+5. Telegram native streaming/draft spike: wire `sendMessageDraft` into private bot topics first, then decide whether it is good enough for Codex `Chats` before touching project groups.
 6. ~~Telegram cleanup helper base: Bot API `deleteMessages` batching for bot-deletable cleanup where possible.~~ Keep Telethon/user-session cleanup for older or non-bot-owned history.
 7. ~~Wire app-server stream probe results into the live bridge once the probe has stable evidence from real turns.~~ Keep tuning event coverage with live smokes; raw token-by-token Telegram streaming is intentionally not the goal yet.
 
@@ -43,7 +58,9 @@
 7. ~~Telegram `date_time` entity base for compact rate-limit resets in the pinned status bar.~~ Live visual polish can still tune the exact format after mobile review.
 8. ~~Bot profile/install polish base: default administrator rights, command menu, menu button and profile descriptions.~~ Cleaner topic/project icons still need a visual pass.
 9. ~~Add the bot direct chat to the `codex` Telegram folder during bootstrap when possible.~~
-10. ~~Bot avatar polish: bundled default avatar plus `bot:avatar` command using Telegram MTProto `photos.uploadProfilePhoto(bot=...)`.~~ Future pass can make project-specific icons if that becomes useful.
+10. ~~Bot avatar polish: bundled default avatar plus `bot:avatar` command using Telegram MTProto `photos.uploadProfilePhoto(bot=...)`.~~ Replace with official Bot API `setMyProfilePhoto` once the helper is wired.
+11. Private-topic enablement guide/check: detect `has_topics_enabled` from `getMe`, explain the BotFather Mini App switch plainly and retry Codex `Chats` topic bootstrap after it is enabled.
+12. Backfill/media polish: evaluate `copyMessages` for preserving Telegram albums/history shape where it beats rebuilding messages from scratch.
 
 ## P4 - UX Modes
 

@@ -59,10 +59,13 @@ They are not the streaming backbone for this project yet. Current tool hooks mai
 Telegram also shipped a few useful things recently:
 
 - `deleteMessages` can delete 1-100 message ids in one call, within normal Bot API deletion limits. This can make cleanup less slow and less fragile for bot-owned or admin-deletable messages.
-- `sendMessageDraft` streams a partial message while it is being generated, but the method targets private chats. Nice for a future private-topic mode, not a replacement for progress bubbles in project supergroups.
-- Private chats can now have topics for bots. Interesting, but it fights our current product shape where one group maps to one Codex project.
+- `sendMessageDraft` streams a partial message while it is being generated. The useful product target is Codex Desktop `Chats`, because drafts target private chats/private topics; it is not a replacement for progress bubbles in project supergroups.
+- Private chats can now have topics for bots. This no longer fights our product shape: project groups still map to Codex projects, while bot-private topics can map to Codex Desktop `Chats`. Current live blocker is enabling private-topic mode for the bot.
 - Managed Bots in Bot API 9.6 are the big onboarding lead. Telegram now has `request_managed_bot`, `getManagedBotToken`, `replaceManagedBotToken` and `https://t.me/newbot/{manager_bot_username}/...` links. If this is usable enough, the install flow can stop saying "go wrestle BotFather" and instead guide the user through a tighter manager-bot flow.
+- Bot API profile photo support means the avatar path can move from the MTProto `photos.uploadProfilePhoto(bot=...)` workaround to official `setMyProfilePhoto`.
 - Native Telegram Checklists look tempting for Codex Todo, but sending/editing checklists is currently business-account-shaped. Worth a spike, not a default.
+- Sender/member tags may help role clarity later, but they are easy to overuse. Keep the working surface calm.
+- `copyMessages` is worth keeping in the back pocket for richer history/backfill and album preservation.
 - Inline keyboards are still the cleanest way to keep ops actions out of working topics: preview, apply, cleanup, smoke, retry, open runbook.
 
 The first Bot API helper layer now covers `deleteMessages`, private-chat `sendMessageDraft`, inline-keyboard markup on messages, and bot profile/admin-rights calls. That is deliberately only plumbing; the product decision is still "use these where they keep the working surface clean."
@@ -78,8 +81,10 @@ Next implementation step:
 - Build an app-server stream probe, not a full rewrite.
 - Feed the probe into the existing `outbound-progress`/`progress-bubble` shapes.
 - Keep app-control send-only as the current happy path until the probe proves app-server streaming is stable.
-- Do not chase `sendMessageDraft` for project topics unless Telegram expands it beyond private chats.
-- Add a managed-bot onboarding spike after streaming, because that could remove one of the ugliest install steps.
+- Try `sendMessageDraft` only in the bot direct chat/private-topic surface first.
+- Add a managed-bot onboarding spike soon, because that could remove one of the ugliest install steps.
+- Move avatar polish to official Bot API `setMyProfilePhoto`.
+- Validate private bot topics end-to-end before making Codex Desktop `Chats` part of the public install promise.
 
 The first probe now lives in:
 
