@@ -175,6 +175,10 @@ These are local runtime files and should not be committed:
 - [lib/codex-native.mjs](lib/codex-native.mjs) - Codex send wrapper
 - [lib/voice-transcription.mjs](lib/voice-transcription.mjs) - Telegram voice/audio STT
 - [lib/outbound-progress.mjs](lib/outbound-progress.mjs) - Telegram progress bubble content
+- [lib/outbound-progress-message.mjs](lib/outbound-progress-message.mjs) - progress bubble send/edit state
+- [lib/app-server-stream-runner.mjs](lib/app-server-stream-runner.mjs) - optional app-server event stream bridge
+- [lib/status-bar-runner.mjs](lib/status-bar-runner.mjs) - pinned topic status refresh loop
+- [lib/typing-heartbeat-runner.mjs](lib/typing-heartbeat-runner.mjs) - native Telegram "typing" loop for active turns
 - [lib/state-doctor.mjs](lib/state-doctor.mjs) - local state/index drift inspection and safe repairs
 - [scripts/onboard.mjs](scripts/onboard.mjs) - onboarding scan/plan/wizard
 - [scripts/state_doctor.mjs](scripts/state_doctor.mjs) - CLI for local state repair previews

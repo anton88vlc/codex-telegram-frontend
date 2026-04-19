@@ -19,9 +19,12 @@ Codex outbound:
 
 1. `bridge.mjs` watches Codex rollout files and app-server stream events.
 2. `lib/thread-rollout.mjs` parses user/final/commentary/plan chunks.
-3. `lib/outbound-progress.mjs` builds the live progress bubble.
-4. `lib/worktree-summary.mjs` adds changed-file context.
-5. `lib/telegram.mjs` sends or edits Telegram messages.
+3. `lib/outbound-mirror-messages.mjs` formats mirrored user/assistant messages.
+4. `lib/outbound-progress.mjs` builds progress text, while `lib/outbound-progress-message.mjs` owns send/edit state.
+5. `lib/worktree-summary.mjs` adds changed-file context.
+6. `lib/app-server-stream-runner.mjs` coalesces optional app-server events into the same progress path.
+7. `lib/status-bar-runner.mjs` and `lib/typing-heartbeat-runner.mjs` keep pinned status and native typing hints current.
+8. `lib/telegram.mjs` sends or edits Telegram messages.
 
 ## Current Module Shape
 
@@ -34,8 +37,15 @@ Codex outbound:
 - `lib/native-transport-state.mjs` - app-control cooldown and fallback state.
 - `lib/private-topic-bindings.mjs` - private bot topics mapped to Codex Desktop `Chats`.
 - `lib/project-sync.mjs` - project topic sync planning.
+- `lib/outbound-binding-eligibility.mjs` - shared checks for mirror/status/typing eligible bindings.
+- `lib/outbound-mirror-messages.mjs` - pure text shaping for Codex Desktop-originated mirrors.
 - `lib/outbound-progress.mjs` - progress bubble text.
+- `lib/outbound-progress-message.mjs` - progress bubble send/edit/finalization.
+- `lib/app-server-stream-runner.mjs` - optional app-server stream subscription and progress coalescing.
 - `lib/status-bar.mjs` - compact pinned topic status.
+- `lib/status-bar-runner.mjs` - status bar reserve/refresh orchestration.
+- `lib/typing-heartbeat.mjs` - raw Telegram typing heartbeat timer.
+- `lib/typing-heartbeat-runner.mjs` - binding-aware typing heartbeat orchestration.
 - `lib/runtime-health.mjs` and `lib/state-doctor.mjs` - diagnostics and safe repair planning.
 
 ## Refactor Direction
@@ -50,9 +60,9 @@ Do not build a giant framework around this. The right move is boring extraction:
 
 Good next slices:
 
-- `lib/bridge-bindings.mjs` for binding payloads, attach/detach formatting and validation.
-- `lib/outbound-mirror.mjs` for rollout mirror selection, suppression and final/progress message sending.
-- `lib/status-bar-runner.mjs` for reserve/refresh status-bar orchestration.
+- `lib/outbound-mirror-runner.mjs` for rollout mirror selection, suppression and final/progress message sending.
+- `lib/command-handlers.mjs` for `/help`, `/status`, `/health`, `/settings`, `/project-status` and `/sync-project` routing.
+- `lib/inbound-turn-runner.mjs` for the safer half of `handlePlainText`: prompt preparation, surrogate bubbles and native send result handling.
 - `lib/project-sync-runner.mjs` for applying sync plans through Telegram admin calls.
 
 Bad next slices:
