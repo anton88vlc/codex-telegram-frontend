@@ -20,6 +20,14 @@ The bridge is only the Telegram frontend. `Codex.app` remains the engine and sou
 
 Keep `Codex.app` open for real work. Prefer `app-control` on `http://127.0.0.1:9222`; the app-server fallback is useful resilience, not the happy path.
 
+Start the happy path with:
+
+```bash
+npm run codex:launch
+```
+
+If Codex is already open without the debug port, close it first. The launcher does not kill active Codex windows. Good tools do not yoink the steering wheel.
+
 ## Install Assumptions
 
 The current ops path assumes macOS. There is no secret cloud brain hiding behind this:
@@ -92,7 +100,7 @@ npm run once
 Do this in order. Random poking makes the bridge look haunted when it is usually just missing one boring prerequisite.
 
 1. Make sure `Codex.app` is open.
-2. Prefer launching it with `--remote-debugging-port=9222`; otherwise the bridge can still try the local app-server fallback.
+2. Prefer `npm run codex:launch`; otherwise the bridge can still try the local app-server fallback.
 3. Run `npm run self-check`.
 4. Check `logs/bridge.stderr.log`.
 5. Check whether `state/state.json -> lastUpdateId` moves.

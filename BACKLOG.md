@@ -41,3 +41,4 @@
 5. Codex task plans are mirrored into Telegram progress bubbles as compact `Todo` blocks below live commentary updates.
 6. App-control send-only mode is the default happy path: `threads.send_message` only, no renderer `threads.read` polling, with rollout mirror as the source for Telegram progress/final.
 7. Compact changed-files summary in Telegram progress bubbles, sourced from the thread git worktree instead of renderer state, with turn-baseline commits plus the current dirty worktree.
+8. `npm run codex:launch` starts the Codex Desktop happy path with the app-control debug port, and onboarding doctor now points users there instead of leaving them with a magic manual command.

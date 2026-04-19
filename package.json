@@ -17,7 +17,8 @@
     "onboard:plan": "node scripts/onboard.mjs plan",
     "onboard:rehearsal": "node scripts/onboard.mjs plan --rehearsal",
     "onboard:wizard": "node scripts/onboard.mjs wizard",
-    "onboard:wizard:rehearsal": "node scripts/onboard.mjs wizard --rehearsal"
+    "onboard:wizard:rehearsal": "node scripts/onboard.mjs wizard --rehearsal",
+    "codex:launch": "node scripts/launch_codex_app_control.mjs"
   },
   "engines": {
     "node": ">=20.0.0",

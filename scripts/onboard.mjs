@@ -18,6 +18,7 @@ import {
   formatBootstrapPlanSummary,
   formatScanSummary,
 } from "../lib/onboarding-plan.mjs";
+import { DEFAULT_APP_CONTROL_BASE_URL, checkAppControl } from "../lib/app-control-launcher.mjs";
 import { listProjectThreads, listRecentProjects, parsePositiveInt } from "../lib/thread-db.mjs";
 
 const PROJECT_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -31,7 +32,7 @@ const DEFAULT_ADMIN_ENV_PATH = path.join(PROJECT_ROOT, "admin", ".env");
 const DEFAULT_ADMIN_SESSION_PATH = path.join(PROJECT_ROOT, "state", "telegram_user.session");
 const DEFAULT_BRIDGE_STATE_PATH = path.join(PROJECT_ROOT, "state", "state.json");
 const DEFAULT_BOT_TOKEN_KEYCHAIN_SERVICE = "codex-telegram-bridge-bot-token";
-const DEFAULT_NATIVE_DEBUG_BASE_URL = "http://127.0.0.1:9222";
+const DEFAULT_NATIVE_DEBUG_BASE_URL = DEFAULT_APP_CONTROL_BASE_URL;
 const execFileAsync = promisify(execFile);
 
 function fail(message) {
@@ -214,9 +215,11 @@ function renderHelp() {
     "  node scripts/onboard.mjs plan --project /path/to/repo [--project /path/to/other] [--threads-per-project 3] [--group-prefix 'Codex - '] [--folder-title codex] [--topic-display tabs|list] [--write]",
     "  node scripts/onboard.mjs plan --rehearsal --project /path/to/repo [--write]",
     "  node scripts/onboard.mjs wizard [--rehearsal] [--write] [--apply] [--cleanup-dry-run|--cleanup] [--backfill-dry-run|--backfill] [--smoke]",
+    "  npm run codex:launch",
     "",
     "Notes:",
     "  doctor checks local prerequisites before the wizard gets creative.",
+    "  codex:launch starts Codex.app with the app-control debug port when it is not already open.",
     "  scan is read-only and shows candidate Codex projects/threads.",
     "  plan is a preview by default; add --write to update admin/bootstrap-plan.json.",
     "  wizard is interactive by default and keeps Telegram side effects behind explicit confirmation or flags.",
@@ -255,17 +258,6 @@ async function keychainHasSecret(serviceName) {
       "-w",
     ]);
     return Boolean(String(stdout ?? "").trim());
-  } catch {
-    return false;
-  }
-}
-
-async function appControlReachable(baseUrl = DEFAULT_NATIVE_DEBUG_BASE_URL) {
-  try {
-    const response = await fetch(`${String(baseUrl).replace(/\/+$/, "")}/json/list`, {
-      signal: AbortSignal.timeout(1000),
-    });
-    return response.ok;
   } catch {
     return false;
   }
@@ -349,7 +341,7 @@ async function buildOnboardingChecks(args) {
   const keychainService = config.botTokenKeychainService || DEFAULT_BOT_TOKEN_KEYCHAIN_SERVICE;
   const nativeDebugBaseUrl = config.nativeDebugBaseUrl || DEFAULT_NATIVE_DEBUG_BASE_URL;
   const configHasBotToken = Boolean(process.env[botTokenEnv] || config.botToken);
-  const [configOk, envOk, helperOk, adminPythonOk, sessionOk, threadsDbOk, codexAppOk, botTokenOk, appControlOk] =
+  const [configOk, envOk, helperOk, adminPythonOk, sessionOk, threadsDbOk, codexAppOk, botTokenOk, appControl] =
     await Promise.all([
       pathExists(args.configPath),
       pathExists(args.adminEnvPath),
@@ -359,8 +351,9 @@ async function buildOnboardingChecks(args) {
       pathExists(args.threadsDbPath),
       pathExists("/Applications/Codex.app/Contents/MacOS/Codex"),
       configHasBotToken ? Promise.resolve(true) : keychainHasSecret(keychainService),
-      appControlReachable(nativeDebugBaseUrl),
+      checkAppControl(nativeDebugBaseUrl),
     ]);
+  const appControlOk = appControl.ok;
   return [
     makeCheck("macOS host", process.platform === "darwin", process.platform),
     makeCheck("Codex.app", codexAppOk, "/Applications/Codex.app/Contents/MacOS/Codex"),
@@ -371,7 +364,12 @@ async function buildOnboardingChecks(args) {
     makeCheck("authorized Telegram user session", sessionOk, args.adminSessionPath),
     makeCheck("local Codex threads DB", threadsDbOk, args.threadsDbPath),
     makeCheck("Telegram bot token", botTokenOk, `${botTokenEnv}, config, or Keychain service ${keychainService}`),
-    makeCheck("app-control debug port", appControlOk, nativeDebugBaseUrl, { required: false }),
+    makeCheck(
+      "app-control debug port",
+      appControlOk,
+      appControlOk ? nativeDebugBaseUrl : `${nativeDebugBaseUrl}; run npm run codex:launch`,
+      { required: false },
+    ),
   ];
 }
 

@@ -86,7 +86,7 @@ async function getPageTarget(debugBaseUrl) {
 
   const pageTargets = targets.filter((target) => target?.type === "page" && target?.webSocketDebuggerUrl);
   if (pageTargets.length === 0) {
-    throw new Error(`no page targets found at ${baseUrl}; launch Codex with --remote-debugging-port`);
+    throw new Error(`no page targets found at ${baseUrl}; run npm run codex:launch`);
   }
 
   const codexPage =

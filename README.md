@@ -17,7 +17,7 @@ This is not "one more bot". The intended shape is a clean bridge:
 Frontend, not a standalone Codex brain. The Mac still does the real work.
 
 - For real work in v1, keep `Codex.app` open on the Mac.
-- Preferred transport is `app-control` at `http://127.0.0.1:9222`, started with `--remote-debugging-port=9222`.
+- Preferred transport is `app-control` at `http://127.0.0.1:9222`, started with `npm run codex:launch` or `--remote-debugging-port=9222`.
 - If the debug port is unavailable, the bridge can use local `app-server` fallback, but that is a degraded path: useful for emergency sends, weaker for UI-aware mirroring, progress and diagnostics.
 - If `Codex.app` is closed or crashed, Telegram can still receive bot/admin commands, but real Codex turns will not finish normally. The bridge should say that clearly, not cosplay as a backend.
 
@@ -89,6 +89,7 @@ Docs should sound like a competent teammate at 2am: direct, practical, and a lit
 - [lib/codex-native.mjs](lib/codex-native.mjs) - native Codex send wrapper
 - [scripts/send_via_app_control.js](scripts/send_via_app_control.js) - renderer-aware send through Codex app-control
 - [scripts/send_via_app_server.js](scripts/send_via_app_server.js) - fallback transport through local Codex app-server
+- [scripts/launch_codex_app_control.mjs](scripts/launch_codex_app_control.mjs) - safe launcher for Codex.app with the app-control debug port
 - [scripts/onboard.mjs](scripts/onboard.mjs) - onboarding scan/plan/wizard generator from the local Codex DB
 - [admin/telegram_user_admin.py](admin/telegram_user_admin.py) - user-side bootstrap/admin helper for Telegram groups and topics
 - [AGENTS.md](AGENTS.md) - local notes for future Codex agents working in this repo
@@ -130,8 +131,10 @@ npm run onboard:doctor
 Launch `Codex.app` with a debug port:
 
 ```bash
-/Applications/Codex.app/Contents/MacOS/Codex --remote-debugging-port=9222
+npm run codex:launch
 ```
+
+If `Codex.app` is already open without the debug port, close it and run the command again. The helper refuses to kill the app automatically; that is deliberate.
 
 Start the bridge:
 

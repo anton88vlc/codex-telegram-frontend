@@ -19,10 +19,18 @@ Current v1 is macOS-first. It can run on another properly prepared Mac. Linux an
 For live work and onboarding smoke tests, `Codex.app` should be open. The best path is launching it with:
 
 ```bash
+npm run codex:launch
+```
+
+That exposes `app-control` on `http://127.0.0.1:9222`. Under the hood it runs Codex with:
+
+```bash
 /Applications/Codex.app/Contents/MacOS/Codex --remote-debugging-port=9222
 ```
 
-That exposes `app-control` on `http://127.0.0.1:9222`. If it is unavailable, the bridge can fall back to the local app-server, but fallback is weaker and should be treated as degraded mode, not the normal product experience.
+If `Codex.app` is already open without that port, close it and rerun `npm run codex:launch`. The helper will not kill it for you. Annoying, but safer than a tool randomly murdering the user's active work.
+
+If app-control is unavailable, the bridge can fall back to the local app-server, but fallback is weaker and should be treated as degraded mode, not the normal product experience.
 
 ## Preflight Checklist
 
