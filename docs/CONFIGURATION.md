@@ -84,6 +84,8 @@ Working commands today:
 - `/sync-project [count]` - applies that working-set sync.
 - `/mode native` - pins the binding transport to native. It is the only supported v1 mode.
 
+Telegram's command menu prefers underscores, so the bridge also accepts `/attach_latest`, `/project_status`, `/sync_project` and `/mode_native`. The old hyphen commands still work; the menu-safe aliases are just less annoying in real Telegram clients.
+
 What commands mutate:
 
 - bindings in `state/state.json`

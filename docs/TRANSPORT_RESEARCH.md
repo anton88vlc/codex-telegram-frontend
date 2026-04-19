@@ -67,6 +67,8 @@ Telegram also shipped a few useful things recently:
 
 The first Bot API helper layer now covers `deleteMessages`, private-chat `sendMessageDraft`, inline-keyboard markup on messages, and bot profile/admin-rights calls. That is deliberately only plumbing; the product decision is still "use these where they keep the working surface clean."
 
+The first install polish path now exposes those profile/admin-rights helpers through `npm run bot:polish`. It also uses underscore command aliases (`/sync_project`, `/project_status`) because Telegram's command menu is not fond of our nicer-looking hyphen commands. Tiny detail, real UX.
+
 ## Recommendation
 
 Next implementation step:

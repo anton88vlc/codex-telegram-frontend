@@ -39,6 +39,8 @@ What you may still need to do manually:
 
 After that, the wizard can create/reuse the Telegram folder, project groups, thread topics, bindings, status bars, clean history backfill and smoke checks. BotFather has no proper public API, so pretending the bot itself can be created magically would be cute and false.
 
+Optional but nice: once the token is wired, Codex can polish the bot command menu, short description, menu button and suggested admin rights with `npm run bot:polish -- --apply`. Dry-run is the default, because Telegram setup commands should not surprise anyone.
+
 ## Runtime Boundary
 
 Frontend, not a standalone Codex brain. The Mac still does the real work.
@@ -71,7 +73,7 @@ Docs should sound like a competent teammate at 2am: direct, practical, and a lit
 
 - Telegram Bot API long polling
 - direct chats and forum topics
-- `/attach`, `/attach-latest`, `/detach`, `/status`, `/health`, `/settings`, `/project-status`, `/sync-project`, `/mode native`
+- `/attach`, `/attach-latest`, `/detach`, `/status`, `/health`, `/settings`, `/project-status`, `/sync-project`, `/mode native`, plus Telegram-menu-safe aliases like `/attach_latest`, `/project_status`, `/sync_project`, `/mode_native`
 - native send through renderer-aware `app-control -> threads.send_message`, with local `app-server` fallback when Codex is not launched with a debug port
 - app-control send-only mode by default: Desktop accepts the turn, then Telegram gets progress/final from the rollout mirror without heavy renderer polling
 - clear degraded/offline UX when `Codex.app` is closed, app-control is down, fallback is used, or both transports fail
@@ -85,6 +87,7 @@ Docs should sound like a competent teammate at 2am: direct, practical, and a lit
 - mention-aware ingress (`@bot your request`) when group privacy blocks plain text
 - `sync-project dry-run` and CLI `--self-check`
 - npm scripts for running, self-checks, tests and guided onboarding
+- `bot:polish` for Telegram command menu, profile text, menu button and suggested bot admin rights
 - `onboard:prepare` creates missing local config/admin env files and can set up the admin Python venv before the wizard runs
 - onboarding wizard with interactive project/thread selection, checklist, reuse preview, plan write, optional bootstrap, clean backfill dry-run/send and Telegram smoke
 - `/project-status` shows desired thread column, active topics, parked sync topics and sync preview
@@ -175,6 +178,15 @@ One-shot self-check:
 ```bash
 npm run self-check
 ```
+
+Polish the Telegram bot profile and command menu:
+
+```bash
+npm run bot:polish
+npm run bot:polish -- --apply
+```
+
+The first command previews the Bot API calls. The second applies them.
 
 Local checks before committing:
 

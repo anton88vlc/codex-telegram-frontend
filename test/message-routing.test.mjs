@@ -14,6 +14,25 @@ test("parseCommand strips bot target from commands", () => {
   });
 });
 
+test("parseCommand maps Telegram-menu-safe aliases to canonical commands", () => {
+  assert.deepEqual(parseCommand("/sync_project 4 dry-run"), {
+    command: "/sync-project",
+    args: ["4", "dry-run"],
+  });
+  assert.deepEqual(parseCommand("/project_status"), {
+    command: "/project-status",
+    args: [],
+  });
+  assert.deepEqual(parseCommand("/attach_latest"), {
+    command: "/attach-latest",
+    args: [],
+  });
+  assert.deepEqual(parseCommand("/mode_native"), {
+    command: "/mode",
+    args: ["native"],
+  });
+});
+
 test("stripLeadingBotMention removes a leading bot mention", () => {
   assert.equal(
     stripLeadingBotMention("@examplebot проверь health", "examplebot"),

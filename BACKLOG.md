@@ -41,7 +41,7 @@
 5. Managed-bot onboarding spike: Bot API 9.6 added managed bots and `t.me/newbot/...` links. Investigate whether a manager bot can make first install less BotFather-heavy without adding a creepy SaaS control plane.
 6. Native Telegram Checklist spike for Codex Todo blocks. Likely not default yet because Bot API checklist sending is business-account-shaped, but it is worth validating before we keep hand-rendering Todo forever.
 7. Telegram `date_time` entity spike for compact rate-limit resets in the pinned status bar.
-8. Bot profile/install polish: default administrator rights, menu button, short description and cleaner topic/project icons.
+8. ~~Bot profile/install polish base: default administrator rights, command menu, menu button and profile descriptions.~~ Cleaner topic/project icons still need a visual pass.
 
 ## P4 - UX Modes
 
@@ -70,3 +70,4 @@
 17. Transport research spike: official Codex app-server, hooks and Telegram Bot API docs reviewed; app-server v2 events are the strongest next path, managed bots are the biggest onboarding lead, and Telegram drafts/checklists are useful but constrained.
 18. App-server stream probe base: CLI probe plus tested event normalization for assistant deltas, reasoning, Todo, diffs, token/rate updates and tool progress.
 19. Telegram Bot API helper base for cleanup batches, private-chat drafts, inline keyboard markup and bot profile/admin-rights polish.
+20. Bot install polish script: dry-run/apply flow for command menu, profile text, menu button and suggested admin rights, plus Telegram-menu-safe command aliases.

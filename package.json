@@ -19,6 +19,7 @@
     "onboard:rehearsal": "node scripts/onboard.mjs plan --rehearsal",
     "onboard:wizard": "node scripts/onboard.mjs wizard",
     "onboard:wizard:rehearsal": "node scripts/onboard.mjs wizard --rehearsal",
+    "bot:polish": "node scripts/configure_bot_profile.mjs",
     "app-server:probe": "node scripts/probe_app_server_stream.mjs",
     "codex:launch": "node scripts/launch_codex_app_control.mjs"
   },
