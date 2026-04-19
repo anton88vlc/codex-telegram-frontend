@@ -10,15 +10,22 @@
 
 ## P1 - Bring Telegram UX Closer To Codex
 
-1. True streaming/commentary transport instead of timer-based progress bubbles.
-2. Cleaner split between ops/admin quiet path and working replies, possibly with a dedicated ops topic or configurable routing.
-3. Richer rendering: blockquotes, tables, cleaner local file links.
-4. Onboarding wizard polish: safer clean rebuild flow, restore/reuse existing Telegram surfaces, clearer BotFather/token guidance and nicer selectors.
+1. ~~In-place commentary/progress bubbles instead of silence followed by one final answer.~~
+2. True token streaming from Codex UI. Current progress is honest rollout/commentary mirroring, not raw token streaming.
+3. ~~Basic ops/admin quiet path: help, health, settings, project-status and sync previews can route long replies to direct chat.~~
+4. Dedicated ops topic or configurable ops routing, so the working topics stay chat-like even under heavier admin use.
+5. ~~Telegram HTML rendering for bold, italic, code, code fences, lists, task lists, links, blockquotes, spoilers and plain fallback.~~
+6. Richer rendering polish: Markdown tables and cleaner local file links.
+7. ~~Onboarding wizard base: doctor, project/thread selection, plan write, optional bootstrap, clean rebuild preview, backfill and smoke.~~
+8. Onboarding wizard polish: safer restore/reuse flows, clearer BotFather/token guidance and nicer selectors.
+9. Agent-led install flow: the public docs should let a new user open Codex in this repo, paste one clear install prompt, and let Codex run doctor/setup/wizard/bootstrap/backfill/smoke while asking only for unavoidable manual Telegram steps like BotFather token, Telegram API credentials and user-session login.
 
 ## P2 - Transport And Observability
 
 1. Separate streaming mode on top of app-control if intermediate events can be extracted.
-2. Event log retention and nicer operator views once the structured log gets real usage.
+2. ~~Structured event/audit log at `logs/bridge.events.ndjson`, sampled by `/health`.~~
+3. Event log retention and nicer operator views once the structured log gets real usage.
+4. Codex Hooks spike: evaluate experimental `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse` and `Stop` hooks as a cleaner source for lifecycle events, completion checks, auto-continue and Telegram progress updates. This should complement app-control send-only, not replace it, unless the local proof says otherwise.
 
 ## P3 - Product Surface
 
@@ -29,7 +36,8 @@
 
 ## P4 - UX Modes
 
-1. Split Telegram UX into two modes: `chat-like` for normal work and `ops-like` for service commands, so the system does not look like an admin panel after P1.
+1. Split Telegram UX into two explicit modes: `chat-like` for normal work and `ops-like` for service commands, so the system does not look like an admin panel after P1.
+2. ~~First quiet-path slice: noisy ops replies can go to direct chat with a short trace in the topic.~~
 
 ## Done
 
@@ -43,3 +51,5 @@
 8. `npm run codex:launch` starts the Codex Desktop happy path with the app-control debug port, and onboarding doctor now points users there instead of leaving them with a magic manual command.
 9. Structured event/audit log at `logs/bridge.events.ndjson`; `/health` samples that instead of treating launchd stderr as the product observability layer.
 10. Clean history import defaults moved into config/plan: message tail size, optional user prompt cap, assistant phases and heartbeat inclusion.
+11. Telegram HTML rendering layer for common Markdown and safe plain-text fallback.
+12. Onboarding wizard base flow with doctor, plan, optional bootstrap, cleanup/backfill preview and smoke.
