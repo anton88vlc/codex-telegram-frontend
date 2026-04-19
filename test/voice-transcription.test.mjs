@@ -111,8 +111,9 @@ test("formats transcript bubble and Codex prompt", () => {
   ];
 
   const bubble = formatVoiceTranscriptBubble(transcripts);
-  assert.match(bubble, /^Voice transcript/);
-  assert.match(bubble, /voice, 8s, lang ru/);
+  assert.equal(bubble, "_«Сделай короткий статус проекта.»_");
+  assert.doesNotMatch(bubble, /Voice transcript/);
+  assert.doesNotMatch(bubble, /voice, 8s/);
   assert.match(bubble, /Сделай короткий статус проекта\./);
 
   const prompt = formatVoiceTranscriptPrompt({

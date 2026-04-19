@@ -1947,7 +1947,7 @@ async function handlePlainText({
         getFile,
         downloadFile: downloadTelegramFile,
       });
-      const transcriptSent = await replyPlain(config.botToken, message, formatVoiceTranscriptBubble(voiceTranscripts));
+      const transcriptSent = await reply(config.botToken, message, formatVoiceTranscriptBubble(voiceTranscripts));
       const transcriptMessageId = transcriptSent[0]?.message_id ?? null;
       if (Number.isInteger(transcriptMessageId)) {
         replyMessage = { ...message, message_id: transcriptMessageId };
