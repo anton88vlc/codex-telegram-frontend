@@ -78,6 +78,15 @@ import {
   stopTypingHeartbeats,
 } from "./lib/typing-heartbeat.mjs";
 import {
+  buildTargetFromBinding,
+  buildTargetFromMessage,
+  formatUnboundGroupFallbackBubble,
+  isPrivateTopicMessage,
+  isTopicMessage,
+  reply,
+  replyPlain,
+} from "./lib/telegram-targets.mjs";
+import {
   chooseVoiceTranscriptionProvider,
   collectTelegramVoiceRefs,
   formatVoiceTranscriptBubble,
@@ -109,7 +118,6 @@ import {
   reopenForumTopic,
   sendMessage,
   sendRichTextChunks,
-  sendTextChunks,
   sendTyping,
 } from "./lib/telegram.mjs";
 
@@ -167,67 +175,6 @@ function parseArgs(argv) {
     }
   }
   return out;
-}
-
-function buildTargetFromMessage(message) {
-  return {
-    chatId: message.chat.id,
-    messageThreadId: message.message_thread_id ?? null,
-  };
-}
-
-function buildTargetFromBinding(binding) {
-  return {
-    chatId: binding.chatId,
-    messageThreadId: binding.messageThreadId ?? null,
-  };
-}
-
-function formatTelegramSenderName(message) {
-  const firstName = normalizeText(message?.from?.first_name);
-  const lastName = normalizeText(message?.from?.last_name);
-  const fullName = normalizeText([firstName, lastName].filter(Boolean).join(" "));
-  if (fullName) {
-    return fullName;
-  }
-  const username = normalizeText(message?.from?.username).replace(/^@+/, "");
-  return username ? `@${username}` : "Telegram user";
-}
-
-function truncatePreview(text, limit = 1200) {
-  const normalized = normalizeText(text).replace(/\r\n/g, "\n");
-  if (normalized.length <= limit) {
-    return normalized;
-  }
-  return `${normalized.slice(0, Math.max(0, limit - 1)).trimEnd()}…`;
-}
-
-function quoteMarkdownBlock(text) {
-  return String(text ?? "")
-    .replace(/\r\n/g, "\n")
-    .split("\n")
-    .map((line) => `> ${line}`)
-    .join("\n");
-}
-
-function formatUnboundGroupFallbackBubble({ message, promptText, attachmentRefs = [], voiceRefs = [] }) {
-  const sender = formatTelegramSenderName(message);
-  const source = message?.message_thread_id != null ? "General / unbound topic" : "group surface";
-  const lines = [`**${sender} via ${source}**`];
-  const preview = truncatePreview(promptText);
-  if (preview) {
-    lines.push("", quoteMarkdownBlock(preview));
-  }
-  if (attachmentRefs.length) {
-    lines.push("", `_${attachmentRefs.length} attachment${attachmentRefs.length === 1 ? "" : "s"} moved with this prompt._`);
-  }
-  if (voiceRefs.length) {
-    lines.push("", `_${voiceRefs.length} voice note${voiceRefs.length === 1 ? "" : "s"} moved with this prompt._`);
-  }
-  if (!preview && !attachmentRefs.length && !voiceRefs.length) {
-    lines.push("", "_Moved from an unbound group surface._");
-  }
-  return lines.join("\n");
 }
 
 async function rerouteUnboundGroupMessageToFallbackTopic({ config, state, message, promptText, attachmentRefs, voiceRefs }) {
@@ -352,22 +299,6 @@ function isAuthorized(config, message) {
     return false;
   }
   return true;
-}
-
-async function reply(token, message, text) {
-  return sendRichTextChunks(token, buildTargetFromMessage(message), text, message.message_id);
-}
-
-async function replyPlain(token, message, text) {
-  return sendTextChunks(token, buildTargetFromMessage(message), text, message.message_id);
-}
-
-function isTopicMessage(message) {
-  return message.message_thread_id != null && (message.chat.type === "group" || message.chat.type === "supergroup");
-}
-
-function isPrivateTopicMessage(message) {
-  return message?.message_thread_id != null && message?.chat?.type === "private";
 }
 
 function getPrivateTopicTitleStore(state) {
