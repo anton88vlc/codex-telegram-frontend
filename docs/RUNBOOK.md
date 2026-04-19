@@ -114,14 +114,19 @@ If `self-check` says `app-control: fetch failed`, but `app-server: reachable`, t
 
 Photos and documents from a bound topic are downloaded by the bot into `state/attachments/`, then sent to Codex as local file paths inside the prompt. That is intentionally boring and inspectable: no hidden cloud storage, no mystery media relay.
 
+Voice/audio is different on purpose. The bridge downloads the Telegram audio bytes, sends them to STT, posts a visible transcript bubble in the topic, then sends that transcript to Codex. For built-in Deepgram/OpenAI providers it does not keep the audio file on disk. The optional `command` provider uses a temp file and deletes it after the command returns unless `voiceTranscriptionKeepFiles` is enabled.
+
 Current boundary:
 
 - photos and documents: supported
 - image documents: treated as images
-- voice/audio/video/stickers: not yet
+- voice/audio: transcribed first, then sent to Codex as text
+- video/stickers: not yet
 - default limit: 10 files per message/media album, 20 MB per file
+- voice default limit: 1 voice/audio item, 25 MB per item
 
 If an attachment fails, check `logs/bridge.events.ndjson` for `telegram_attachment_error`. The file itself is runtime state, so do not commit it.
+If transcription fails, check `telegram_voice_transcription_error` in the same event log. In normal UX the user only sees a short "could not transcribe" note; provider details stay in logs where they belong.
 It means the bridge is using fallback transport and some UI-aware behavior may be weaker.
 Successful fallback replies include a short transport note in Telegram, so the user knows the request did not use the happy path.
 If both paths fail, Telegram shows a short recovery hint: open `Codex.app`, preferably with `--remote-debugging-port=9222`, then retry.

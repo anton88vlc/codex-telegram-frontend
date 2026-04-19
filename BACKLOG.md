@@ -35,7 +35,7 @@
 ## P3 - Product Surface
 
 1. ~~Attachments and images base.~~ Telegram photos/documents are downloaded into ignored local storage and forwarded to Codex as local file paths. Native binary attachment transport can still get better later.
-2. Voice / audio ingress.
+2. ~~Voice / audio ingress base.~~ Telegram voice/audio is transcribed first, shown as a transcript bubble, then forwarded to Codex as text. Next polish is provider UX, live partial transcripts and confidence display.
 3. Auto-create topic rules for fresh threads without turning Telegram into a dump.
 4. Heartbeat transport as an alternative mode for UI-visible jobs.
 5. Managed-bot onboarding spike: Bot API 9.6 added managed bots and `t.me/newbot/...` links. Investigate whether a manager bot can make first install less BotFather-heavy without adding a creepy SaaS control plane.

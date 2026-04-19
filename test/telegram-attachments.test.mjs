@@ -124,9 +124,11 @@ test("groupTelegramMediaGroupUpdates turns an album batch into one processable i
   assert.equal(grouped[1].message.text, "plain");
 });
 
-test("hasUnsupportedTelegramMedia catches voice and video messages", () => {
-  assert.equal(hasUnsupportedTelegramMedia({ voice: { file_id: "v" } }), true);
+test("hasUnsupportedTelegramMedia leaves voice to the transcription layer", () => {
+  assert.equal(hasUnsupportedTelegramMedia({ voice: { file_id: "v" } }), false);
+  assert.equal(hasUnsupportedTelegramMedia({ audio: { file_id: "a" } }), false);
   assert.equal(hasUnsupportedTelegramMedia({ video: { file_id: "v" } }), true);
+  assert.equal(hasUnsupportedTelegramMedia({ sticker: { file_id: "s" } }), true);
   assert.equal(hasUnsupportedTelegramMedia({ document: { file_id: "d" } }), false);
 });
 

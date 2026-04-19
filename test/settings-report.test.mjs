@@ -38,6 +38,13 @@ test("buildSettingsReport shows safe runtime settings without secrets", () => {
       attachmentStorageDir: "state/attachments",
       attachmentMaxBytes: 20 * 1024 * 1024,
       attachmentMaxCount: 10,
+      voiceTranscriptionEnabled: true,
+      voiceTranscriptionProvider: "auto",
+      voiceTranscriptionModel: "",
+      voiceTranscriptionLanguage: "multi",
+      voiceTranscriptionMaxBytes: 25 * 1024 * 1024,
+      voiceTranscriptionDeepgramApiKeySource: "env DEEPGRAM_API_KEY",
+      voiceTranscriptionOpenAIApiKeySource: "missing",
       historyMaxMessages: 12,
       historyMaxUserPrompts: 4,
       historyAssistantPhases: ["final_answer", "commentary"],
@@ -75,6 +82,7 @@ test("buildSettingsReport shows safe runtime settings without secrets", () => {
   assert.match(text, /mirror: on; phases commentary, final_answer; progress updates; poll 2s/);
   assert.match(text, /worktree: changed files on; max all/);
   assert.match(text, /attachments: on; max 10; size 20mb; dir `state\/attachments`/);
+  assert.match(text, /voice: on; provider auto; model auto; language multi; max 25mb; keys deepgram env DEEPGRAM_API_KEY, openai missing/);
   assert.match(text, /history import: max messages 12; max user prompts 4; phases final_answer, commentary; heartbeats on/);
   assert.match(text, /event log `logs\/bridge\.events\.ndjson`; stderr `logs\/bridge\.stderr\.log`/);
   assert.match(text, /current binding: `group:-100:topic:3`; thread `thread-1`; status bar `5`/);

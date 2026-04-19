@@ -62,6 +62,17 @@ import {
   stopTypingHeartbeats,
 } from "./lib/typing-heartbeat.mjs";
 import {
+  DEFAULT_DEEPGRAM_TRANSCRIPTION_LANGUAGE,
+  DEFAULT_VOICE_TRANSCRIPTION_MAX_BYTES,
+  chooseVoiceTranscriptionProvider,
+  collectTelegramVoiceRefs,
+  formatVoiceTranscriptBubble,
+  formatVoiceTranscriptPrompt,
+  formatVoiceTranscriptionReceipt,
+  normalizeVoiceTranscriptionProvider,
+  transcribeTelegramVoice,
+} from "./lib/voice-transcription.mjs";
+import {
   DEFAULT_ATTACHMENT_MAX_BYTES,
   DEFAULT_ATTACHMENT_MAX_COUNT,
   collectTelegramAttachments,
@@ -193,6 +204,34 @@ async function loadConfig(configPath) {
     });
   }
 
+  const voiceTranscriptionProvider = normalizeVoiceTranscriptionProvider(fromFile?.voiceTranscriptionProvider);
+  const voiceTranscriptionOpenAIKeyEnv = normalizeText(
+    fromFile?.voiceTranscriptionOpenAIKeyEnv || fromFile?.voiceTranscriptionApiKeyEnv || "OPENAI_API_KEY",
+  );
+  const voiceTranscriptionDeepgramKeyEnv = normalizeText(
+    fromFile?.voiceTranscriptionDeepgramKeyEnv || fromFile?.voiceTranscriptionApiKeyEnv || "DEEPGRAM_API_KEY",
+  );
+  const voiceTranscriptionOpenAISecret = await readOptionalSecret({
+    envName: voiceTranscriptionOpenAIKeyEnv,
+    configValue:
+      fromFile?.voiceTranscriptionOpenAIApiKey ||
+      (voiceTranscriptionProvider === "openai" ? fromFile?.voiceTranscriptionApiKey : null),
+    keychainService:
+      fromFile?.voiceTranscriptionOpenAIKeychainService ||
+      (voiceTranscriptionProvider === "openai" ? fromFile?.voiceTranscriptionKeychainService : null) ||
+      "codex-telegram-bridge-openai-api-key",
+  });
+  const voiceTranscriptionDeepgramSecret = await readOptionalSecret({
+    envName: voiceTranscriptionDeepgramKeyEnv,
+    configValue:
+      fromFile?.voiceTranscriptionDeepgramApiKey ||
+      (voiceTranscriptionProvider === "deepgram" ? fromFile?.voiceTranscriptionApiKey : null),
+    keychainService:
+      fromFile?.voiceTranscriptionDeepgramKeychainService ||
+      (voiceTranscriptionProvider === "deepgram" ? fromFile?.voiceTranscriptionKeychainService : null) ||
+      "codex-telegram-bridge-deepgram-api-key",
+  });
+
   return {
     botToken,
     botTokenSource,
@@ -261,6 +300,34 @@ async function loadConfig(configPath) {
     attachmentMaxCount: Number.isFinite(fromFile?.attachmentMaxCount)
       ? Math.max(1, Math.min(10, Number(fromFile.attachmentMaxCount)))
       : DEFAULT_ATTACHMENT_MAX_COUNT,
+    voiceTranscriptionEnabled: fromFile?.voiceTranscriptionEnabled !== false,
+    voiceTranscriptionProvider,
+    voiceTranscriptionModel: normalizeText(fromFile?.voiceTranscriptionModel),
+    voiceTranscriptionLanguage:
+      fromFile?.voiceTranscriptionLanguage === null
+        ? ""
+        : normalizeText(fromFile?.voiceTranscriptionLanguage) || DEFAULT_DEEPGRAM_TRANSCRIPTION_LANGUAGE,
+    voiceTranscriptionPrompt: normalizeText(fromFile?.voiceTranscriptionPrompt),
+    voiceTranscriptionBaseUrl: normalizeText(fromFile?.voiceTranscriptionBaseUrl),
+    voiceTranscriptionMaxBytes: Number.isFinite(fromFile?.voiceTranscriptionMaxBytes)
+      ? Math.max(1, Number(fromFile.voiceTranscriptionMaxBytes))
+      : DEFAULT_VOICE_TRANSCRIPTION_MAX_BYTES,
+    voiceTranscriptionMaxCount: Number.isFinite(fromFile?.voiceTranscriptionMaxCount)
+      ? Math.max(1, Math.min(3, Number(fromFile.voiceTranscriptionMaxCount)))
+      : 1,
+    voiceTranscriptionKeepFiles: fromFile?.voiceTranscriptionKeepFiles === true,
+    voiceTranscriptionTimeoutMs: Number.isFinite(fromFile?.voiceTranscriptionTimeoutMs)
+      ? Math.max(1_000, Number(fromFile.voiceTranscriptionTimeoutMs))
+      : 60_000,
+    voiceTranscriptionCommand: Array.isArray(fromFile?.voiceTranscriptionCommand)
+      ? fromFile.voiceTranscriptionCommand.map(String).filter(Boolean)
+      : [],
+    voiceTranscriptionOpenAIKeyEnv,
+    voiceTranscriptionDeepgramKeyEnv,
+    voiceTranscriptionOpenAIApiKey: voiceTranscriptionOpenAISecret.value,
+    voiceTranscriptionOpenAIApiKeySource: voiceTranscriptionOpenAISecret.source,
+    voiceTranscriptionDeepgramApiKey: voiceTranscriptionDeepgramSecret.value,
+    voiceTranscriptionDeepgramApiKeySource: voiceTranscriptionDeepgramSecret.source,
     historyMaxMessages: Number.isFinite(fromFile?.historyMaxMessages)
       ? Math.max(1, Number(fromFile.historyMaxMessages))
       : DEFAULT_HISTORY_MAX_MESSAGES,
@@ -310,6 +377,23 @@ async function readKeychainSecret(serviceName) {
   } catch {
     return null;
   }
+}
+
+async function readOptionalSecret({ envName, configValue = null, keychainService = null } = {}) {
+  const normalizedEnvName = normalizeText(envName);
+  const envValue = normalizedEnvName ? process.env[normalizedEnvName] : null;
+  if (envValue) {
+    return { value: envValue, source: `env ${normalizedEnvName}` };
+  }
+  if (configValue) {
+    return { value: String(configValue), source: "config" };
+  }
+  const normalizedService = normalizeText(keychainService);
+  const keychainValue = normalizedService ? await readKeychainSecret(normalizedService) : null;
+  if (keychainValue) {
+    return { value: keychainValue, source: `Keychain ${normalizedService}` };
+  }
+  return { value: null, source: "missing" };
 }
 
 function buildTargetFromMessage(message) {
@@ -1815,12 +1899,27 @@ async function handlePlainText({
   const attachmentRefs = collectTelegramAttachments(message, {
     maxCount: config.attachmentMaxCount,
   });
-  if (!promptText && !attachmentRefs.length) {
+  const voiceRefs = collectTelegramVoiceRefs(message, {
+    maxCount: config.voiceTranscriptionMaxCount,
+  });
+  if (!promptText && !attachmentRefs.length && !voiceRefs.length) {
     await reply(config.botToken, message, "The text is empty. If you mention the bot, put the actual request after the mention.");
     return;
   }
   if (attachmentRefs.length && config.attachmentsEnabled === false) {
     await reply(config.botToken, message, "Attachments are disabled in this bridge config. Text still works.");
+    return;
+  }
+  if (voiceRefs.length && config.voiceTranscriptionEnabled === false) {
+    await reply(config.botToken, message, "Voice transcription is disabled in this bridge config. Text still works.");
+    return;
+  }
+  if (voiceRefs.length && !chooseVoiceTranscriptionProvider(config)) {
+    await reply(
+      config.botToken,
+      message,
+      "Voice transcription is not configured yet. Set a Deepgram/OpenAI key or a local command, then restart the bridge.",
+    );
     return;
   }
 
@@ -1831,7 +1930,57 @@ async function handlePlainText({
   }
 
   let savedAttachments = [];
+  let voiceTranscripts = [];
   let prompt = promptText;
+  let replyMessage = message;
+  if (voiceRefs.length) {
+    try {
+      if (config.sendTyping) {
+        await sendTyping(config.botToken, buildTargetFromMessage(message)).catch(() => null);
+      }
+      voiceTranscripts = await transcribeTelegramVoice({
+        token: config.botToken,
+        message,
+        config,
+        maxBytes: config.voiceTranscriptionMaxBytes,
+        maxCount: config.voiceTranscriptionMaxCount,
+        getFile,
+        downloadFile: downloadTelegramFile,
+      });
+      const transcriptSent = await replyPlain(config.botToken, message, formatVoiceTranscriptBubble(voiceTranscripts));
+      const transcriptMessageId = transcriptSent[0]?.message_id ?? null;
+      if (Number.isInteger(transcriptMessageId)) {
+        replyMessage = { ...message, message_id: transcriptMessageId };
+      }
+      rememberOutbound(binding, transcriptSent);
+      prompt = formatVoiceTranscriptPrompt({
+        text: prompt,
+        transcripts: voiceTranscripts,
+      });
+      logBridgeEvent("telegram_voice_transcribed", {
+        chatId: message.chat.id,
+        messageThreadId: message.message_thread_id ?? null,
+        messageId: message.message_id ?? null,
+        count: voiceTranscripts.length,
+        provider: voiceTranscripts[0]?.provider || null,
+        model: voiceTranscripts[0]?.model || null,
+        transcriptMessageId,
+      });
+    } catch (error) {
+      logBridgeEvent("telegram_voice_transcription_error", {
+        chatId: message.chat.id,
+        messageThreadId: message.message_thread_id ?? null,
+        messageId: message.message_id ?? null,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      await reply(
+        config.botToken,
+        message,
+        "I could not transcribe that voice message. Try again, or send the text version if it is urgent.",
+      );
+      return;
+    }
+  }
   if (attachmentRefs.length) {
     try {
       savedAttachments = await saveTelegramAttachments({
@@ -1844,7 +1993,7 @@ async function handlePlainText({
         downloadFile: downloadTelegramFile,
       });
       prompt = formatAttachmentPrompt({
-        text: promptText,
+        text: prompt,
         attachments: savedAttachments,
       });
       logBridgeEvent("telegram_attachments_saved", {
@@ -1867,7 +2016,7 @@ async function handlePlainText({
       });
       await reply(
         config.botToken,
-        message,
+        replyMessage,
         "I could not download that attachment. Try a smaller image/file, or send the text part without media.",
       );
       return;
@@ -1875,7 +2024,7 @@ async function handlePlainText({
   }
 
   const worktreeBaseline = await captureWorktreeBaseline(bindingValidation.thread);
-  binding.lastInboundMessageId = message.message_id ?? null;
+  binding.lastInboundMessageId = replyMessage.message_id ?? message.message_id ?? null;
   binding.currentTurn = {
     source: "telegram",
     startedAt: new Date().toISOString(),
@@ -1899,11 +2048,15 @@ async function handlePlainText({
   }
   await subscribeAppServerStream({ config, stream: appServerStream, bindingKey, binding });
 
-  const target = buildTargetFromMessage(message);
-  const initialProgressText = savedAttachments.length
-    ? `${formatAttachmentReceipt(savedAttachments)}\n${getInitialProgressText()}`
+  const target = buildTargetFromMessage(replyMessage);
+  const progressIntro = [
+    voiceTranscripts.length ? formatVoiceTranscriptionReceipt(voiceTranscripts) : null,
+    savedAttachments.length ? formatAttachmentReceipt(savedAttachments) : null,
+  ].filter(Boolean);
+  const initialProgressText = progressIntro.length
+    ? `${progressIntro.join("\n")}\n${getInitialProgressText()}`
     : getInitialProgressText();
-  const receipt = await replyPlain(config.botToken, message, initialProgressText);
+  const receipt = await replyPlain(config.botToken, replyMessage, initialProgressText);
   const receiptMessageId = receipt[0]?.message_id ?? null;
   rememberOutbound(binding, receipt);
   const progressBubble = startProgressBubble({
@@ -2050,12 +2203,15 @@ async function processMessage({ config, state, message, appServerStream = null, 
   const attachmentRefs = collectTelegramAttachments(message, {
     maxCount: config.attachmentMaxCount,
   });
-  if (!ingressText.trim() && !attachmentRefs.length) {
+  const voiceRefs = collectTelegramVoiceRefs(message, {
+    maxCount: config.voiceTranscriptionMaxCount,
+  });
+  if (!ingressText.trim() && !attachmentRefs.length && !voiceRefs.length) {
     await reply(
       config.botToken,
       message,
       hasUnsupportedTelegramMedia(message)
-        ? "I can handle text, images and files now. Voice/audio is still next."
+        ? "I can handle text, images, files and voice now. Video/stickers are still next."
         : "I can handle text, images and files now. Send a caption if the attachment needs instructions.",
     );
     return true;

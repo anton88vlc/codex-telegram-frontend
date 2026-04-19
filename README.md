@@ -95,6 +95,7 @@ Docs should sound like a competent teammate at 2am: direct, practical, and a lit
 - `/project-status` shows desired thread column, active topics, parked sync topics and sync preview
 - `/sync-project` can rename/reopen/create/park sync-managed topics for the current working set
 - Telegram photos/documents, including multi-photo albums, are downloaded into ignored local storage and forwarded to Codex as local file paths in one prompt
+- Telegram voice/audio is transcribed first, shown back in the topic as a transcript bubble, then forwarded to Codex as text
 - user-side history backfill from `rollout_path` into Telegram topics via `admin/telegram_user_admin.py backfill-thread`; defaults to user prompts plus assistant `final_answer`, with a bounded clean history tail
 - backfill uses the same Markdown-to-Telegram HTML renderer as the live bridge
 - safe topic cleanup via `admin/telegram_user_admin.py cleanup-topic`: dry-run first, deletion only with `--delete`
@@ -114,7 +115,7 @@ Docs should sound like a competent teammate at 2am: direct, practical, and a lit
 ## Not Yet
 
 - raw token-by-token Telegram streaming; current app-server stream support intentionally coalesces noisy event deltas into readable progress updates
-- voice/audio ingress
+- richer voice/audio controls: provider picker, live partial transcripts and optional transcript confidence display
 - auto-create topic rules for new threads
 - heartbeat transport as a separate UI-visible mode
 

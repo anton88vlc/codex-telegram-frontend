@@ -34,6 +34,14 @@ Use this for things that should survive restarts and should not be changed from 
 | `attachmentStorageDir` | `state/attachments` | Local ignored storage for downloaded Telegram media. Do not commit it. |
 | `attachmentMaxBytes` | `20971520` | Per-file attachment limit. Default is 20 MB; enough for screenshots without inviting chaos. |
 | `attachmentMaxCount` | `10` | Max attachments processed from one Telegram message or media album. Telegram albums top out at 10, so the default keeps the whole user intent together. |
+| `voiceTranscriptionEnabled` | `true` | Enables Telegram voice/audio ingestion. The bridge downloads audio bytes, transcribes them, posts a transcript bubble, then sends the transcript to Codex. |
+| `voiceTranscriptionProvider` | `auto` | `auto`, `deepgram`, `openai`, or `command`. `auto` prefers Deepgram first because Telegram voice is usually OGG/Opus; OpenAI is still supported for compatible audio files. |
+| `voiceTranscriptionModel` | provider default | Deepgram defaults to `nova-3`; OpenAI defaults to `gpt-4o-mini-transcribe`. Leave empty unless you have a reason. |
+| `voiceTranscriptionLanguage` | `multi` | Deepgram language hint. `multi` is the phone-friendly default for Russian/English switching; `auto` uses language detection. OpenAI ignores `multi`. |
+| `voiceTranscriptionMaxBytes` | `26214400` | Per-voice limit. Default is 25 MB, matching the common transcription upload ceiling. |
+| `voiceTranscriptionDeepgramKeyEnv` | `DEEPGRAM_API_KEY` | Env var for Deepgram STT. Keychain fallback is `codex-telegram-bridge-deepgram-api-key`. |
+| `voiceTranscriptionOpenAIKeyEnv` | `OPENAI_API_KEY` | Env var for OpenAI STT. Keychain fallback is `codex-telegram-bridge-openai-api-key`. |
+| `voiceTranscriptionCommand` | `[]` | Optional custom STT command. Use `{file}` in args, or the bridge appends a temp file path. Temp files are deleted unless `voiceTranscriptionKeepFiles` is true. |
 | `historyMaxMessages` | `40` | Default clean history tail size for onboarding/backfill. |
 | `historyMaxUserPrompts` | `null` | Optional cap by recent user prompts. Leave `null` unless the message tail is too noisy. |
 | `historyAssistantPhases` | `["final_answer"]` | Assistant phases imported during clean history backfill. Keep commentary out by default. |
@@ -66,6 +74,7 @@ Hard take: keep this file boring. If a setting can make the bridge unusable, do 
 These are not product settings; they are local machine plumbing.
 
 - Bot token: env var from `botTokenEnv`, `botToken` in local config, or macOS Keychain.
+- STT key for voice: prefer `DEEPGRAM_API_KEY` or Keychain service `codex-telegram-bridge-deepgram-api-key`; OpenAI also works through `OPENAI_API_KEY` or `codex-telegram-bridge-openai-api-key`.
 - Telegram user API credentials: `admin/.env` with `API_ID` and `API_HASH`.
 - Telegram user session: `state/telegram_user.session`, created by `login-qr` or `login-phone`.
 - launchd overrides: `CODEX_TELEGRAM_CONFIG`, `CODEX_TELEGRAM_LAUNCHD_LABEL`, `CODEX_TELEGRAM_KEYCHAIN_SERVICE`.
@@ -108,6 +117,7 @@ What commands do not mutate:
 - allowlists
 - transport URLs
 - attachment storage/limits
+- voice transcription provider/keys
 - mirror/status-bar settings
 - onboarding defaults
 
