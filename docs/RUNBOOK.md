@@ -266,7 +266,7 @@ npm run bot:topics -- --smoke --chat-id <telegram-user-id>
 
 If the check reports private topics as off, open @BotFather, select the bot, enable forum/topic mode in private chats in the BotFather Mini App, then rerun bootstrap. Without that switch, Codex Desktop `Chats` stay out of Telegram instead of being faked as project groups.
 
-Once private topics are enabled, an unbound private bot topic is no longer a dead end. The first normal user message creates a Codex Chat from the user's home cwd and starts that same first turn through app-server in one shot. Translation: a new private topic can become a real Desktop `Chats` item without a separate `/attach` dance, and without the old “create a thread, then fail to resume it” nonsense.
+Once private topics are enabled, onboarding can map existing Codex Desktop `Chats` into bot-private topics. Creating a brand-new Desktop `Chat` from a brand-new Telegram topic is still not first-class: the app-server `thread/start` path creates a usable backend thread, but it does not behave exactly like the Desktop `New chat` button. Keep `privateTopicAutoCreateChats` off unless you are deliberately testing that rough edge.
 
 Apply the bundled bot avatar after the user-side Telegram session is authorized:
 

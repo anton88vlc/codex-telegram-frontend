@@ -68,8 +68,8 @@ Two modes matter: `app-control` is the live near-Mac mode with the best Desktop 
 - Attachments: photos/documents, including media albums, are saved to ignored local storage and forwarded to Codex as file paths.
 - Voice/audio: Telegram voice is transcribed first, shown as an italic quoted transcript, then sent to Codex as text.
 - Clean bounded history backfill: user prompts plus assistant final answers by default.
-- Quickstart onboarding: latest active Codex project threads become Telegram groups/topics, and Codex Chats become private topics inside the bot direct chat when the bot has Threaded Mode enabled.
-- New messages in an unbound private bot topic can create a fresh Codex Chat and start the first turn in one app-server move. The bridge uses your home cwd by default so Codex Desktop treats it like a normal `Chats` item, not a random project thread.
+- Quickstart onboarding: latest active Codex project threads become Telegram groups/topics, and existing Codex Chats become private topics inside the bot direct chat when the bot has Threaded Mode enabled.
+- New private bot topics are not auto-created as Desktop `Chats` by default. The app-server `thread/start` path is useful, but it does not yet behave exactly like pressing `New chat` in Codex Desktop, so the safe default is explicit `/attach` instead of fake magic.
 - Private bot topic preflight for Codex Desktop `Chats`: `npm run bot:topics`.
 - Bootstrap can create/reuse Telegram folder, project groups, topics, bot folder entry and status bars.
 - Optional curated topic auto-sync for fresh Codex threads in already bootstrapped project groups.

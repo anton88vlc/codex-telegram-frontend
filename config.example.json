@@ -40,7 +40,7 @@
   "nativeWaitForReply": false,
   "nativePollIntervalMs": 1000,
   "nativeIngressTransport": "app-control",
-  "privateTopicAutoCreateChats": true,
+  "privateTopicAutoCreateChats": false,
   "nativeChatStartTimeoutMs": 45000,
   "nativeChatStartCwd": null,
   "appControlCooldownMs": 300000,

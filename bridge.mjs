@@ -291,7 +291,7 @@ async function loadConfig(configPath) {
     nativeIngressTransport: ["app-control", "app-server", "auto"].includes(normalizeText(fromFile?.nativeIngressTransport))
       ? normalizeText(fromFile.nativeIngressTransport)
       : "app-control",
-    privateTopicAutoCreateChats: fromFile?.privateTopicAutoCreateChats !== false,
+    privateTopicAutoCreateChats: fromFile?.privateTopicAutoCreateChats === true,
     nativeChatStartTimeoutMs: Number.isFinite(fromFile?.nativeChatStartTimeoutMs)
       ? fromFile.nativeChatStartTimeoutMs
       : DEFAULT_NATIVE_CHAT_START_TIMEOUT_MS,
@@ -680,7 +680,7 @@ function rememberPrivateTopicTitle(state, message) {
   return true;
 }
 
-function makePrivateTopicChatTitle({ state, bindingKey, message, promptText }) {
+function makePrivateTopicChatTitle({ state, bindingKey, message }) {
   const remembered = normalizeText(getPrivateTopicTitleStore(state)?.[bindingKey]?.title);
   if (remembered && !isGenericPrivateTopicTitle(remembered)) {
     return sanitizeTopicTitle(remembered, "New Codex Chat");
@@ -689,11 +689,6 @@ function makePrivateTopicChatTitle({ state, bindingKey, message, promptText }) {
   const serviceTitle = normalizeText(message?.reply_to_message?.forum_topic_created?.name);
   if (serviceTitle && !isGenericPrivateTopicTitle(serviceTitle)) {
     return sanitizeTopicTitle(serviceTitle, "New Codex Chat");
-  }
-
-  const promptTitle = normalizeText(promptText).replace(/\s+/g, " ");
-  if (promptTitle) {
-    return sanitizeTopicTitle(promptTitle.length <= 64 ? promptTitle : `${promptTitle.slice(0, 61).trimEnd()}...`, "New Codex Chat");
   }
 
   return "New Codex Chat";
@@ -2405,7 +2400,10 @@ async function handlePlainText({
 }) {
   const shouldAutoCreatePrivateTopic = shouldAutoCreatePrivateTopicBinding({ config, message, binding });
   if (!binding && !shouldAutoCreatePrivateTopic) {
-    await reply(config.botToken, message, "No Codex thread is bound here. Open a topic or use /attach <thread-id>.");
+    const hint = isPrivateTopicMessage(message)
+      ? "No Codex Chat is bound here yet. Open an existing Codex Chat topic, or bind this one with /attach <thread-id>."
+      : "No Codex thread is bound here. Open a topic or use /attach <thread-id>.";
+    await reply(config.botToken, message, hint);
     return;
   }
 
