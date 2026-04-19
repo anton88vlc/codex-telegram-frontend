@@ -79,3 +79,4 @@
 24. Optional passive app-server stream in the live bridge: subscribes to active threads, coalesces noisy reasoning/Todo/diff/command/tool events into the existing Telegram progress bubble, and leaves app-control as the send-only happy path.
 25. Telegram typing heartbeat: while a bound topic has an active Codex turn, the bot keeps refreshing the native "typing" action instead of relying on one short-lived `sendChatAction`.
 26. Telegram photos/documents ingress base: bot downloads media into `state/attachments`, builds a prompt with local file paths and image markdown hints, then uses the normal Codex transport/progress/reply flow.
+27. Changed-files UX fix: progress bubbles compare against a turn-start worktree snapshot, so old dirty files are not reported as fresh work; default file list is full instead of `+N more`.

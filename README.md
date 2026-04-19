@@ -105,7 +105,7 @@ Docs should sound like a competent teammate at 2am: direct, practical, and a lit
 - Codex-originated commentary is folded into one editable progress message with recent visible updates; `outboundProgressMode: "generic"` hides details and `outboundProgressMode: "verbatim"` mirrors raw commentary
 - Codex task plans are mirrored into the same progress bubble as a compact `Todo` block
 - optional app-server v2 event stream feeds coalesced live progress from reasoning, Todo, diff, command and tool events while app-control stays send-only
-- live progress includes a compact `Changed files` block from the thread git worktree: turn-baseline commits plus the current dirty worktree, so Telegram keeps the same “what changed?” signal as Codex Desktop
+- live progress includes a `Changed files` block for files touched during the current turn, with pre-existing dirty worktree state treated as baseline instead of fresh work
 - pinned compact status bar in active topics with model/reasoning/context/rate/activity data
 - status bar reset times use Telegram `date_time` entities while keeping the text compact and readable
 - persisted outbound checkpoint and suppression layer to avoid duplicating bridge-originated replies

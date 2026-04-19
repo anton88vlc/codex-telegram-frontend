@@ -71,7 +71,7 @@ import {
   hasUnsupportedTelegramMedia,
   saveTelegramAttachments,
 } from "./lib/telegram-attachments.mjs";
-import { formatWorktreeSummary, readGitHead, readWorktreeSummary } from "./lib/worktree-summary.mjs";
+import { formatWorktreeSummary, readGitHead, readWorktreeSummary, subtractWorktreeSummary } from "./lib/worktree-summary.mjs";
 import {
   closeForumTopic,
   createForumTopic,
@@ -111,7 +111,7 @@ const DEFAULT_APP_SERVER_STREAM_CONNECT_TIMEOUT_MS = 1_200;
 const DEFAULT_APP_SERVER_STREAM_RECONNECT_MS = 5_000;
 const DEFAULT_APP_SERVER_STREAM_MAX_EVENTS = 500;
 const DEFAULT_STATUS_BAR_TAIL_BYTES = 512 * 1024;
-const DEFAULT_WORKTREE_SUMMARY_MAX_FILES = 8;
+const DEFAULT_WORKTREE_SUMMARY_MAX_FILES = 0;
 const DEFAULT_HISTORY_MAX_MESSAGES = 40;
 const DEFAULT_HISTORY_ASSISTANT_PHASES = ["final_answer"];
 const DEFAULT_BOT_TOKEN_KEYCHAIN_SERVICE = "codex-telegram-bridge-bot-token";
@@ -250,7 +250,7 @@ async function loadConfig(configPath) {
       : DEFAULT_STATUS_BAR_TAIL_BYTES,
     worktreeSummaryEnabled: fromFile?.worktreeSummaryEnabled !== false,
     worktreeSummaryMaxFiles: Number.isFinite(fromFile?.worktreeSummaryMaxFiles)
-      ? Math.max(1, Math.min(30, Number(fromFile.worktreeSummaryMaxFiles)))
+      ? Math.max(0, Math.min(200, Number(fromFile.worktreeSummaryMaxFiles)))
       : DEFAULT_WORKTREE_SUMMARY_MAX_FILES,
     attachmentsEnabled: fromFile?.attachmentsEnabled !== false,
     attachmentStorageDir: fromFile?.attachmentStorageDir || DEFAULT_ATTACHMENT_STORAGE_DIR,
@@ -470,9 +470,20 @@ function rememberOutboundMirrorSuppression(state, bindingKey, text, { role = "as
   return signature;
 }
 
-async function captureWorktreeBaseHead(thread) {
+async function captureWorktreeBaseline(thread) {
   const cwd = normalizeText(thread?.cwd);
-  return cwd ? await readGitHead(cwd) : null;
+  if (!cwd) {
+    return {
+      head: null,
+      summary: null,
+    };
+  }
+  const head = await readGitHead(cwd);
+  const summary = await readWorktreeSummary(cwd, { baseRef: head });
+  return {
+    head,
+    summary,
+  };
 }
 
 async function loadChangedFilesTextForThread({ config, thread, binding, cache }) {
@@ -484,22 +495,26 @@ async function loadChangedFilesTextForThread({ config, thread, binding, cache })
     return null;
   }
   let baseRef = normalizeText(binding?.currentTurn?.worktreeBaseHead);
+  let baselineSummary = binding?.currentTurn?.worktreeBaseSummary || null;
   if (!baseRef && binding?.currentTurn) {
-    baseRef = await captureWorktreeBaseHead(thread);
-    if (baseRef) {
+    const baseline = await captureWorktreeBaseline(thread);
+    baseRef = baseline.head;
+    baselineSummary = baseline.summary;
+    if (baseRef || baselineSummary) {
       binding.currentTurn.worktreeBaseHead = baseRef;
+      binding.currentTurn.worktreeBaseSummary = baselineSummary;
     }
   }
-  const cacheKey = `${cwd}\0${baseRef || ""}`;
+  const cacheKey = `${cwd}\0${baseRef || ""}\0${JSON.stringify(baselineSummary?.files || [])}`;
   if (cache.has(cacheKey)) {
-    return cache.get(cacheKey) || binding?.currentTurn?.changedFilesText || null;
+    return cache.get(cacheKey) || null;
   }
-  const summary = await readWorktreeSummary(cwd, { baseRef });
+  const summary = subtractWorktreeSummary(await readWorktreeSummary(cwd, { baseRef }), baselineSummary);
   const text = formatWorktreeSummary(summary, {
     maxFiles: config.worktreeSummaryMaxFiles,
   });
   cache.set(cacheKey, text);
-  return text || binding?.currentTurn?.changedFilesText || null;
+  return text || null;
 }
 
 function isOutboundMirrorBindingEligible(binding) {
@@ -1854,12 +1869,14 @@ async function handlePlainText({
     }
   }
 
+  const worktreeBaseline = await captureWorktreeBaseline(bindingValidation.thread);
   binding.lastInboundMessageId = message.message_id ?? null;
   binding.currentTurn = {
     source: "telegram",
     startedAt: new Date().toISOString(),
     promptPreview: makePromptPreview(prompt),
-    worktreeBaseHead: await captureWorktreeBaseHead(bindingValidation.thread),
+    worktreeBaseHead: worktreeBaseline.head,
+    worktreeBaseSummary: worktreeBaseline.summary,
   };
   binding.updatedAt = new Date().toISOString();
   state.bindings[bindingKey] = binding;
@@ -2195,11 +2212,13 @@ async function syncOutboundMirrors({ config, state }) {
         if (message.role === "user") {
           replyTargetMessageId = sent[0]?.message_id ?? replyTargetMessageId;
           binding.lastMirroredUserMessageId = replyTargetMessageId;
+          const worktreeBaseline = await captureWorktreeBaseline(thread);
           binding.currentTurn = {
             source: "codex",
             startedAt: message.timestamp || new Date().toISOString(),
             promptPreview: makePromptPreview(message.text),
-            worktreeBaseHead: await captureWorktreeBaseHead(thread),
+            worktreeBaseHead: worktreeBaseline.head,
+            worktreeBaseSummary: worktreeBaseline.summary,
           };
         } else if (isFinalAssistant) {
           replyTargetMessageId = null;

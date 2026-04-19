@@ -17,7 +17,7 @@
   "statusBarPin": true,
   "statusBarTailBytes": 524288,
   "worktreeSummaryEnabled": true,
-  "worktreeSummaryMaxFiles": 8,
+  "worktreeSummaryMaxFiles": 0,
   "attachmentsEnabled": true,
   "attachmentStorageDir": "state/attachments",
   "attachmentMaxBytes": 20971520,

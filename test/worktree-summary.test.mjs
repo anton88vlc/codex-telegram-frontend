@@ -12,6 +12,7 @@ import {
   parseUntrackedFiles,
   readGitHead,
   readWorktreeSummary,
+  subtractWorktreeSummary,
 } from "../lib/worktree-summary.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -39,23 +40,72 @@ test("parseGitNumstat collects file totals", () => {
 test("formatWorktreeSummary renders compact Telegram-friendly list", () => {
   const tracked = parseGitNumstat("5\t1\tbridge.mjs\n1\t0\tREADME.md\n");
   const untracked = parseUntrackedFiles("lib/worktree-summary.mjs\n");
-  const text = formatWorktreeSummary(
-    {
-      files: [...tracked.files, ...untracked],
-      fileCount: tracked.files.length + untracked.length,
-      trackedCount: tracked.files.length,
-      untrackedCount: untracked.length,
-      totalAdditions: tracked.totalAdditions,
-      totalDeletions: tracked.totalDeletions,
-    },
-    { maxFiles: 2 },
-  );
+  const summary = {
+    files: [...tracked.files, ...untracked],
+    fileCount: tracked.files.length + untracked.length,
+    trackedCount: tracked.files.length,
+    untrackedCount: untracked.length,
+    totalAdditions: tracked.totalAdditions,
+    totalDeletions: tracked.totalDeletions,
+  };
+  const text = formatWorktreeSummary(summary);
 
   assert.match(text, /^\*\*Changed files\*\*/);
   assert.match(text, /3 files changed \+6 -1 1 untracked/);
   assert.match(text, /- `bridge\.mjs` \+5 -1/);
   assert.match(text, /- `README\.md` \+1 -0/);
-  assert.match(text, /\.\.\. \+1 more/);
+  assert.match(text, /- `lib\/worktree-summary\.mjs` untracked/);
+  assert.doesNotMatch(text, /\.\.\. \+\d+ more/);
+  assert.match(formatWorktreeSummary(summary, { maxFiles: 2 }), /\.\.\. \+1 more/);
+});
+
+test("subtractWorktreeSummary hides files that were already dirty at turn start", () => {
+  const baselineTracked = parseGitNumstat("5\t1\tbridge.mjs\n1\t0\tREADME.md\n");
+  const currentTracked = parseGitNumstat("7\t1\tbridge.mjs\n1\t0\tREADME.md\n2\t0\tlib/new.mjs\n");
+  const baseline = {
+    cwd: "/repo",
+    files: baselineTracked.files,
+    fileCount: baselineTracked.files.length,
+    trackedCount: baselineTracked.files.length,
+    untrackedCount: 0,
+    totalAdditions: baselineTracked.totalAdditions,
+    totalDeletions: baselineTracked.totalDeletions,
+  };
+  const current = {
+    cwd: "/repo",
+    files: currentTracked.files,
+    fileCount: currentTracked.files.length,
+    trackedCount: currentTracked.files.length,
+    untrackedCount: 0,
+    totalAdditions: currentTracked.totalAdditions,
+    totalDeletions: currentTracked.totalDeletions,
+  };
+
+  const delta = subtractWorktreeSummary(current, baseline);
+
+  assert.equal(delta.fileCount, 2);
+  assert.deepEqual(
+    delta.files.map((file) => ({ path: file.path, additions: file.additions, deletions: file.deletions })),
+    [
+      { path: "bridge.mjs", additions: 2, deletions: 0 },
+      { path: "lib/new.mjs", additions: 2, deletions: 0 },
+    ],
+  );
+});
+
+test("subtractWorktreeSummary returns null when nothing changed after baseline", () => {
+  const tracked = parseGitNumstat("5\t1\tbridge.mjs\n");
+  const summary = {
+    cwd: "/repo",
+    files: tracked.files,
+    fileCount: tracked.files.length,
+    trackedCount: tracked.files.length,
+    untrackedCount: 0,
+    totalAdditions: tracked.totalAdditions,
+    totalDeletions: tracked.totalDeletions,
+  };
+
+  assert.equal(subtractWorktreeSummary(summary, summary), null);
 });
 
 test("readWorktreeSummary includes committed changes since baseline plus current dirty worktree", async () => {

@@ -28,8 +28,8 @@ Use this for things that should survive restarts and should not be changed from 
 | `statusBarEnabled` | `true` | Enables compact pinned topic status bar. |
 | `statusBarPin` | `true` | Pins the status bar message when Telegram allows it. |
 | `statusBarTailBytes` | `524288` | How much rollout tail is sampled for status data. |
-| `worktreeSummaryEnabled` | `true` | Adds a compact `Changed files` block to live progress bubbles when the thread cwd is a git repo. It uses the turn baseline commit plus the current dirty worktree. |
-| `worktreeSummaryMaxFiles` | `8` | Maximum changed files shown in the Telegram progress bubble before `... +N more`. |
+| `worktreeSummaryEnabled` | `true` | Adds a `Changed files` block to live progress bubbles when this turn changes the thread git worktree. Pre-existing dirty files are treated as baseline, not fresh work. |
+| `worktreeSummaryMaxFiles` | `0` | Maximum changed files shown in the Telegram progress bubble. `0` means show the full list. |
 | `attachmentsEnabled` | `true` | Allows Telegram photos and documents to be downloaded locally and forwarded to Codex as local file paths in the prompt. |
 | `attachmentStorageDir` | `state/attachments` | Local ignored storage for downloaded Telegram media. Do not commit it. |
 | `attachmentMaxBytes` | `20971520` | Per-file attachment limit. Default is 20 MB; enough for screenshots without inviting chaos. |
