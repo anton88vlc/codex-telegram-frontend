@@ -11,6 +11,11 @@ import { promisify } from "node:util";
 import { createNativeChat, sendNativeTurn } from "./lib/codex-native.mjs";
 import { AppServerLiveStream } from "./lib/app-server-live.mjs";
 import { appendAppServerStreamBuffer, formatAppServerStreamProgressLine } from "./lib/app-server-stream.mjs";
+import {
+  CODEX_CHATS_SURFACE,
+  PRIVATE_TOPIC_AUTO_CREATE_CREATOR,
+  isThreadDbOptionalBinding,
+} from "./lib/binding-classification.mjs";
 import { readRecentBridgeEvents, summarizeBridgeEvents } from "./lib/bridge-events.mjs";
 import {
   DEFAULT_UNBOUND_GROUP_FALLBACK_MAX_AGE_MS,
@@ -710,8 +715,8 @@ async function autoCreatePrivateTopicBinding({ config, state, message, bindingKe
     threadTitle: title,
     createdAt: now,
     updatedAt: now,
-    createdBy: "private-topic-auto-create",
-    surface: "codex-chats",
+    createdBy: PRIVATE_TOPIC_AUTO_CREATE_CREATOR,
+    surface: CODEX_CHATS_SURFACE,
     lastTransportPath: result.transportPath || "app-server-thread-start",
   });
 
@@ -2016,6 +2021,16 @@ async function validateBindingForSend(config, binding) {
   try {
     const thread = await getThreadById(config.threadsDbPath, binding.threadId);
     if (!thread) {
+      if (isThreadDbOptionalBinding(binding)) {
+        logBridgeEvent("binding_thread_db_pending", {
+          threadId: binding.threadId,
+          chatId: binding.chatId,
+          messageThreadId: binding.messageThreadId ?? null,
+          createdBy: binding.createdBy || null,
+          surface: binding.surface || null,
+        });
+        return { ok: true, thread: null };
+      }
       return {
         ok: false,
         message: `This binding points to thread ${binding.threadId}, which is no longer in the local Codex DB. Use /detach and bind it again.`,

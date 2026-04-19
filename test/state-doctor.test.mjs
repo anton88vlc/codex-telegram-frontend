@@ -173,3 +173,30 @@ test("applyStateDoctorActions only edits local state and bootstrap index", () =>
   assert.equal(result.applied.length, 4);
   assert.equal(result.skipped.length, 0);
 });
+
+test("buildStateDoctorReport keeps app-server-created private Chat bindings quiet while thread DB catches up", () => {
+  const state = {
+    bindings: {
+      "group:6074160741:topic:120646": {
+        chatId: "6074160741",
+        messageThreadId: 120646,
+        threadId: "019da645-8252-7313-9d7c-16163f36e6de",
+        createdBy: "private-topic-auto-create",
+        surface: "codex-chats",
+        updatedAt: "2026-04-19T15:04:31.000Z",
+      },
+    },
+  };
+
+  const report = buildStateDoctorReport({
+    state,
+    projectIndex: { groups: [] },
+    threads: [],
+    recentEvents: [],
+  });
+
+  assert.equal(report.ok, true);
+  assert.equal(report.findings.some((finding) => finding.kind === "binding-missing-thread"), false);
+  assert.equal(report.actions.some((action) => action.type === "tombstone-binding"), false);
+  assert.match(formatStateDoctorReport(report), /STATE DOCTOR OK/);
+});

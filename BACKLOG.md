@@ -107,3 +107,4 @@ These are the useful Telegram platform leads found during the April 2026 API pas
 35. Codex Desktop `Chats` onboarding base: quickstart classifies projectless/home/scratch Codex Chats separately from projects and maps them to private topics in the bot direct chat when the bot has Threaded Mode enabled.
 36. Private bot topics readiness layer: `npm run bot:topics`, self-check reporting, bootstrap preflight and clean BotFather recovery hints instead of repeated `chat is not a forum` failures.
 37. Private bot topic auto-create: the first user message in an unbound bot-private topic creates a projectless Codex Chat through app-server `thread/start`, binds the Telegram topic, then sends the turn through the normal app-control happy path.
+38. Private Chat auto-create hardening: fresh app-server-created Chats can be used before the legacy local threads DB catches up, and empty sqlite lookups no longer poison the bridge.
