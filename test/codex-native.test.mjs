@@ -212,6 +212,34 @@ console.log(JSON.stringify({ ok: true, mode: "chat-start-only", threadId: "threa
   assert.equal(args[args.indexOf("--cwd") + 1], "");
 });
 
+test("createNativeChat can start a new chat with the first prompt", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-native-chat-"));
+  const argsPath = path.join(dir, "args.json");
+  const helper = await writeHelper(
+    dir,
+    "start.js",
+    `const fs = require("node:fs");
+fs.writeFileSync(${JSON.stringify(argsPath)}, JSON.stringify(process.argv.slice(2)));
+console.log(JSON.stringify({ ok: true, mode: "chat-start-and-send-only", threadId: "thread-new" }));
+`,
+  );
+
+  const result = await createNativeChat({
+    helperPath: helper,
+    title: "Fresh idea",
+    cwd: "/tmp/project",
+    prompt: "start from Telegram",
+    timeoutMs: 1000,
+  });
+  const args = JSON.parse(await fs.readFile(argsPath, "utf8"));
+
+  assert.equal(result.transportPath, "app-server-thread-start");
+  assert.equal(result.mode, "chat-start-and-send-only");
+  assert.equal(args[args.indexOf("--title") + 1], "Fresh idea");
+  assert.equal(args[args.indexOf("--cwd") + 1], "/tmp/project");
+  assert.equal(args[args.indexOf("--prompt") + 1], "start from Telegram");
+});
+
 test("createNativeChat reports app-server thread start failures", async () => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-native-chat-"));
   const helper = await writeHelper(

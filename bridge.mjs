@@ -654,6 +654,11 @@ function getPrivateTopicTitleStore(state) {
   return state.privateTopicTitles;
 }
 
+function isGenericPrivateTopicTitle(title) {
+  const normalized = normalizeText(title).toLowerCase();
+  return ["new thread", "new topic", "new chat", "новая тема", "новый тред", "nuevo tema"].includes(normalized);
+}
+
 function rememberPrivateTopicTitle(state, message) {
   if (!isPrivateTopicMessage(message)) {
     return false;
@@ -676,12 +681,12 @@ function rememberPrivateTopicTitle(state, message) {
 
 function makePrivateTopicChatTitle({ state, bindingKey, message, promptText }) {
   const remembered = normalizeText(getPrivateTopicTitleStore(state)?.[bindingKey]?.title);
-  if (remembered) {
+  if (remembered && !isGenericPrivateTopicTitle(remembered)) {
     return sanitizeTopicTitle(remembered, "New Codex Chat");
   }
 
   const serviceTitle = normalizeText(message?.reply_to_message?.forum_topic_created?.name);
-  if (serviceTitle) {
+  if (serviceTitle && !isGenericPrivateTopicTitle(serviceTitle)) {
     return sanitizeTopicTitle(serviceTitle, "New Codex Chat");
   }
 
@@ -693,7 +698,31 @@ function makePrivateTopicChatTitle({ state, bindingKey, message, promptText }) {
   return "New Codex Chat";
 }
 
-async function autoCreatePrivateTopicBinding({ config, state, message, bindingKey, promptText }) {
+function shouldAutoCreatePrivateTopicBinding({ config, message, binding }) {
+  return !binding && config.privateTopicAutoCreateChats !== false && isPrivateTopicMessage(message);
+}
+
+async function maybeRenamePrivateTopic({ config, message, title }) {
+  if (!isPrivateTopicMessage(message) || !normalizeText(title)) {
+    return;
+  }
+  try {
+    await editForumTopic(config.botToken, {
+      chatId: message.chat.id,
+      messageThreadId: message.message_thread_id,
+      name: title,
+    });
+  } catch (error) {
+    logBridgeEvent("private_topic_rename_error", {
+      chatId: message.chat.id,
+      messageThreadId: message.message_thread_id ?? null,
+      title,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+async function autoCreatePrivateTopicBinding({ config, state, message, bindingKey, promptText, sendPrompt = null }) {
   if (config.privateTopicAutoCreateChats === false || !isPrivateTopicMessage(message)) {
     return null;
   }
@@ -703,6 +732,7 @@ async function autoCreatePrivateTopicBinding({ config, state, message, bindingKe
     helperPath: config.nativeChatStartHelperPath,
     title,
     cwd: config.nativeChatStartCwd,
+    prompt: sendPrompt,
     timeoutMs: config.nativeChatStartTimeoutMs,
     appServerUrl: config.appServerUrl,
   });
@@ -725,7 +755,9 @@ async function autoCreatePrivateTopicBinding({ config, state, message, bindingKe
     createdBy: PRIVATE_TOPIC_AUTO_CREATE_CREATOR,
     surface: CODEX_CHATS_SURFACE,
     lastTransportPath: result.transportPath || "app-server-thread-start",
+    lastNativeMode: result.mode || null,
   });
+  await maybeRenamePrivateTopic({ config, message, title });
 
   logBridgeEvent("private_topic_chat_created", {
     chatId: message.chat.id,
@@ -735,6 +767,7 @@ async function autoCreatePrivateTopicBinding({ config, state, message, bindingKe
     threadId,
     title,
     cwd: config.nativeChatStartCwd,
+    sentInitialPrompt: Boolean(sendPrompt),
   });
 
   return binding;
@@ -2369,12 +2402,13 @@ async function handlePlainText({
   appServerStream = null,
   typingHeartbeats = null,
 }) {
-  if (!binding) {
+  const shouldAutoCreatePrivateTopic = shouldAutoCreatePrivateTopicBinding({ config, message, binding });
+  if (!binding && !shouldAutoCreatePrivateTopic) {
     await reply(config.botToken, message, "No Codex thread is bound here. Open a topic or use /attach <thread-id>.");
     return;
   }
 
-  if ((binding.transport || "native") !== "native") {
+  if (binding && (binding.transport || "native") !== "native") {
     await reply(config.botToken, message, "This v1 bridge only supports native transport.");
     return;
   }
@@ -2410,7 +2444,9 @@ async function handlePlainText({
     return;
   }
 
-  const bindingValidation = await validateBindingForSendWithRescue({ config, state, bindingKey, binding });
+  const bindingValidation = binding
+    ? await validateBindingForSendWithRescue({ config, state, bindingKey, binding })
+    : { ok: true, thread: null, binding: null, notice: null };
   if (!bindingValidation.ok) {
     await reply(config.botToken, message, bindingValidation.message);
     return;
@@ -2507,6 +2543,88 @@ async function handlePlainText({
         replyMessage,
         "I could not download that attachment. Try a smaller image/file, or send the text part without media.",
       );
+      return;
+    }
+  }
+
+  if (shouldAutoCreatePrivateTopic) {
+    const target = buildTargetFromMessage(replyMessage);
+    const progressIntro = [
+      voiceTranscripts.length ? formatVoiceTranscriptionReceipt(voiceTranscripts) : null,
+      savedAttachments.length ? formatAttachmentReceipt(savedAttachments) : null,
+    ].filter(Boolean);
+    const initialProgressText = progressIntro.length
+      ? `${progressIntro.join("\n")}\n${getInitialProgressText()}`
+      : getInitialProgressText();
+    const receipt = await replyPlain(config.botToken, replyMessage, initialProgressText);
+    const receiptMessageId = receipt[0]?.message_id ?? null;
+    const progressBubble = startProgressBubble({
+      token: config.botToken,
+      target,
+      messageId: receiptMessageId,
+      onError(error) {
+        logBridgeEvent("progress_bubble_error", {
+          bindingKey,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      },
+    });
+
+    try {
+      binding = await autoCreatePrivateTopicBinding({
+        config,
+        state,
+        message,
+        bindingKey,
+        promptText: prompt,
+        sendPrompt: prompt,
+      });
+      if (!binding) {
+        throw new Error("private topic chat auto-create returned no binding");
+      }
+      await progressBubble.stop();
+      binding.lastInboundMessageId = replyMessage.message_id ?? message.message_id ?? null;
+      binding.currentTurn = {
+        source: "telegram",
+        startedAt: new Date().toISOString(),
+        promptPreview: makePromptPreview(prompt),
+        codexProgressMessageId: Number.isInteger(receiptMessageId) ? receiptMessageId : undefined,
+        sendOnly: true,
+        transportPath: binding.lastTransportPath || "app-server-thread-start",
+      };
+      binding.updatedAt = new Date().toISOString();
+      state.bindings[bindingKey] = binding;
+      rememberOutbound(binding, receipt);
+      rememberOutboundMirrorSuppression(state, bindingKey, prompt, {
+        role: "user",
+        phase: null,
+      });
+      await refreshStatusBars({ config, state, onlyBindingKey: bindingKey });
+      await saveState(config.statePath, state);
+      await subscribeAppServerStream({ config, stream: appServerStream, bindingKey, binding });
+      syncTypingHeartbeats({ config, state, heartbeats: typingHeartbeats, onlyBindingKey: bindingKey });
+      logBridgeEvent("private_topic_initial_turn_started", {
+        threadId: binding.threadId,
+        bindingKey,
+        receiptMessageId,
+        transportPath: binding.lastTransportPath,
+      });
+      return;
+    } catch (error) {
+      await progressBubble.stop();
+      logBridgeEvent("private_topic_initial_turn_error", {
+        bindingKey,
+        chatId: message.chat.id,
+        messageThreadId: message.message_thread_id ?? null,
+        attempts: Array.isArray(error?.attempts) ? error.attempts : undefined,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      const errorText = renderNativeSendError(error);
+      if (receiptMessageId) {
+        await editThenSendRichTextChunks(config.botToken, target, receiptMessageId, errorText);
+      } else {
+        await reply(config.botToken, message, errorText);
+      }
       return;
     }
   }
@@ -2723,14 +2841,7 @@ async function processMessage({ config, state, message, appServerStream = null, 
     let effectiveBinding = binding;
     if (!effectiveBinding) {
       const promptText = normalizeInboundPrompt(ingressText, { botUsername: config.botUsername });
-      effectiveBinding = await autoCreatePrivateTopicBinding({
-        config,
-        state,
-        message,
-        bindingKey,
-        promptText,
-      });
-      if (!effectiveBinding) {
+      if (!shouldAutoCreatePrivateTopicBinding({ config, message, binding: effectiveBinding })) {
         const rerouted = await rerouteUnboundGroupMessageToFallbackTopic({
           config,
           state,

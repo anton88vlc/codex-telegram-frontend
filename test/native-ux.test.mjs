@@ -42,6 +42,21 @@ test("renderNativeSendError explains app-server-first failure", () => {
   assert.match(text, /app server down/);
 });
 
+test("renderNativeSendError explains failed private Chat creation", () => {
+  const error = new Error("app-server chat start failed: no rollout found");
+  error.kind = "app_server_chat_start_failed";
+  error.attempts = [
+    {
+      path: "app-server-thread-start",
+      error: "no rollout found",
+    },
+  ];
+
+  const text = renderNativeSendError(error);
+
+  assert.match(text, /could not create a new Codex Chat/);
+});
+
 test("renderNativeSendError warns that timeout may still be running", () => {
   const error = new Error("timed out waiting for final reply via threads.read");
   error.kind = "reply_timeout";
