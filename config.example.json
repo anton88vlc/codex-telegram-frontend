@@ -28,6 +28,10 @@
   "appControlShowThread": false,
   "nativeDebugBaseUrl": "http://127.0.0.1:9222",
   "appServerUrl": "ws://127.0.0.1:27890",
+  "appServerStreamEnabled": true,
+  "appServerStreamConnectTimeoutMs": 1200,
+  "appServerStreamReconnectMs": 5000,
+  "appServerStreamMaxEvents": 500,
   "eventLogPath": "logs/bridge.events.ndjson",
   "bridgeLogPath": "logs/bridge.stderr.log",
   "syncDefaultLimit": 3

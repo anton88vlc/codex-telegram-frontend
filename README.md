@@ -102,6 +102,7 @@ Docs should sound like a competent teammate at 2am: direct, practical, and a lit
 - live outbound mirror: Codex Desktop user-turn surrogate and final answers are mirrored into the bound Telegram topic/chat
 - Codex-originated commentary is folded into one editable progress message with recent visible updates; `outboundProgressMode: "generic"` hides details and `outboundProgressMode: "verbatim"` mirrors raw commentary
 - Codex task plans are mirrored into the same progress bubble as a compact `Todo` block
+- optional app-server v2 event stream feeds coalesced live progress from reasoning, Todo, diff, command and tool events while app-control stays send-only
 - live progress includes a compact `Changed files` block from the thread git worktree: turn-baseline commits plus the current dirty worktree, so Telegram keeps the same “what changed?” signal as Codex Desktop
 - pinned compact status bar in active topics with model/reasoning/context/rate/activity data
 - status bar reset times use Telegram `date_time` entities while keeping the text compact and readable
@@ -110,7 +111,7 @@ Docs should sound like a competent teammate at 2am: direct, practical, and a lit
 
 ## Not Yet
 
-- true token streaming from Codex UI
+- raw token-by-token Telegram streaming; current app-server stream support intentionally coalesces noisy event deltas into readable progress updates
 - attachments, images and voice/audio ingress
 - auto-create topic rules for new threads
 - heartbeat transport as a separate UI-visible mode

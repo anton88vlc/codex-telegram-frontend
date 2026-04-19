@@ -2,7 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  appendAppServerStreamBuffer,
   categorizeAppServerMethod,
+  formatAppServerStreamProgressLine,
   normalizeAppServerNotification,
   shouldKeepAppServerStreamEvent,
   summarizeAppServerStreamEvents,
@@ -37,8 +39,46 @@ test("normalizeAppServerNotification extracts stable event fields", () => {
   assert.equal(event.threadId, "thread-1");
   assert.equal(event.turnId, "turn-1");
   assert.equal(event.itemId, "item-1");
+  assert.equal(event.deltaText, "hello");
   assert.equal(event.deltaChars, 5);
   assert.equal(event.textPreview, "hello");
+});
+
+test("normalizeAppServerNotification formats plan updates for Telegram progress", () => {
+  const event = normalizeAppServerNotification({
+    method: "turn/plan/updated",
+    params: {
+      threadId: "thread-1",
+      turnId: "turn-1",
+      plan: [
+        { step: "Inspect stream", status: "completed" },
+        { step: "Patch bridge", status: "in_progress" },
+      ],
+    },
+  });
+
+  assert.equal(event.category, "plan");
+  assert.match(event.planText, /\*\*Todo\*\*/);
+  assert.match(event.planText, /1\/2 done/);
+  assert.match(event.planText, /2\. \[>\] Patch bridge/);
+});
+
+test("appendAppServerStreamBuffer coalesces tiny reasoning deltas", () => {
+  const turn = {};
+  const first = normalizeAppServerNotification({
+    method: "item/reasoning/textDelta",
+    params: { threadId: "thread-1", turnId: "turn-1", itemId: "reason-1", delta: "Checking " },
+  });
+  const second = normalizeAppServerNotification({
+    method: "item/reasoning/textDelta",
+    params: { threadId: "thread-1", turnId: "turn-1", itemId: "reason-1", delta: "the bridge" },
+  });
+
+  appendAppServerStreamBuffer(turn, first);
+  const buffer = appendAppServerStreamBuffer(turn, second);
+
+  assert.equal(buffer, "Checking the bridge");
+  assert.equal(formatAppServerStreamProgressLine(second, { bufferText: buffer }), "Thinking: Checking the bridge");
 });
 
 test("shouldKeepAppServerStreamEvent filters by thread and turn while keeping global rate limits", () => {

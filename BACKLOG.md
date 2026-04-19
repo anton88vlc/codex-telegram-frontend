@@ -24,13 +24,13 @@
 
 ## P2 - Transport And Observability
 
-1. Prototype app-server v2 event streaming as the next transport layer. Local Codex 0.121.0 exposes `item/agentMessage/delta`, `item/reasoning/*`, `turn/plan/updated`, `turn/diff/updated`, `thread/tokenUsage/updated`, `account/rateLimits/updated` and tool/file-change progress events, which is a much better source than renderer polling.
+1. ~~Prototype app-server v2 event streaming as the next transport layer.~~ The bridge now has an optional passive app-server stream feeding coalesced progress from reasoning, Todo, diff, command and tool events while app-control remains send-only.
 2. ~~Structured event/audit log at `logs/bridge.events.ndjson`, sampled by `/health`.~~
 3. Event log retention and nicer operator views once the structured log gets real usage.
 4. Codex Hooks spike: evaluate experimental `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse` and `Stop` hooks for lifecycle logging, completion checks and local guardrails. Do not treat hooks as the main streaming transport yet: current tool hooks mostly see Bash and do not cover MCP, WebSearch or other non-shell tools.
 5. Telegram native streaming/draft spike: `sendMessageDraft` is interesting for private chats with topics, but it is not the project-group happy path because Bot API targets private chats for drafts.
 6. ~~Telegram cleanup helper base: Bot API `deleteMessages` batching for bot-deletable cleanup where possible.~~ Keep Telethon/user-session cleanup for older or non-bot-owned history.
-7. Wire app-server stream probe results into the live bridge once the probe has stable evidence from real turns.
+7. ~~Wire app-server stream probe results into the live bridge once the probe has stable evidence from real turns.~~ Keep tuning event coverage with live smokes; raw token-by-token Telegram streaming is intentionally not the goal yet.
 
 ## P3 - Product Surface
 
@@ -76,3 +76,4 @@
 21. Status bar reset times now use Telegram `date_time` entities while keeping the plain compact text readable.
 22. Telegram command replies now stay in the chat/topic where the command was sent; direct chat is no longer the surprise default for project/status/sync output.
 23. Bootstrap now includes the bot direct chat in the Telegram folder alongside project groups, with `--skip-bot-folder` as the escape hatch.
+24. Optional passive app-server stream in the live bridge: subscribes to active threads, coalesces noisy reasoning/Todo/diff/command/tool events into the existing Telegram progress bubble, and leaves app-control as the send-only happy path.

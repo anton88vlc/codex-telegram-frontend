@@ -9,6 +9,8 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import { sendNativeTurn } from "./lib/codex-native.mjs";
+import { AppServerLiveStream } from "./lib/app-server-live.mjs";
+import { appendAppServerStreamBuffer, formatAppServerStreamProgressLine } from "./lib/app-server-stream.mjs";
 import { readRecentBridgeEvents, summarizeBridgeEvents } from "./lib/bridge-events.mjs";
 import { normalizeInboundPrompt, normalizeText, parseCommand } from "./lib/message-routing.mjs";
 import { appendTransportNotice, renderNativeSendError } from "./lib/native-ux.mjs";
@@ -86,6 +88,9 @@ const DEFAULT_NATIVE_POLL_INTERVAL_MS = 1_000;
 const DEFAULT_NATIVE_WAIT_FOR_REPLY = false;
 const DEFAULT_OUTBOUND_POLL_INTERVAL_MS = 2_000;
 const DEFAULT_OUTBOUND_MIRROR_PHASES = ["commentary", "final_answer"];
+const DEFAULT_APP_SERVER_STREAM_CONNECT_TIMEOUT_MS = 1_200;
+const DEFAULT_APP_SERVER_STREAM_RECONNECT_MS = 5_000;
+const DEFAULT_APP_SERVER_STREAM_MAX_EVENTS = 500;
 const DEFAULT_STATUS_BAR_TAIL_BYTES = 512 * 1024;
 const DEFAULT_WORKTREE_SUMMARY_MAX_FILES = 8;
 const DEFAULT_HISTORY_MAX_MESSAGES = 40;
@@ -197,6 +202,16 @@ async function loadConfig(configPath) {
     appControlShowThread: fromFile?.appControlShowThread === true,
     nativeDebugBaseUrl: fromFile?.nativeDebugBaseUrl || DEFAULT_NATIVE_DEBUG_BASE_URL,
     appServerUrl: fromFile?.appServerUrl || DEFAULT_APP_SERVER_URL,
+    appServerStreamEnabled: fromFile?.appServerStreamEnabled !== false,
+    appServerStreamConnectTimeoutMs: Number.isFinite(fromFile?.appServerStreamConnectTimeoutMs)
+      ? fromFile.appServerStreamConnectTimeoutMs
+      : DEFAULT_APP_SERVER_STREAM_CONNECT_TIMEOUT_MS,
+    appServerStreamReconnectMs: Number.isFinite(fromFile?.appServerStreamReconnectMs)
+      ? fromFile.appServerStreamReconnectMs
+      : DEFAULT_APP_SERVER_STREAM_RECONNECT_MS,
+    appServerStreamMaxEvents: Number.isFinite(fromFile?.appServerStreamMaxEvents)
+      ? Math.max(50, Math.min(5000, Number(fromFile.appServerStreamMaxEvents)))
+      : DEFAULT_APP_SERVER_STREAM_MAX_EVENTS,
     outboundSyncEnabled: fromFile?.outboundSyncEnabled !== false,
     outboundPollIntervalMs: Number.isFinite(fromFile?.outboundPollIntervalMs)
       ? fromFile.outboundPollIntervalMs
@@ -582,6 +597,207 @@ async function completeOutboundProgressMessage({ config, binding, target, change
     text || "**Progress**\nDone. Final answer below.",
   );
   return edited.length ? edited : [{ message_id: messageId }];
+}
+
+function makeAppServerLiveStream(config) {
+  if (config.appServerStreamEnabled === false || !config.appServerUrl) {
+    return null;
+  }
+  return new AppServerLiveStream({
+    url: config.appServerUrl,
+    connectTimeoutMs: config.appServerStreamConnectTimeoutMs,
+    reconnectMs: config.appServerStreamReconnectMs,
+    maxQueuedEvents: config.appServerStreamMaxEvents,
+    onStatus(payload) {
+      logBridgeEvent("app_server_stream_status", payload);
+    },
+  });
+}
+
+async function subscribeAppServerStream({ config, stream, bindingKey, binding }) {
+  if (!stream || config.appServerStreamEnabled === false || !binding?.threadId) {
+    return false;
+  }
+  try {
+    await stream.subscribe(binding.threadId);
+    return true;
+  } catch (error) {
+    logBridgeEvent("app_server_stream_subscribe_error", {
+      bindingKey,
+      threadId: binding.threadId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return false;
+  }
+}
+
+async function syncAppServerStreamSubscriptions({ config, state, stream }) {
+  if (!stream || config.appServerStreamEnabled === false) {
+    return { subscribed: 0 };
+  }
+  let subscribed = 0;
+  const entries = Object.entries(state.bindings ?? {}).filter(([, binding]) => {
+    return isOutboundMirrorBindingEligible(binding) && binding?.currentTurn;
+  });
+  for (const [bindingKey, binding] of entries) {
+    if (await subscribeAppServerStream({ config, stream, bindingKey, binding })) {
+      subscribed += 1;
+    }
+  }
+  return { subscribed };
+}
+
+function getAppServerPatch(patches, bindingKey) {
+  if (!patches.has(bindingKey)) {
+    patches.set(bindingKey, {
+      eventCount: 0,
+      categories: new Set(),
+      lines: new Map(),
+      planText: null,
+      latestTimestamp: null,
+      sawDiff: false,
+    });
+  }
+  return patches.get(bindingKey);
+}
+
+function appServerLineKey(event) {
+  return [event?.category || "other", event?.itemId || event?.method || "event"].join(":");
+}
+
+async function syncAppServerStreamProgress({ config, state, stream }) {
+  if (!stream || config.appServerStreamEnabled === false) {
+    return { changed: false, applied: 0, events: 0 };
+  }
+  const events = stream.drainEvents();
+  if (!events.length) {
+    return { changed: false, applied: 0, events: 0 };
+  }
+
+  const activeEntries = Object.entries(state.bindings ?? {}).filter(([, binding]) => {
+    return isOutboundMirrorBindingEligible(binding) && binding?.currentTurn;
+  });
+  const bindingByThreadId = new Map(activeEntries.map(([bindingKey, binding]) => [String(binding.threadId), [bindingKey, binding]]));
+  const patches = new Map();
+
+  for (const event of events) {
+    const threadId = normalizeText(event?.threadId);
+    if (!threadId || !bindingByThreadId.has(threadId)) {
+      continue;
+    }
+    const [bindingKey, binding] = bindingByThreadId.get(threadId);
+    const currentTurn = binding.currentTurn || {};
+    if (event.turnId && currentTurn.appServerTurnId && currentTurn.appServerTurnId !== event.turnId) {
+      continue;
+    }
+    if (event.turnId && !currentTurn.appServerTurnId) {
+      currentTurn.appServerTurnId = event.turnId;
+    }
+    binding.currentTurn = currentTurn;
+
+    const patch = getAppServerPatch(patches, bindingKey);
+    patch.eventCount += 1;
+    patch.categories.add(event.category);
+    patch.latestTimestamp = event.ts || patch.latestTimestamp || new Date().toISOString();
+    if (event.planText) {
+      patch.planText = event.planText;
+    }
+    if (event.category === "diff") {
+      patch.sawDiff = true;
+    }
+    const bufferText = appendAppServerStreamBuffer(currentTurn, event);
+    const line = formatAppServerStreamProgressLine(event, { bufferText });
+    if (line) {
+      patch.lines.set(appServerLineKey(event), line);
+    }
+  }
+
+  if (!patches.size) {
+    return { changed: false, applied: 0, events: events.length };
+  }
+
+  const threads = await getThreadsByIds(
+    config.threadsDbPath,
+    [...patches.keys()].map((bindingKey) => state.bindings[bindingKey]?.threadId).filter(Boolean),
+  );
+  const threadsById = new Map(threads.map((thread) => [String(thread.id), thread]));
+  const changedFilesCache = new Map();
+  let changed = false;
+  let applied = 0;
+
+  for (const [bindingKey, patch] of patches.entries()) {
+    const binding = state.bindings[bindingKey];
+    if (!binding?.currentTurn) {
+      continue;
+    }
+    const target = {
+      chatId: binding.chatId,
+      messageThreadId: binding.messageThreadId ?? null,
+    };
+    const thread = threadsById.get(String(binding.threadId));
+    const changedFilesText =
+      thread && (patch.sawDiff || patch.planText || patch.lines.size)
+        ? await loadChangedFilesTextForThread({
+            config,
+            thread,
+            binding,
+            cache: changedFilesCache,
+          })
+        : null;
+    const progressText = [...patch.lines.values()].slice(-4).join("\n");
+    const message = progressText
+      ? {
+          role: "assistant",
+          phase: "commentary",
+          text: progressText,
+          timestamp: patch.latestTimestamp || new Date().toISOString(),
+        }
+      : patch.planText
+        ? {
+            role: "plan",
+            phase: "update_plan",
+            text: patch.planText,
+            timestamp: patch.latestTimestamp || new Date().toISOString(),
+          }
+        : null;
+    if (!message) {
+      continue;
+    }
+    if (patch.planText && message.role !== "plan") {
+      binding.currentTurn.planText = patch.planText;
+      binding.currentTurn.planUpdatedAt = patch.latestTimestamp || new Date().toISOString();
+    }
+    try {
+      const sent = await upsertOutboundProgressMessage({
+        config,
+        binding,
+        target,
+        replyToMessageId: binding.lastInboundMessageId || binding.lastMirroredUserMessageId || null,
+        message,
+        changedFilesText,
+      });
+      rememberOutbound(binding, sent);
+      binding.updatedAt = new Date().toISOString();
+      binding.lastAppServerStreamAt = patch.latestTimestamp || binding.updatedAt;
+      state.bindings[bindingKey] = binding;
+      logBridgeEvent("app_server_stream_progress", {
+        bindingKey,
+        threadId: binding.threadId,
+        eventCount: patch.eventCount,
+        categories: [...patch.categories].sort(),
+      });
+      changed = true;
+      applied += 1;
+    } catch (error) {
+      logBridgeEvent("app_server_stream_progress_error", {
+        bindingKey,
+        threadId: binding.threadId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  return { changed, applied, events: events.length };
 }
 
 function makePromptPreview(text) {
@@ -1431,7 +1647,7 @@ async function handleCommand({ config, state, message, bindingKey, binding, pars
   }
 }
 
-async function handlePlainText({ config, state, message, bindingKey, binding }) {
+async function handlePlainText({ config, state, message, bindingKey, binding, appServerStream = null }) {
   if (!binding) {
     await reply(config.botToken, message, "No binding here. Use /attach <thread-id>.");
     return;
@@ -1475,6 +1691,7 @@ async function handlePlainText({ config, state, message, bindingKey, binding }) 
   if (config.sendTyping) {
     await sendTyping(config.botToken, buildTargetFromMessage(message)).catch(() => null);
   }
+  await subscribeAppServerStream({ config, stream: appServerStream, bindingKey, binding });
 
   const target = buildTargetFromMessage(message);
   const receipt = await replyPlain(config.botToken, message, getInitialProgressText());
@@ -1597,7 +1814,7 @@ async function handlePlainText({ config, state, message, bindingKey, binding }) 
   }
 }
 
-async function processMessage({ config, state, message }) {
+async function processMessage({ config, state, message, appServerStream = null }) {
   if (!message?.chat?.id) {
     return false;
   }
@@ -1631,7 +1848,7 @@ async function processMessage({ config, state, message }) {
     if (parsed) {
       return await handleCommand({ config, state, message, bindingKey, binding, parsed });
     }
-    return await handlePlainText({ config, state, message, bindingKey, binding });
+    return await handlePlainText({ config, state, message, bindingKey, binding, appServerStream });
   } catch (error) {
     logBridgeEvent("process_message_error", {
       chatId: message.chat.id,
@@ -1985,6 +2202,7 @@ async function main() {
   const config = await loadConfig(args.configPath);
   configureBridgeEventLog(config);
   const state = await loadState(config.statePath);
+  const appServerStream = makeAppServerLiveStream(config);
   const effectivePollTimeoutSeconds =
     config.outboundSyncEnabled === false
       ? config.pollTimeoutSeconds
@@ -2031,12 +2249,22 @@ async function main() {
         if (checkpoint.alreadyProcessed) {
           continue;
         }
-        await processMessage({ config, state, message: update.message });
+        await processMessage({ config, state, message: update.message, appServerStream });
         await saveState(config.statePath, state);
       } else {
         state.lastUpdateId = Number.isInteger(update.update_id) ? update.update_id : state.lastUpdateId;
         await saveState(config.statePath, state);
       }
+    }
+
+    let appServerStreamResult = { changed: false };
+    try {
+      await syncAppServerStreamSubscriptions({ config, state, stream: appServerStream });
+      appServerStreamResult = await syncAppServerStreamProgress({ config, state, stream: appServerStream });
+    } catch (error) {
+      logBridgeEvent("app_server_stream_error", {
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
 
     let syncResult = { changed: false };
@@ -2057,7 +2285,7 @@ async function main() {
       });
     }
 
-    if (syncResult.changed || statusBarResult.changed) {
+    if (appServerStreamResult.changed || syncResult.changed || statusBarResult.changed) {
       await saveState(config.statePath, state);
     }
 
