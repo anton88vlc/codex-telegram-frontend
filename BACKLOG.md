@@ -83,3 +83,4 @@
 28. Telegram media albums are grouped by `media_group_id`, so several photos attached at once become one Codex turn, one progress bubble and one reply chain.
 29. Telegram voice/audio ingress with Deepgram/OpenAI/custom-command STT, italic transcript bubble, reply-chain UX and no permanent audio file for built-in providers.
 30. Public-readiness cleanup pass: secret/local-artifact scan, neutral repo examples, agent notes without personal user context and onboarding doctor validation for placeholder Telegram API credentials.
+31. Mobile General/All rescue: plain messages accidentally sent to an unbound group surface are moved into the last active bound topic with a bot-side surrogate user bubble; commands still stay local.

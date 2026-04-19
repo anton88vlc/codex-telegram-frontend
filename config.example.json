@@ -8,6 +8,8 @@
   "sendTyping": true,
   "typingHeartbeatEnabled": true,
   "typingHeartbeatIntervalMs": 4000,
+  "unboundGroupFallbackEnabled": true,
+  "unboundGroupFallbackMaxAgeMs": 2592000000,
   "outboundSyncEnabled": true,
   "outboundPollIntervalMs": 2000,
   "outboundMirrorPhases": ["commentary", "final_answer"],

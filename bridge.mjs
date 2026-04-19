@@ -12,7 +12,13 @@ import { sendNativeTurn } from "./lib/codex-native.mjs";
 import { AppServerLiveStream } from "./lib/app-server-live.mjs";
 import { appendAppServerStreamBuffer, formatAppServerStreamProgressLine } from "./lib/app-server-stream.mjs";
 import { readRecentBridgeEvents, summarizeBridgeEvents } from "./lib/bridge-events.mjs";
-import { normalizeInboundPrompt, normalizeText, parseCommand } from "./lib/message-routing.mjs";
+import {
+  DEFAULT_UNBOUND_GROUP_FALLBACK_MAX_AGE_MS,
+  findFallbackTopicBindingForUnboundGroupMessage,
+  normalizeInboundPrompt,
+  normalizeText,
+  parseCommand,
+} from "./lib/message-routing.mjs";
 import { appendTransportNotice, renderNativeSendError } from "./lib/native-ux.mjs";
 import {
   appendOutboundProgressItem,
@@ -249,6 +255,10 @@ async function loadConfig(configPath) {
       fromFile?.typingHeartbeatIntervalMs,
       DEFAULT_TYPING_HEARTBEAT_INTERVAL_MS,
     ),
+    unboundGroupFallbackEnabled: fromFile?.unboundGroupFallbackEnabled !== false,
+    unboundGroupFallbackMaxAgeMs: Number.isFinite(fromFile?.unboundGroupFallbackMaxAgeMs)
+      ? Math.max(0, Number(fromFile.unboundGroupFallbackMaxAgeMs))
+      : DEFAULT_UNBOUND_GROUP_FALLBACK_MAX_AGE_MS,
     nativeTimeoutMs: Number.isFinite(fromFile?.nativeTimeoutMs) ? fromFile.nativeTimeoutMs : 120_000,
     nativeWaitForReply:
       typeof fromFile?.nativeWaitForReply === "boolean"
@@ -407,6 +417,107 @@ function buildTargetFromBinding(binding) {
   return {
     chatId: binding.chatId,
     messageThreadId: binding.messageThreadId ?? null,
+  };
+}
+
+function formatTelegramSenderName(message) {
+  const firstName = normalizeText(message?.from?.first_name);
+  const lastName = normalizeText(message?.from?.last_name);
+  const fullName = normalizeText([firstName, lastName].filter(Boolean).join(" "));
+  if (fullName) {
+    return fullName;
+  }
+  const username = normalizeText(message?.from?.username).replace(/^@+/, "");
+  return username ? `@${username}` : "Telegram user";
+}
+
+function truncatePreview(text, limit = 1200) {
+  const normalized = normalizeText(text).replace(/\r\n/g, "\n");
+  if (normalized.length <= limit) {
+    return normalized;
+  }
+  return `${normalized.slice(0, Math.max(0, limit - 1)).trimEnd()}…`;
+}
+
+function quoteMarkdownBlock(text) {
+  return String(text ?? "")
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((line) => `> ${line}`)
+    .join("\n");
+}
+
+function formatUnboundGroupFallbackBubble({ message, promptText, attachmentRefs = [], voiceRefs = [] }) {
+  const sender = formatTelegramSenderName(message);
+  const source = message?.message_thread_id != null ? "General / unbound topic" : "group surface";
+  const lines = [`**${sender} via ${source}**`];
+  const preview = truncatePreview(promptText);
+  if (preview) {
+    lines.push("", quoteMarkdownBlock(preview));
+  }
+  if (attachmentRefs.length) {
+    lines.push("", `_${attachmentRefs.length} attachment${attachmentRefs.length === 1 ? "" : "s"} moved with this prompt._`);
+  }
+  if (voiceRefs.length) {
+    lines.push("", `_${voiceRefs.length} voice note${voiceRefs.length === 1 ? "" : "s"} moved with this prompt._`);
+  }
+  if (!preview && !attachmentRefs.length && !voiceRefs.length) {
+    lines.push("", "_Moved from an unbound group surface._");
+  }
+  return lines.join("\n");
+}
+
+async function rerouteUnboundGroupMessageToFallbackTopic({ config, state, message, promptText, attachmentRefs, voiceRefs }) {
+  if (config.unboundGroupFallbackEnabled === false) {
+    return null;
+  }
+  const fallback = findFallbackTopicBindingForUnboundGroupMessage(state, message, {
+    maxAgeMs: config.unboundGroupFallbackMaxAgeMs,
+  });
+  if (!fallback?.binding) {
+    return null;
+  }
+
+  const sent = await sendRichTextChunks(
+    config.botToken,
+    buildTargetFromBinding(fallback.binding),
+    formatUnboundGroupFallbackBubble({
+      message,
+      promptText,
+      attachmentRefs,
+      voiceRefs,
+    }),
+  );
+  const routedMessageId = sent[0]?.message_id;
+  const routedMessage = {
+    ...message,
+    message_id: Number.isInteger(routedMessageId) ? routedMessageId : message.message_id,
+    message_thread_id: fallback.binding.messageThreadId ?? message.message_thread_id ?? null,
+    routedFromMessage: {
+      chatId: String(message.chat.id),
+      messageThreadId: message.message_thread_id ?? null,
+      messageId: message.message_id ?? null,
+    },
+  };
+  fallback.binding.lastUnboundFallbackAt = new Date().toISOString();
+  fallback.binding.lastUnboundFallbackFrom = routedMessage.routedFromMessage;
+  fallback.binding.updatedAt = fallback.binding.lastUnboundFallbackAt;
+  state.bindings[fallback.bindingKey] = fallback.binding;
+  rememberOutbound(fallback.binding, sent);
+  logBridgeEvent("unbound_group_message_rerouted", {
+    chatId: message.chat.id,
+    fromMessageThreadId: message.message_thread_id ?? null,
+    fromMessageId: message.message_id ?? null,
+    toMessageThreadId: fallback.binding.messageThreadId ?? null,
+    toMessageId: Number.isInteger(routedMessageId) ? routedMessageId : null,
+    bindingKey: fallback.bindingKey,
+    threadId: fallback.binding.threadId,
+    activityMs: fallback.activityMs,
+  });
+  return {
+    bindingKey: fallback.bindingKey,
+    binding: fallback.binding,
+    message: routedMessage,
   };
 }
 
@@ -1883,7 +1994,7 @@ async function handlePlainText({
   typingHeartbeats = null,
 }) {
   if (!binding) {
-    await reply(config.botToken, message, "No binding here. Use /attach <thread-id>.");
+    await reply(config.botToken, message, "No Codex thread is bound here. Open a topic or use /attach <thread-id>.");
     return;
   }
 
@@ -2227,7 +2338,33 @@ async function processMessage({ config, state, message, appServerStream = null, 
     if (parsed) {
       return await handleCommand({ config, state, message, bindingKey, binding, parsed });
     }
-    return await handlePlainText({ config, state, message, bindingKey, binding, appServerStream, typingHeartbeats });
+    let effectiveMessage = message;
+    let effectiveBindingKey = bindingKey;
+    let effectiveBinding = binding;
+    if (!effectiveBinding) {
+      const rerouted = await rerouteUnboundGroupMessageToFallbackTopic({
+        config,
+        state,
+        message,
+        promptText: normalizeInboundPrompt(ingressText, { botUsername: config.botUsername }),
+        attachmentRefs,
+        voiceRefs,
+      });
+      if (rerouted) {
+        effectiveMessage = rerouted.message;
+        effectiveBindingKey = rerouted.bindingKey;
+        effectiveBinding = rerouted.binding;
+      }
+    }
+    return await handlePlainText({
+      config,
+      state,
+      message: effectiveMessage,
+      bindingKey: effectiveBindingKey,
+      binding: effectiveBinding,
+      appServerStream,
+      typingHeartbeats,
+    });
   } catch (error) {
     logBridgeEvent("process_message_error", {
       chatId: message.chat.id,

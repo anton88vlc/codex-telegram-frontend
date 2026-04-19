@@ -17,6 +17,8 @@ test("buildSettingsReport shows safe runtime settings without secrets", () => {
       sendTyping: true,
       typingHeartbeatEnabled: true,
       typingHeartbeatIntervalMs: 4000,
+      unboundGroupFallbackEnabled: true,
+      unboundGroupFallbackMaxAgeMs: 30 * 24 * 60 * 60 * 1000,
       nativeDebugBaseUrl: "http://127.0.0.1:9222",
       appServerUrl: "ws://127.0.0.1:27890",
       nativeTimeoutMs: 120000,
@@ -75,8 +77,9 @@ test("buildSettingsReport shows safe runtime settings without secrets", () => {
   assert.match(text, /\*\*Bridge settings\*\*/);
   assert.match(text, /bot: @cdxbot; token: Keychain codex-telegram-bridge-bot-token/);
   assert.match(text, /ingress: poll 30s; typing on; typing heartbeat on \/ 4s/);
+  assert.match(text, /mobile rescue: on; max age 30d/);
   assert.match(text, /transport: native; ingress app-server; app-control `http:\/\/127\.0\.0\.1:9222`; fallback `ws:\/\/127\.0\.0\.1:27890`/);
-  assert.match(text, /wait reply off; native poll 1s; app-control cooldown 300s/);
+  assert.match(text, /wait reply off; native poll 1s; app-control cooldown 5m/);
   assert.match(text, /app-control: show thread on/);
   assert.match(text, /app-server stream: on; connect 1200ms; reconnect 5s/);
   assert.match(text, /mirror: on; phases commentary, final_answer; progress updates; poll 2s/);
