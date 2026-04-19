@@ -37,6 +37,36 @@ test("renderTelegramChunks formats lists, quotes and extra inline styles", () =>
   );
 });
 
+test("renderTelegramChunks renders Markdown tables as compact pre blocks", () => {
+  const [chunk] = renderTelegramChunks(`| File | Change |
+| --- | --- |
+| bridge.mjs | +2 -1 |
+| lib/telegram-format.mjs | +8 -0 |`);
+
+  assert.match(chunk.html, /<pre>File\s+Change/);
+  assert.match(chunk.html, /bridge\.mjs\s+\+2 -1/);
+  assert.match(chunk.html, /lib\/telegram-format\.mjs\s+\+8 -0/);
+  assert.doesNotMatch(chunk.html, /\| ---/);
+  assert.match(chunk.plain, /File\s+Change/);
+  assert.doesNotMatch(chunk.plain, /\| ---/);
+});
+
+test("renderTelegramChunks renders local file links as readable code text", () => {
+  const [chunk] = renderTelegramChunks(
+    "See [bridge.mjs](/Users/antonnaumov/code/codex-telegram-frontend/bridge.mjs:42) and [space file](</Users/a/My File.md:3>).",
+  );
+
+  assert.match(
+    chunk.html,
+    /<code>bridge\.mjs — \/Users\/antonnaumov\/code\/codex-telegram-frontend\/bridge\.mjs:42<\/code>/,
+  );
+  assert.match(chunk.html, /<code>space file — \/Users\/a\/My File\.md:3<\/code>/);
+  assert.equal(
+    chunk.plain,
+    "See bridge.mjs — /Users/antonnaumov/code/codex-telegram-frontend/bridge.mjs:42 and space file — /Users/a/My File.md:3.",
+  );
+});
+
 test("renderTelegramChunks keeps code fences as pre blocks", () => {
   const [chunk] = renderTelegramChunks("```js\nconst x = 1;\n```");
 

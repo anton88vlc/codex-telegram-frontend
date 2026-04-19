@@ -78,7 +78,7 @@ Docs should sound like a competent teammate at 2am: direct, practical, and a lit
 - configurable Telegram ingress transport: use `nativeIngressTransport: "app-server"` if app-control destabilizes the desktop renderer
 - in-place progress bubble in Telegram: one receipt message is edited while Codex works
 - reply-style answers to the triggering Telegram message
-- Telegram HTML rendering for `**bold**`, `_italic_` / `*italic*`, quotes, lists, code, spoilers and links, with plain-text fallback
+- Telegram HTML rendering for `**bold**`, `_italic_` / `*italic*`, quotes, lists, code, spoilers, links, Markdown tables and local file links, with plain-text fallback
 - short human-facing errors in chat, technical details in logs
 - noisy ops commands can be routed to direct chat with the bot to keep work topics clean
 - `/health` includes delivery clues, recent failures and app-control vs fallback counters

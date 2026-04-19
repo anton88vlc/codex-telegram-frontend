@@ -15,7 +15,7 @@
 3. ~~Basic ops/admin quiet path: help, health, settings, project-status and sync previews can route long replies to direct chat.~~
 4. Dedicated ops topic or configurable ops routing, so the working topics stay chat-like even under heavier admin use.
 5. ~~Telegram HTML rendering for bold, italic, code, code fences, lists, task lists, links, blockquotes, spoilers and plain fallback.~~
-6. Richer rendering polish: Markdown tables and cleaner local file links.
+6. ~~Richer rendering polish: Markdown tables and cleaner local file links.~~
 7. ~~Onboarding wizard base: doctor, project/thread selection, plan write, optional bootstrap, clean rebuild preview, backfill and smoke.~~
 8. Onboarding polish: safer restore/reuse flows, clearer selectors and nicer recovery when Telegram credentials/session are wrong.
 9. ~~Agent-led install docs: public docs let a new user open Codex in this repo, paste one clear install prompt, and let Codex drive doctor/setup/wizard/bootstrap/backfill/smoke while asking only for unavoidable Telegram steps.~~
@@ -56,3 +56,4 @@
 12. Onboarding wizard base flow with doctor, plan, optional bootstrap, cleanup/backfill preview and smoke.
 13. Agent-led onboarding docs: README install prompt, simplified onboarding guide and lower-level commands reframed as escape hatches.
 14. `onboard:prepare` for agent-led local setup: safe config/admin env creation, optional admin venv install, credential prompts and QR-login handoff.
+15. Richer Telegram rendering polish: Markdown tables become compact monospace blocks, and local file links render as readable code text instead of broken phone links.
