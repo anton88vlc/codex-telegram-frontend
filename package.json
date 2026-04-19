@@ -25,6 +25,7 @@
     "bot:topics": "node scripts/check_private_bot_topics.mjs",
     "bot:avatar": "admin/.venv/bin/python admin/telegram_user_admin.py set-bot-avatar",
     "app-server:probe": "node scripts/probe_app_server_stream.mjs",
+    "app-server:start-chat": "node scripts/start_via_app_server.js",
     "codex:launch": "node scripts/launch_codex_app_control.mjs"
   },
   "engines": {

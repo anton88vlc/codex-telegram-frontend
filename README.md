@@ -67,6 +67,7 @@ This project is a frontend. It does not replace Codex.
 - Voice/audio: Telegram voice is transcribed first, shown as an italic quoted transcript, then sent to Codex as text.
 - Clean bounded history backfill: user prompts plus assistant final answers by default.
 - Quickstart onboarding: latest active Codex project threads become Telegram groups/topics, and Codex Chats become private topics inside the bot direct chat when the bot has Threaded Mode enabled.
+- New messages in an unbound private bot topic can create a fresh projectless Codex Chat, bind the topic, then continue through the normal app-control send flow.
 - Private bot topic preflight for Codex Desktop `Chats`: `npm run bot:topics`.
 - Bootstrap can create/reuse Telegram folder, project groups, topics, bot folder entry and status bars.
 - Optional curated topic auto-sync for fresh Codex threads in already bootstrapped project groups.
@@ -120,6 +121,12 @@ npm run bot:polish
 npm run bot:polish -- --apply
 npm run bot:topics
 npm run bot:avatar
+```
+
+Low-level app-server probe for creating a Codex Chat without touching Telegram:
+
+```bash
+npm run app-server:start-chat -- --title "Scratch idea"
 ```
 
 Install or refresh launchd:

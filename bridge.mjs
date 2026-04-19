@@ -8,7 +8,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
-import { sendNativeTurn } from "./lib/codex-native.mjs";
+import { createNativeChat, sendNativeTurn } from "./lib/codex-native.mjs";
 import { AppServerLiveStream } from "./lib/app-server-live.mjs";
 import { appendAppServerStreamBuffer, formatAppServerStreamProgressLine } from "./lib/app-server-stream.mjs";
 import { readRecentBridgeEvents, summarizeBridgeEvents } from "./lib/bridge-events.mjs";
@@ -115,6 +115,7 @@ const DEFAULT_CONFIG_PATH = path.join(PROJECT_ROOT, "config.local.json");
 const DEFAULT_STATE_PATH = path.join(PROJECT_ROOT, "state", "state.json");
 const DEFAULT_NATIVE_HELPER_PATH = path.join(PROJECT_ROOT, "scripts", "send_via_app_control.js");
 const DEFAULT_NATIVE_FALLBACK_HELPER_PATH = path.join(PROJECT_ROOT, "scripts", "send_via_app_server.js");
+const DEFAULT_NATIVE_CHAT_START_HELPER_PATH = path.join(PROJECT_ROOT, "scripts", "start_via_app_server.js");
 const DEFAULT_PROJECT_INDEX_PATH = path.join(PROJECT_ROOT, "state", "bootstrap-result.json");
 const DEFAULT_ATTACHMENT_STORAGE_DIR = path.join(PROJECT_ROOT, "state", "attachments");
 const DEFAULT_BRIDGE_LOG_PATH = path.join(PROJECT_ROOT, "logs", "bridge.stderr.log");
@@ -124,6 +125,7 @@ const DEFAULT_NATIVE_DEBUG_BASE_URL = process.env.CODEX_REMOTE_DEBUG_URL || "htt
 const DEFAULT_APP_SERVER_URL = process.env.CODEX_APP_SERVER_URL || "ws://127.0.0.1:27890";
 const DEFAULT_NATIVE_POLL_INTERVAL_MS = 1_000;
 const DEFAULT_NATIVE_WAIT_FOR_REPLY = false;
+const DEFAULT_NATIVE_CHAT_START_TIMEOUT_MS = 45_000;
 const DEFAULT_OUTBOUND_POLL_INTERVAL_MS = 2_000;
 const DEFAULT_OUTBOUND_MIRROR_PHASES = ["commentary", "final_answer"];
 const DEFAULT_APP_SERVER_STREAM_CONNECT_TIMEOUT_MS = 1_200;
@@ -276,6 +278,14 @@ async function loadConfig(configPath) {
     nativeIngressTransport: ["app-control", "app-server", "auto"].includes(normalizeText(fromFile?.nativeIngressTransport))
       ? normalizeText(fromFile.nativeIngressTransport)
       : "app-control",
+    privateTopicAutoCreateChats: fromFile?.privateTopicAutoCreateChats !== false,
+    nativeChatStartTimeoutMs: Number.isFinite(fromFile?.nativeChatStartTimeoutMs)
+      ? fromFile.nativeChatStartTimeoutMs
+      : DEFAULT_NATIVE_CHAT_START_TIMEOUT_MS,
+    nativeChatStartCwd:
+      Object.prototype.hasOwnProperty.call(fromFile || {}, "nativeChatStartCwd")
+        ? normalizeText(fromFile.nativeChatStartCwd) || null
+        : null,
     appControlCooldownMs: Number.isFinite(fromFile?.appControlCooldownMs)
       ? fromFile.appControlCooldownMs
       : DEFAULT_APP_CONTROL_COOLDOWN_MS,
@@ -355,6 +365,7 @@ async function loadConfig(configPath) {
     statePath: fromFile?.statePath || DEFAULT_STATE_PATH,
     nativeHelperPath: fromFile?.nativeHelperPath || DEFAULT_NATIVE_HELPER_PATH,
     nativeFallbackHelperPath: fromFile?.nativeFallbackHelperPath || DEFAULT_NATIVE_FALLBACK_HELPER_PATH,
+    nativeChatStartHelperPath: fromFile?.nativeChatStartHelperPath || DEFAULT_NATIVE_CHAT_START_HELPER_PATH,
     projectIndexPath: fromFile?.projectIndexPath || DEFAULT_PROJECT_INDEX_PATH,
     bridgeLogPath: fromFile?.bridgeLogPath || DEFAULT_BRIDGE_LOG_PATH,
     eventLogPath: fromFile?.eventLogPath || DEFAULT_EVENT_LOG_PATH,
@@ -618,6 +629,103 @@ async function replyPlain(token, message, text) {
 
 function isTopicMessage(message) {
   return message.message_thread_id != null && (message.chat.type === "group" || message.chat.type === "supergroup");
+}
+
+function isPrivateTopicMessage(message) {
+  return message?.message_thread_id != null && message?.chat?.type === "private";
+}
+
+function getPrivateTopicTitleStore(state) {
+  if (!state.privateTopicTitles || typeof state.privateTopicTitles !== "object") {
+    state.privateTopicTitles = {};
+  }
+  return state.privateTopicTitles;
+}
+
+function rememberPrivateTopicTitle(state, message) {
+  if (!isPrivateTopicMessage(message)) {
+    return false;
+  }
+  const topicTitle = normalizeText(message?.forum_topic_created?.name);
+  if (!topicTitle) {
+    return false;
+  }
+  const bindingKey = makeBindingKey({
+    chatId: message.chat.id,
+    messageThreadId: message.message_thread_id,
+  });
+  getPrivateTopicTitleStore(state)[bindingKey] = {
+    title: sanitizeTopicTitle(topicTitle, "New Codex Chat"),
+    updatedAt: new Date().toISOString(),
+    messageId: message.message_id ?? null,
+  };
+  return true;
+}
+
+function makePrivateTopicChatTitle({ state, bindingKey, message, promptText }) {
+  const remembered = normalizeText(getPrivateTopicTitleStore(state)?.[bindingKey]?.title);
+  if (remembered) {
+    return sanitizeTopicTitle(remembered, "New Codex Chat");
+  }
+
+  const serviceTitle = normalizeText(message?.reply_to_message?.forum_topic_created?.name);
+  if (serviceTitle) {
+    return sanitizeTopicTitle(serviceTitle, "New Codex Chat");
+  }
+
+  const promptTitle = normalizeText(promptText).replace(/\s+/g, " ");
+  if (promptTitle) {
+    return sanitizeTopicTitle(promptTitle.length <= 64 ? promptTitle : `${promptTitle.slice(0, 61).trimEnd()}...`, "New Codex Chat");
+  }
+
+  return "New Codex Chat";
+}
+
+async function autoCreatePrivateTopicBinding({ config, state, message, bindingKey, promptText }) {
+  if (config.privateTopicAutoCreateChats === false || !isPrivateTopicMessage(message)) {
+    return null;
+  }
+
+  const title = makePrivateTopicChatTitle({ state, bindingKey, message, promptText });
+  const result = await createNativeChat({
+    helperPath: config.nativeChatStartHelperPath,
+    title,
+    cwd: config.nativeChatStartCwd,
+    timeoutMs: config.nativeChatStartTimeoutMs,
+    appServerUrl: config.appServerUrl,
+  });
+  const threadId = normalizeText(result.threadId || result.thread?.id);
+  if (!threadId) {
+    throw new Error("Codex app-server created a chat without returning a thread id");
+  }
+
+  removeOutboundMirror(state, bindingKey);
+  const now = new Date().toISOString();
+  const binding = setBinding(state, bindingKey, {
+    threadId,
+    transport: "native",
+    chatId: String(message.chat.id),
+    messageThreadId: message.message_thread_id ?? null,
+    chatTitle: normalizeText(message.chat.title || message.chat.username || message.chat.first_name || "Codex Chats"),
+    threadTitle: title,
+    createdAt: now,
+    updatedAt: now,
+    createdBy: "private-topic-auto-create",
+    surface: "codex-chats",
+    lastTransportPath: result.transportPath || "app-server-thread-start",
+  });
+
+  logBridgeEvent("private_topic_chat_created", {
+    chatId: message.chat.id,
+    messageThreadId: message.message_thread_id ?? null,
+    messageId: message.message_id ?? null,
+    bindingKey,
+    threadId,
+    title,
+    cwd: config.nativeChatStartCwd,
+  });
+
+  return binding;
 }
 
 function buildOpsDmIntro(message) {
@@ -2455,11 +2563,13 @@ async function processMessage({ config, state, message, appServerStream = null, 
   if (!isAuthorized(config, message)) {
     return false;
   }
+  const rememberedPrivateTopicTitle = rememberPrivateTopicTitle(state, message);
   if (isTelegramServiceMessage(message)) {
     logBridgeEvent("skip_service_message", {
       chatId: message.chat.id,
       messageId: message.message_id ?? null,
       messageThreadId: message.message_thread_id ?? null,
+      rememberedPrivateTopicTitle,
       serviceKeys: TELEGRAM_SERVICE_MESSAGE_KEYS.filter((key) => key in message),
     });
     return false;
@@ -2496,18 +2606,28 @@ async function processMessage({ config, state, message, appServerStream = null, 
     let effectiveBindingKey = bindingKey;
     let effectiveBinding = binding;
     if (!effectiveBinding) {
-      const rerouted = await rerouteUnboundGroupMessageToFallbackTopic({
+      const promptText = normalizeInboundPrompt(ingressText, { botUsername: config.botUsername });
+      effectiveBinding = await autoCreatePrivateTopicBinding({
         config,
         state,
         message,
-        promptText: normalizeInboundPrompt(ingressText, { botUsername: config.botUsername }),
-        attachmentRefs,
-        voiceRefs,
+        bindingKey,
+        promptText,
       });
-      if (rerouted) {
-        effectiveMessage = rerouted.message;
-        effectiveBindingKey = rerouted.bindingKey;
-        effectiveBinding = rerouted.binding;
+      if (!effectiveBinding) {
+        const rerouted = await rerouteUnboundGroupMessageToFallbackTopic({
+          config,
+          state,
+          message,
+          promptText,
+          attachmentRefs,
+          voiceRefs,
+        });
+        if (rerouted) {
+          effectiveMessage = rerouted.message;
+          effectiveBindingKey = rerouted.bindingKey;
+          effectiveBinding = rerouted.binding;
+        }
       }
     }
     return await handlePlainText({

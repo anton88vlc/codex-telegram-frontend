@@ -52,6 +52,9 @@ Use this for things that should survive restarts and should not be changed from 
 | `nativeWaitForReply` | `false` | Keep this off for the normal happy path. The transport returns as soon as Codex accepts the turn; Telegram gets progress/final through the outbound rollout mirror. Setting it to `true` uses the older renderer polling path and should be treated as a debugging fallback. |
 | `nativePollIntervalMs` | `1000` | Poll interval while waiting for native Codex reply. |
 | `nativeIngressTransport` | `app-control` | Telegram-originated send path: `app-control`, `app-server`, or `auto`. Use `app-server` if renderer app-control crashes the desktop app. |
+| `privateTopicAutoCreateChats` | `true` | If a user writes in an unbound private bot topic, create a new projectless Codex Chat and bind that topic before forwarding the message. This is what makes "new Telegram topic = new Codex Chat" feel native. |
+| `nativeChatStartTimeoutMs` | `45000` | Timeout for the app-server `thread/start` helper used by private-topic auto-create. |
+| `nativeChatStartCwd` | `null` | Cwd for auto-created Codex Chats. Keep `null` for projectless `Chats`; set a path only if you intentionally want every private topic to become project-scoped. |
 | `appControlCooldownMs` | `300000` | How long to avoid app-control after an app-control send error before trying it again. |
 | `appControlShowThread` | `false` | Experimental: after app-control accepts a turn, ask Codex Desktop to show the thread. Useful for Desktop-first UX, but keep it off if renderer stability is shaky. |
 | `nativeDebugBaseUrl` | `http://127.0.0.1:9222` | Preferred Codex Desktop app-control endpoint. |
@@ -65,6 +68,7 @@ Use this for things that should survive restarts and should not be changed from 
 | `bridgeLogPath` | `logs/bridge.stderr.log` | launchd stderr log. Useful when the bridge crashes before it can write structured events. |
 | `nativeHelperPath` | `scripts/send_via_app_control.js` | app-control helper path. |
 | `nativeFallbackHelperPath` | `scripts/send_via_app_server.js` | app-server fallback helper path. |
+| `nativeChatStartHelperPath` | `scripts/start_via_app_server.js` | app-server `thread/start` helper for new Codex Chats from private bot topics. |
 | `projectIndexPath` | `state/bootstrap-result.json` | Project/group/topic index produced by bootstrap. |
 | `threadsDbPath` | `~/.codex/state_5.sqlite` | Local Codex Desktop threads DB. |
 | `syncDefaultLimit` | `3` | Default project working-set size for `/project-status` and `/sync-project`. |

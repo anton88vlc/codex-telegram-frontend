@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { NativeTransportError, sendNativeTurn } from "../lib/codex-native.mjs";
+import { NativeTransportError, createNativeChat, sendNativeTurn } from "../lib/codex-native.mjs";
 
 async function writeHelper(dir, name, source) {
   const filePath = path.join(dir, name);
@@ -179,6 +179,58 @@ test("sendNativeTurn reports app-server-first failure without app-control attemp
       assert.equal(error.attempts.length, 1);
       assert.equal(error.attempts[0].path, "app-server-fallback");
       assert.match(error.message, /app-server ingress failed/);
+      return true;
+    },
+  );
+});
+
+test("createNativeChat starts a projectless app-server thread", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-native-chat-"));
+  const argsPath = path.join(dir, "args.json");
+  const helper = await writeHelper(
+    dir,
+    "start.js",
+    `const fs = require("node:fs");
+fs.writeFileSync(${JSON.stringify(argsPath)}, JSON.stringify(process.argv.slice(2)));
+console.log(JSON.stringify({ ok: true, mode: "chat-start-only", threadId: "thread-new", thread: { id: "thread-new", name: "Lab chat" } }));
+`,
+  );
+
+  const result = await createNativeChat({
+    helperPath: helper,
+    title: "Lab chat",
+    cwd: null,
+    timeoutMs: 1000,
+    appServerUrl: "ws://127.0.0.1:27890",
+  });
+  const args = JSON.parse(await fs.readFile(argsPath, "utf8"));
+
+  assert.equal(result.transportPath, "app-server-thread-start");
+  assert.equal(result.threadId, "thread-new");
+  assert.deepEqual(args.slice(0, 6), ["--title", "Lab chat", "--timeout-ms", "1000", "--url", "ws://127.0.0.1:27890"]);
+  assert.equal(args.includes("--cwd"), true);
+  assert.equal(args[args.indexOf("--cwd") + 1], "");
+});
+
+test("createNativeChat reports app-server thread start failures", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-native-chat-"));
+  const helper = await writeHelper(
+    dir,
+    "start.js",
+    'console.log(JSON.stringify({ ok: false, error: "thread/start rejected" })); process.exit(1);\n',
+  );
+
+  await assert.rejects(
+    createNativeChat({
+      helperPath: helper,
+      title: "Lab chat",
+      timeoutMs: 1000,
+    }),
+    (error) => {
+      assert.ok(error instanceof NativeTransportError);
+      assert.equal(error.kind, "app_server_chat_start_failed");
+      assert.equal(error.attempts[0].path, "app-server-thread-start");
+      assert.match(error.message, /thread\/start rejected/);
       return true;
     },
   );
