@@ -39,6 +39,7 @@ Codex outbound:
 - `lib/project-sync.mjs` - project topic sync planning.
 - `lib/outbound-binding-eligibility.mjs` - shared checks for mirror/status/typing eligible bindings.
 - `lib/outbound-mirror-messages.mjs` - pure text shaping for Codex Desktop-originated mirrors.
+- `lib/outbound-mirror-runner.mjs` - rollout mirror delivery, suppression, pending retry state and progress/final routing.
 - `lib/outbound-progress.mjs` - progress bubble text.
 - `lib/outbound-progress-message.mjs` - progress bubble send/edit/finalization.
 - `lib/app-server-stream-runner.mjs` - optional app-server stream subscription and progress coalescing.
@@ -60,7 +61,6 @@ Do not build a giant framework around this. The right move is boring extraction:
 
 Good next slices:
 
-- `lib/outbound-mirror-runner.mjs` for rollout mirror selection, suppression and final/progress message sending.
 - `lib/command-handlers.mjs` for `/help`, `/status`, `/health`, `/settings`, `/project-status` and `/sync-project` routing.
 - `lib/inbound-turn-runner.mjs` for the safer half of `handlePlainText`: prompt preparation, surrogate bubbles and native send result handling.
 - `lib/project-sync-runner.mjs` for applying sync plans through Telegram admin calls.

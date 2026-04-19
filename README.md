@@ -174,6 +174,7 @@ These are local runtime files and should not be committed:
 - [lib/telegram.mjs](lib/telegram.mjs) - Telegram Bot API helpers
 - [lib/codex-native.mjs](lib/codex-native.mjs) - Codex send wrapper
 - [lib/voice-transcription.mjs](lib/voice-transcription.mjs) - Telegram voice/audio STT
+- [lib/outbound-mirror-runner.mjs](lib/outbound-mirror-runner.mjs) - Codex rollout mirror delivery loop
 - [lib/outbound-progress.mjs](lib/outbound-progress.mjs) - Telegram progress bubble content
 - [lib/outbound-progress-message.mjs](lib/outbound-progress-message.mjs) - progress bubble send/edit state
 - [lib/app-server-stream-runner.mjs](lib/app-server-stream-runner.mjs) - optional app-server event stream bridge
