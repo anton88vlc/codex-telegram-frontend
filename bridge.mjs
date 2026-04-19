@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execFile } from "node:child_process";
-import { appendFileSync, mkdirSync } from "node:fs";
+import { appendFileSync, mkdirSync, statSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
@@ -65,7 +65,14 @@ import {
   setOutboundMirror,
   consumeOutboundSuppression,
 } from "./lib/state.mjs";
-import { clamp, getThreadById, getThreadsByIds, listProjectThreads, parsePositiveInt } from "./lib/thread-db.mjs";
+import {
+  clamp,
+  findActiveThreadSuccessors,
+  getThreadById,
+  getThreadsByIds,
+  listProjectThreads,
+  parsePositiveInt,
+} from "./lib/thread-db.mjs";
 import { makeOutboundMirrorSignature, readThreadMirrorDelta } from "./lib/thread-rollout.mjs";
 import {
   DEFAULT_TYPING_HEARTBEAT_INTERVAL_MS,
@@ -2039,6 +2046,7 @@ async function validateBindingForSend(config, binding) {
     if (Number(thread.archived) !== 0) {
       return {
         ok: false,
+        thread,
         message: `This binding points to archived thread ${binding.threadId}. Use /detach and pick an active thread.`,
       };
     }
@@ -2050,6 +2058,97 @@ async function validateBindingForSend(config, binding) {
     });
     return { ok: true, thread: null };
   }
+}
+
+function fileSizeOrZero(filePath) {
+  if (!filePath) {
+    return 0;
+  }
+  try {
+    return Number(statSync(filePath).size) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function prepareOutboundMirrorAtFileEnd(state, bindingKey, thread) {
+  if (!thread?.rollout_path) {
+    removeOutboundMirror(state, bindingKey);
+    return;
+  }
+  setOutboundMirror(state, bindingKey, {
+    initialized: true,
+    threadId: String(thread.id),
+    rolloutPath: thread.rollout_path,
+    byteOffset: fileSizeOrZero(thread.rollout_path),
+    partialLine: "",
+    lastSignature: null,
+    suppressions: [],
+    pendingMessages: [],
+    replyTargetMessageId: null,
+  });
+}
+
+async function validateBindingForSendWithRescue({ config, state, bindingKey, binding }) {
+  const result = await validateBindingForSend(config, binding);
+  if (result.ok || !result.thread || Number(result.thread.archived) === 0) {
+    return result;
+  }
+
+  let candidates = [];
+  try {
+    candidates = await findActiveThreadSuccessors(config.threadsDbPath, result.thread, { limit: 3 });
+  } catch (error) {
+    logBridgeEvent("binding_archived_rescue_lookup_error", {
+      bindingKey,
+      threadId: binding.threadId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  if (candidates.length !== 1) {
+    logBridgeEvent("binding_archived_rescue_ambiguous", {
+      bindingKey,
+      threadId: binding.threadId,
+      candidates: candidates.map((candidate) => ({
+        id: candidate.id,
+        title: candidate.title,
+        cwd: candidate.cwd,
+      })),
+    });
+    return {
+      ...result,
+      message:
+        candidates.length > 1
+          ? `This Telegram topic points to archived Codex thread ${binding.threadId}, and I found ${candidates.length} possible active replacements. Use /detach and /attach <thread-id> once.`
+          : result.message,
+    };
+  }
+
+  const successor = candidates[0];
+  const now = new Date().toISOString();
+  const nextBinding = setBinding(state, bindingKey, {
+    ...binding,
+    threadId: String(successor.id),
+    threadTitle: successor.title || binding.threadTitle,
+    reboundFromThreadId: binding.threadId,
+    reboundAt: now,
+    updatedAt: now,
+  });
+  prepareOutboundMirrorAtFileEnd(state, bindingKey, successor);
+  logBridgeEvent("binding_archived_rescued", {
+    bindingKey,
+    fromThreadId: binding.threadId,
+    toThreadId: successor.id,
+    title: successor.title,
+    cwd: successor.cwd,
+  });
+  return {
+    ok: true,
+    thread: successor,
+    binding: nextBinding,
+    notice: "Recovered the Telegram binding to the active Codex thread; continuing.",
+  };
 }
 
 async function handleCommand({ config, state, message, bindingKey, binding, parsed }) {
@@ -2311,11 +2410,12 @@ async function handlePlainText({
     return;
   }
 
-  const bindingValidation = await validateBindingForSend(config, binding);
+  const bindingValidation = await validateBindingForSendWithRescue({ config, state, bindingKey, binding });
   if (!bindingValidation.ok) {
     await reply(config.botToken, message, bindingValidation.message);
     return;
   }
+  binding = bindingValidation.binding || binding;
 
   let savedAttachments = [];
   let voiceTranscripts = [];
@@ -2438,6 +2538,7 @@ async function handlePlainText({
 
   const target = buildTargetFromMessage(replyMessage);
   const progressIntro = [
+    bindingValidation.notice || null,
     voiceTranscripts.length ? formatVoiceTranscriptionReceipt(voiceTranscripts) : null,
     savedAttachments.length ? formatAttachmentReceipt(savedAttachments) : null,
   ].filter(Boolean);
