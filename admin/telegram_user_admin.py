@@ -414,6 +414,28 @@ def create_private_chat_topic(bot_token: str, chat_id: str, title: str):
     )
 
 
+def get_bot_profile(bot_token: str) -> dict:
+    profile = call_bot_api(bot_token, "getMe", {})
+    return profile if isinstance(profile, dict) else {}
+
+
+def private_topic_status(profile: dict) -> dict:
+    return {
+        "enabled": bool(profile.get("has_topics_enabled")),
+        "allowsUsersToCreateTopics": bool(profile.get("allows_users_to_create_topics")),
+        "username": normalize_bot_username(profile.get("username")),
+    }
+
+
+def private_topic_recovery_hint(profile: dict) -> str:
+    username = normalize_bot_username(profile.get("username"))
+    bot_label = f"@{username}" if username else "the bot"
+    return (
+        f"Private chat topics are off for {bot_label}. Open @BotFather, select the bot, "
+        "enable forum/topic mode in private chats in the BotFather Mini App, then rerun bootstrap."
+    )
+
+
 def make_client(session_path: Path, env: EnvConfig) -> TelegramClient:
     ensure_parent(session_path)
     return TelegramClient(str(session_path), env.api_id, env.api_hash)
@@ -1205,6 +1227,15 @@ async def command_bootstrap(args):
                 }
                 try:
                     bot_token = load_bot_token("CODEX_TELEGRAM_BOT_TOKEN", DEFAULT_BOT_TOKEN_KEYCHAIN_SERVICE)
+                    profile = get_bot_profile(bot_token)
+                    status = private_topic_status(profile)
+                    group_summary["privateTopicStatus"] = status
+                    if not status["enabled"]:
+                        hint = private_topic_recovery_hint(profile)
+                        group_summary["topicError"] = hint
+                        summary["warnings"].append(f"Skipped {group_summary['groupTitle']}: {hint}")
+                        summary["groups"].append(group_summary)
+                        continue
                     for topic_plan in project.get("topics", []):
                         existing_topic = find_existing_topic(existing_group or {}, topic_plan)
                         created_topic = False

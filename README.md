@@ -7,7 +7,7 @@ This is not "another bot chat". The product shape is simple:
 - Telegram folder `codex` = the external Codex container.
 - One Telegram group = one Codex project.
 - One Telegram topic = one Codex thread.
-- Direct bot chat = rare global/ops escape hatch.
+- Direct bot chat with private topics = Codex Desktop `Chats`.
 - Codex Desktop stays the engine and source of truth.
 
 The goal is a clean phone-sized working set, not a landfill mirror of every thread you have ever opened.
@@ -67,6 +67,7 @@ This project is a frontend. It does not replace Codex.
 - Voice/audio: Telegram voice is transcribed first, shown as an italic quoted transcript, then sent to Codex as text.
 - Clean bounded history backfill: user prompts plus assistant final answers by default.
 - Quickstart onboarding: latest active Codex project threads become Telegram groups/topics, and Codex Chats can become private topics inside the bot direct chat.
+- Private bot topic preflight for Codex Desktop `Chats`: `npm run bot:topics`.
 - Bootstrap can create/reuse Telegram folder, project groups, topics, bot folder entry and status bars.
 - Optional curated topic auto-sync for fresh Codex threads in already bootstrapped project groups.
 - Bot polish: command menu, profile text, suggested admin rights and bundled avatar.
@@ -117,6 +118,7 @@ Bot polish:
 ```bash
 npm run bot:polish
 npm run bot:polish -- --apply
+npm run bot:topics
 npm run bot:avatar
 ```
 

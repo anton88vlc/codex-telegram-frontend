@@ -91,9 +91,11 @@ Run the doctor before blaming Telegram:
 ```bash
 npm run onboard:doctor
 npm run state:doctor
+npm run bot:topics
 ```
 
 `onboard:doctor` checks setup prerequisites. `state:doctor` checks the bridge's live local memory: stale bindings, dead-topic errors, orphan mirror state and bootstrap entries that no longer match `state/state.json`.
+`bot:topics` checks whether the bot can create private chat topics for Codex Desktop `Chats`.
 
 ## 3. Telegram Commands
 

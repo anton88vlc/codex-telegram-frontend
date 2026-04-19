@@ -248,6 +248,20 @@ It merges groups into `state/bootstrap-result.json`; pass `--replace-result` onl
 Use `--skip-folder` only when debugging folder automation. Use `--skip-bot-folder` if the bot direct chat should stay out of the folder for a one-off test.
 Bot username is read from `config.local.json -> botUsername`, `CODEX_TELEGRAM_BOT_USERNAME`, or `--bot-username`.
 
+Private bot topics preflight:
+
+```bash
+npm run bot:topics
+```
+
+Real create/delete smoke in the bot direct chat:
+
+```bash
+npm run bot:topics -- --smoke --chat-id <telegram-user-id>
+```
+
+If the check reports private topics as off, open @BotFather, select the bot, enable forum/topic mode in private chats in the BotFather Mini App, then rerun bootstrap. Without that switch, Codex Desktop `Chats` stay out of Telegram instead of being faked as project groups.
+
 Apply the bundled bot avatar after the user-side Telegram session is authorized:
 
 ```bash

@@ -65,6 +65,14 @@ By default it scans the 10 latest active Codex work items across the local Codex
 
 If private bot topics are not enabled yet, quickstart should keep project onboarding alive and report the Chats surface warning plainly. Rough beta edges are fine; silent fake project groups are not.
 
+Check the bot-private `Chats` surface directly:
+
+```bash
+npm run bot:topics
+```
+
+If it says private topics are off, open @BotFather, select the bot, enable forum/topic mode in private chats in the BotFather Mini App, then rerun quickstart. This is Telegram plumbing, not user failure. The product should say that plainly.
+
 Preview without side effects:
 
 ```bash

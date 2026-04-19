@@ -12,7 +12,7 @@
 
 These are the useful Telegram platform leads found during the April 2026 API pass. Treat this as a ranked implementation queue, not a shiny-object shopping list.
 
-1. Private bot topics for Codex Desktop `Chats`. Base onboarding support exists, but the current live bot reports no private-topic/forum mode yet. Next step is to document and/or automate the BotFather Mini App setting, then run a live `Chats` smoke.
+1. ~~Private bot topics for Codex Desktop `Chats` capability layer.~~ Base onboarding support exists, `bot:topics` checks `getMe.has_topics_enabled`, bootstrap skips cleanly with a BotFather recovery hint when private topic mode is off, and self-check surfaces the status. Next step is enabling it on the live bot and running a real `Chats` smoke.
 2. `sendMessageDraft` for native "assistant is writing" UX. It streams animated drafts in private chats and private bot topics, so it is perfect for Codex `Chats`; it should not replace project-group progress bubbles unless Telegram opens drafts for supergroups.
 3. Managed bots and `t.me/newbot/...` links. This is the big onboarding simplifier: fewer BotFather gymnastics, cleaner token handoff, maybe a future manager-bot flow. Keep it local/user-owned; do not turn the project into a weird SaaS control plane.
 4. Official bot avatar API. Bot API now has `setMyProfilePhoto`, so replace the MTProto avatar workaround with the official path when practical.
@@ -59,7 +59,7 @@ These are the useful Telegram platform leads found during the April 2026 API pas
 8. ~~Bot profile/install polish base: default administrator rights, command menu, menu button and profile descriptions.~~ Cleaner topic/project icons still need a visual pass.
 9. ~~Add the bot direct chat to the `codex` Telegram folder during bootstrap when possible.~~
 10. ~~Bot avatar polish: bundled default avatar plus `bot:avatar` command using Telegram MTProto `photos.uploadProfilePhoto(bot=...)`.~~ Replace with official Bot API `setMyProfilePhoto` once the helper is wired.
-11. Private-topic enablement guide/check: detect `has_topics_enabled` from `getMe`, explain the BotFather Mini App switch plainly and retry Codex `Chats` topic bootstrap after it is enabled.
+11. ~~Private-topic enablement guide/check: detect `has_topics_enabled` from `getMe`, explain the BotFather Mini App switch plainly and retry Codex `Chats` topic bootstrap after it is enabled.~~ Live bot enablement and smoke still pending.
 12. Backfill/media polish: evaluate `copyMessages` for preserving Telegram albums/history shape where it beats rebuilding messages from scratch.
 
 ## P4 - UX Modes
@@ -105,3 +105,4 @@ These are the useful Telegram platform leads found during the April 2026 API pas
 33. Curated topic auto-sync base: optionally scans bootstrapped project groups for fresh active Codex threads, creates/reopens/renames/parks only sync-managed Telegram topics within a small working-set limit and leaves manual topics alone.
 34. Quickstart onboarding path: scan the latest active Codex threads, group them by project, create/reuse the Telegram surface, import a 10-message clean tail and run the smoke without forcing manual project/topic selection.
 35. Codex Desktop `Chats` onboarding base: quickstart classifies projectless/home/scratch Codex Chats separately from projects and maps them to private topics in the bot direct chat when Telegram private-topic mode is available.
+36. Private bot topics readiness layer: `npm run bot:topics`, self-check reporting, bootstrap preflight and clean BotFather recovery hints instead of repeated `chat is not a forum` failures.

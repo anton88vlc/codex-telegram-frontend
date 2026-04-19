@@ -22,6 +22,7 @@
     "onboard:wizard": "node scripts/onboard.mjs wizard",
     "onboard:wizard:rehearsal": "node scripts/onboard.mjs wizard --rehearsal",
     "bot:polish": "node scripts/configure_bot_profile.mjs",
+    "bot:topics": "node scripts/check_private_bot_topics.mjs",
     "bot:avatar": "admin/.venv/bin/python admin/telegram_user_admin.py set-bot-avatar",
     "app-server:probe": "node scripts/probe_app_server_stream.mjs",
     "codex:launch": "node scripts/launch_codex_app_control.mjs"

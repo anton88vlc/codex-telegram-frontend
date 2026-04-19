@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  deleteForumTopic,
   deleteMessages,
   downloadTelegramFile,
   getFile,
@@ -12,6 +13,11 @@ import {
   setMyShortDescription,
   splitTelegramText,
 } from "../lib/telegram.mjs";
+import {
+  formatBotPrivateTopicReadiness,
+  isPrivateTopicModeMissingError,
+  normalizeBotPrivateTopicReadiness,
+} from "../lib/bot-private-topics.mjs";
 
 async function withMockTelegramFetch(fn) {
   const originalFetch = globalThis.fetch;
@@ -126,6 +132,19 @@ test("deleteMessages batches ids for Bot API cleanup", async () => {
   });
 });
 
+test("deleteForumTopic deletes temporary private topic smokes", async () => {
+  await withMockTelegramFetch(async (calls) => {
+    await deleteForumTopic("token", {
+      chatId: 42,
+      messageThreadId: 7,
+    });
+
+    assert.equal(calls[0].url, "https://api.telegram.org/bottoken/deleteForumTopic");
+    assert.equal(calls[0].body.chat_id, 42);
+    assert.equal(calls[0].body.message_thread_id, 7);
+  });
+});
+
 test("sendMessageDraft exposes Telegram private-chat draft streaming", async () => {
   await withMockTelegramFetch(async (calls) => {
     await sendMessageDraft("token", {
@@ -141,6 +160,21 @@ test("sendMessageDraft exposes Telegram private-chat draft streaming", async () 
     assert.equal(calls[0].body.message_thread_id, 3);
     assert.equal(calls[0].body.parse_mode, "HTML");
   });
+});
+
+test("bot private topic readiness explains disabled mode", () => {
+  const readiness = normalizeBotPrivateTopicReadiness({
+    id: 123,
+    username: "codex_bot",
+    has_topics_enabled: false,
+    allows_users_to_create_topics: false,
+  });
+
+  assert.equal(readiness.ok, false);
+  assert.equal(readiness.hasTopicsEnabled, false);
+  assert.match(formatBotPrivateTopicReadiness(readiness), /private topics: off/);
+  assert.match(formatBotPrivateTopicReadiness(readiness), /BotFather/);
+  assert.equal(isPrivateTopicModeMissingError(new Error("Bad Request: the chat is not a forum")), true);
 });
 
 test("bot profile helpers cover onboarding polish calls", async () => {
