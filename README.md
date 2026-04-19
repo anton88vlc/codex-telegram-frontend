@@ -106,6 +106,7 @@ These are repo-local runtime files and are ignored by git:
 - `state/state.json`
 - `state/bootstrap-result.json`
 - `state/telegram_user.session`
+- `logs/bridge.events.ndjson`
 - `logs/*`
 - `admin/.env`
 - `admin/bootstrap-plan.json`

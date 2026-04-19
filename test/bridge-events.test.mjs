@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 
-import { parseBridgeEventLogText, summarizeBridgeEvents } from "../lib/bridge-events.mjs";
+import { parseBridgeEventLogText, readRecentBridgeEvents, summarizeBridgeEvents } from "../lib/bridge-events.mjs";
 
 test("parseBridgeEventLogText reads old pretty events and new ndjson events", () => {
   const text = [
@@ -34,4 +37,23 @@ test("summarizeBridgeEvents keeps delivery counters and recent failures", () => 
   assert.equal(summary.nativeSendErrors, 1);
   assert.equal(summary.opsDmFallbacks, 1);
   assert.equal(summary.recentFailures.length, 2);
+});
+
+test("readRecentBridgeEvents reads structured ndjson event log tail", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "bridge-events-"));
+  const logPath = path.join(dir, "bridge.events.ndjson");
+  await fs.writeFile(
+    logPath,
+    [
+      '{"ts":"2026-04-19T00:00:00.000Z","type":"native_send_success","transportPath":"app-control"}',
+      '{"ts":"2026-04-19T00:01:00.000Z","type":"native_send_error","error":"timeout"}',
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+
+  const events = await readRecentBridgeEvents(logPath, { limit: 1 });
+
+  assert.equal(events.length, 1);
+  assert.equal(events[0].type, "native_send_error");
 });

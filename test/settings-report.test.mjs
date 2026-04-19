@@ -35,6 +35,7 @@ test("buildSettingsReport shows safe runtime settings without secrets", () => {
       syncDefaultLimit: 3,
       projectIndexPath: "state/bootstrap-result.json",
       statePath: "state/state.json",
+      eventLogPath: "logs/bridge.events.ndjson",
       bridgeLogPath: "logs/bridge.stderr.log",
       threadsDbPath: "/Users/test/.codex/state_5.sqlite",
     },
@@ -58,6 +59,7 @@ test("buildSettingsReport shows safe runtime settings without secrets", () => {
   assert.match(text, /app-control: show thread on/);
   assert.match(text, /mirror: on; phases commentary, final_answer; progress updates; poll 2s/);
   assert.match(text, /worktree: changed files on; max 8/);
+  assert.match(text, /event log `logs\/bridge\.events\.ndjson`; stderr `logs\/bridge\.stderr\.log`/);
   assert.match(text, /current binding: `group:-100:topic:3`; thread `thread-1`; status bar `5`/);
   assert.doesNotMatch(text, /123456:secret-token/);
 });

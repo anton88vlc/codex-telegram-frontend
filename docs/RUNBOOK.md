@@ -10,7 +10,7 @@ Commands below assume they are run from the repository root. Run them from somew
 - user session: `state/telegram_user.session`
 - bootstrap plan: `admin/bootstrap-plan.json` (ignored runtime file)
 - rehearsal plan: `admin/bootstrap-plan.rehearsal.json` (ignored runtime file)
-- logs: `logs/bridge.stdout.log`, `logs/bridge.stderr.log`
+- logs: `logs/bridge.events.ndjson`, `logs/bridge.stdout.log`, `logs/bridge.stderr.log`
 - launchd label: `com.codex.telegram-frontend.bridge` by default
 - token Keychain service: `codex-telegram-bridge-bot-token` by default
 
@@ -102,9 +102,10 @@ Do this in order. Random poking makes the bridge look haunted when it is usually
 1. Make sure `Codex.app` is open.
 2. Prefer `npm run codex:launch`; otherwise the bridge can still try the local app-server fallback.
 3. Run `npm run self-check`.
-4. Check `logs/bridge.stderr.log`.
-5. Check whether `state/state.json -> lastUpdateId` moves.
-6. If launchd is alive but stuck, use `launchctl kickstart -k ...`.
+4. Check `/health`; it samples `logs/bridge.events.ndjson`.
+5. If the bridge crashed before structured logging, check `logs/bridge.stderr.log`.
+6. Check whether `state/state.json -> lastUpdateId` moves.
+7. If launchd is alive but stuck, use `launchctl kickstart -k ...`.
 
 If `self-check` says `app-control: fetch failed`, but `app-server: reachable`, that is not fatal.
 It means the bridge is using fallback transport and some UI-aware behavior may be weaker.

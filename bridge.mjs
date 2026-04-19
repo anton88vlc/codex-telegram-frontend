@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { execFile } from "node:child_process";
+import { appendFileSync, mkdirSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
@@ -77,6 +78,7 @@ const DEFAULT_NATIVE_HELPER_PATH = path.join(PROJECT_ROOT, "scripts", "send_via_
 const DEFAULT_NATIVE_FALLBACK_HELPER_PATH = path.join(PROJECT_ROOT, "scripts", "send_via_app_server.js");
 const DEFAULT_PROJECT_INDEX_PATH = path.join(PROJECT_ROOT, "state", "bootstrap-result.json");
 const DEFAULT_BRIDGE_LOG_PATH = path.join(PROJECT_ROOT, "logs", "bridge.stderr.log");
+const DEFAULT_EVENT_LOG_PATH = path.join(PROJECT_ROOT, "logs", "bridge.events.ndjson");
 const DEFAULT_THREADS_DB_PATH = path.join(os.homedir(), ".codex", "state_5.sqlite");
 const DEFAULT_NATIVE_DEBUG_BASE_URL = process.env.CODEX_REMOTE_DEBUG_URL || "http://127.0.0.1:9222";
 const DEFAULT_APP_SERVER_URL = process.env.CODEX_APP_SERVER_URL || "ws://127.0.0.1:27890";
@@ -114,6 +116,9 @@ const TELEGRAM_SERVICE_MESSAGE_KEYS = [
   "boost_added",
   "chat_background_set",
 ];
+
+let currentEventLogPath = null;
+const ensuredEventLogDirs = new Set();
 
 function fail(message, extra = {}) {
   const payload = { ok: false, error: message, ...extra };
@@ -211,6 +216,7 @@ async function loadConfig(configPath) {
     nativeFallbackHelperPath: fromFile?.nativeFallbackHelperPath || DEFAULT_NATIVE_FALLBACK_HELPER_PATH,
     projectIndexPath: fromFile?.projectIndexPath || DEFAULT_PROJECT_INDEX_PATH,
     bridgeLogPath: fromFile?.bridgeLogPath || DEFAULT_BRIDGE_LOG_PATH,
+    eventLogPath: fromFile?.eventLogPath || DEFAULT_EVENT_LOG_PATH,
     threadsDbPath: fromFile?.threadsDbPath || DEFAULT_THREADS_DB_PATH,
     syncDefaultLimit: Number.isFinite(fromFile?.syncDefaultLimit) ? fromFile.syncDefaultLimit : 3,
   };
@@ -575,8 +581,38 @@ function isMissingStatusBarMessageError(error) {
   return /message to edit not found|message_id_invalid|message can't be edited|message not found/i.test(message);
 }
 
+function configureBridgeEventLog(config) {
+  currentEventLogPath = normalizeText(config?.eventLogPath) || null;
+}
+
+function appendBridgeEventToFile(line, eventType = "unknown") {
+  if (!currentEventLogPath) {
+    return;
+  }
+  try {
+    const dir = path.dirname(currentEventLogPath);
+    if (!ensuredEventLogDirs.has(dir)) {
+      mkdirSync(dir, { recursive: true });
+      ensuredEventLogDirs.add(dir);
+    }
+    appendFileSync(currentEventLogPath, `${line}\n`, "utf8");
+  } catch (error) {
+    process.stderr.write(
+      `${JSON.stringify({
+        ts: new Date().toISOString(),
+        type: "event_log_write_error",
+        eventType,
+        path: currentEventLogPath,
+        error: error instanceof Error ? error.message : String(error),
+      })}\n`,
+    );
+  }
+}
+
 function logBridgeEvent(type, payload = {}) {
-  process.stderr.write(`${JSON.stringify({ ts: new Date().toISOString(), type, ...payload })}\n`);
+  const line = JSON.stringify({ ts: new Date().toISOString(), type, ...payload });
+  process.stderr.write(`${line}\n`);
+  appendBridgeEventToFile(line, type);
 }
 
 function renderHelp(config) {
@@ -693,7 +729,8 @@ async function renderBindingStatus(config, bindingKey, binding) {
 }
 
 async function renderHealth(config, state, message, bindingKey, binding) {
-  const recentEvents = await readRecentBridgeEvents(config.bridgeLogPath).catch((error) => [
+  const eventLogPath = config.eventLogPath || config.bridgeLogPath;
+  const recentEvents = await readRecentBridgeEvents(eventLogPath).catch((error) => [
     {
       type: "health_event_log_error",
       error: error instanceof Error ? error.message : String(error),
@@ -710,7 +747,7 @@ async function renderHealth(config, state, message, bindingKey, binding) {
     `app server: \`${config.appServerUrl}\``,
     `outbound mirror: ${config.outboundSyncEnabled === false ? "off" : `on (${config.outboundPollIntervalMs}ms poll)`}`,
     `status bar: ${config.statusBarEnabled === false ? "off" : "on"}`,
-    `event log: \`${config.bridgeLogPath}\` (${eventSummary.total} sampled)`,
+    `event log: \`${eventLogPath}\` (${eventSummary.total} sampled)`,
     `delivery: app-control ${eventSummary.appControlSends}, app-server fallback ${eventSummary.appServerFallbackSends}, native errors ${eventSummary.nativeSendErrors}, ops dm fallbacks ${eventSummary.opsDmFallbacks}`,
   ];
 
@@ -1943,6 +1980,7 @@ async function hydrateBotIdentity(config) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const config = await loadConfig(args.configPath);
+  configureBridgeEventLog(config);
   const state = await loadState(config.statePath);
   const effectivePollTimeoutSeconds =
     config.outboundSyncEnabled === false

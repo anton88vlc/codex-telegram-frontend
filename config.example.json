@@ -24,6 +24,7 @@
   "appControlShowThread": false,
   "nativeDebugBaseUrl": "http://127.0.0.1:9222",
   "appServerUrl": "ws://127.0.0.1:27890",
+  "eventLogPath": "logs/bridge.events.ndjson",
   "bridgeLogPath": "logs/bridge.stderr.log",
   "syncDefaultLimit": 3
 }
