@@ -94,6 +94,7 @@ Docs should sound like a competent teammate at 2am: direct, practical, and a lit
 - onboarding wizard with interactive project/thread selection, checklist, reuse preview, plan write, optional bootstrap, clean backfill dry-run/send and Telegram smoke
 - `/project-status` shows desired thread column, active topics, parked sync topics and sync preview
 - `/sync-project` can rename/reopen/create/park sync-managed topics for the current working set
+- Telegram photos and documents are downloaded into ignored local storage and forwarded to Codex as local file paths in the prompt
 - user-side history backfill from `rollout_path` into Telegram topics via `admin/telegram_user_admin.py backfill-thread`; defaults to user prompts plus assistant `final_answer`, with a bounded clean history tail
 - backfill uses the same Markdown-to-Telegram HTML renderer as the live bridge
 - safe topic cleanup via `admin/telegram_user_admin.py cleanup-topic`: dry-run first, deletion only with `--delete`
@@ -113,7 +114,7 @@ Docs should sound like a competent teammate at 2am: direct, practical, and a lit
 ## Not Yet
 
 - raw token-by-token Telegram streaming; current app-server stream support intentionally coalesces noisy event deltas into readable progress updates
-- attachments, images and voice/audio ingress
+- voice/audio ingress
 - auto-create topic rules for new threads
 - heartbeat transport as a separate UI-visible mode
 

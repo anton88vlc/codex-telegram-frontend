@@ -128,4 +128,5 @@ Expected UX:
 - assistant progress appears as one editable message with recent visible updates
 - final assistant replies attach to the triggering user/surrogate message
 - Telegram-originated prompts get one editable progress bubble and a final reply
+- Telegram photos/documents in a bound topic are saved locally and sent to Codex as attachment paths
 - `/project-status` and `/sync-project dry-run` do not flood working topics with ops walls

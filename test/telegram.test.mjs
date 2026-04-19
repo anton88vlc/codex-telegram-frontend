@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 
 import {
   deleteMessages,
+  downloadTelegramFile,
+  getFile,
   sendMessage,
   sendMessageDraft,
   setChatMenuButton,
@@ -81,6 +83,31 @@ test("sendMessage sends explicit entities instead of parse mode", async () => {
       { type: "date_time", offset: 6, length: 5, unix_time: 1776549480, date_time_format: "t" },
     ]);
   });
+});
+
+test("getFile asks Bot API for a file path", async () => {
+  await withMockTelegramFetch(async (calls) => {
+    await getFile("token", { fileId: "abc123" });
+
+    assert.equal(calls[0].url, "https://api.telegram.org/bottoken/getFile");
+    assert.equal(calls[0].body.file_id, "abc123");
+  });
+});
+
+test("downloadTelegramFile fetches file bytes from Bot API file endpoint", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url) => {
+    calls.push(String(url));
+    return new Response(Buffer.from("bytes"), { status: 200 });
+  };
+  try {
+    const bytes = await downloadTelegramFile("token", { filePath: "photos/file 1.jpg" });
+    assert.equal(calls[0], "https://api.telegram.org/file/bottoken/photos/file%201.jpg");
+    assert.equal(bytes.toString("utf8"), "bytes");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("deleteMessages batches ids for Bot API cleanup", async () => {

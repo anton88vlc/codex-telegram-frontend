@@ -34,7 +34,7 @@
 
 ## P3 - Product Surface
 
-1. Attachments and images.
+1. ~~Attachments and images base.~~ Telegram photos/documents are downloaded into ignored local storage and forwarded to Codex as local file paths. Native binary attachment transport can still get better later.
 2. Voice / audio ingress.
 3. Auto-create topic rules for fresh threads without turning Telegram into a dump.
 4. Heartbeat transport as an alternative mode for UI-visible jobs.
@@ -78,3 +78,4 @@
 23. Bootstrap now includes the bot direct chat in the Telegram folder alongside project groups, with `--skip-bot-folder` as the escape hatch.
 24. Optional passive app-server stream in the live bridge: subscribes to active threads, coalesces noisy reasoning/Todo/diff/command/tool events into the existing Telegram progress bubble, and leaves app-control as the send-only happy path.
 25. Telegram typing heartbeat: while a bound topic has an active Codex turn, the bot keeps refreshing the native "typing" action instead of relying on one short-lived `sendChatAction`.
+26. Telegram photos/documents ingress base: bot downloads media into `state/attachments`, builds a prompt with local file paths and image markdown hints, then uses the normal Codex transport/progress/reply flow.

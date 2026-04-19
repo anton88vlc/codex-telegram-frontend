@@ -61,13 +61,25 @@ import {
   startTypingHeartbeat,
   stopTypingHeartbeats,
 } from "./lib/typing-heartbeat.mjs";
+import {
+  DEFAULT_ATTACHMENT_MAX_BYTES,
+  DEFAULT_ATTACHMENT_MAX_COUNT,
+  collectTelegramAttachments,
+  formatAttachmentPrompt,
+  formatAttachmentReceipt,
+  getMessageIngressText,
+  hasUnsupportedTelegramMedia,
+  saveTelegramAttachments,
+} from "./lib/telegram-attachments.mjs";
 import { formatWorktreeSummary, readGitHead, readWorktreeSummary } from "./lib/worktree-summary.mjs";
 import {
   closeForumTopic,
   createForumTopic,
+  downloadTelegramFile,
   editForumTopic,
   editThenSendRichTextChunks,
   editMessageText,
+  getFile,
   getMe,
   getUpdates,
   pinChatMessage,
@@ -85,6 +97,7 @@ const DEFAULT_STATE_PATH = path.join(PROJECT_ROOT, "state", "state.json");
 const DEFAULT_NATIVE_HELPER_PATH = path.join(PROJECT_ROOT, "scripts", "send_via_app_control.js");
 const DEFAULT_NATIVE_FALLBACK_HELPER_PATH = path.join(PROJECT_ROOT, "scripts", "send_via_app_server.js");
 const DEFAULT_PROJECT_INDEX_PATH = path.join(PROJECT_ROOT, "state", "bootstrap-result.json");
+const DEFAULT_ATTACHMENT_STORAGE_DIR = path.join(PROJECT_ROOT, "state", "attachments");
 const DEFAULT_BRIDGE_LOG_PATH = path.join(PROJECT_ROOT, "logs", "bridge.stderr.log");
 const DEFAULT_EVENT_LOG_PATH = path.join(PROJECT_ROOT, "logs", "bridge.events.ndjson");
 const DEFAULT_THREADS_DB_PATH = path.join(os.homedir(), ".codex", "state_5.sqlite");
@@ -239,6 +252,14 @@ async function loadConfig(configPath) {
     worktreeSummaryMaxFiles: Number.isFinite(fromFile?.worktreeSummaryMaxFiles)
       ? Math.max(1, Math.min(30, Number(fromFile.worktreeSummaryMaxFiles)))
       : DEFAULT_WORKTREE_SUMMARY_MAX_FILES,
+    attachmentsEnabled: fromFile?.attachmentsEnabled !== false,
+    attachmentStorageDir: fromFile?.attachmentStorageDir || DEFAULT_ATTACHMENT_STORAGE_DIR,
+    attachmentMaxBytes: Number.isFinite(fromFile?.attachmentMaxBytes)
+      ? Math.max(1, Number(fromFile.attachmentMaxBytes))
+      : DEFAULT_ATTACHMENT_MAX_BYTES,
+    attachmentMaxCount: Number.isFinite(fromFile?.attachmentMaxCount)
+      ? Math.max(1, Math.min(10, Number(fromFile.attachmentMaxCount)))
+      : DEFAULT_ATTACHMENT_MAX_COUNT,
     historyMaxMessages: Number.isFinite(fromFile?.historyMaxMessages)
       ? Math.max(1, Number(fromFile.historyMaxMessages))
       : DEFAULT_HISTORY_MAX_MESSAGES,
@@ -1771,11 +1792,19 @@ async function handlePlainText({
     return;
   }
 
-  const prompt = normalizeInboundPrompt(message.text, {
+  const rawText = getMessageIngressText(message);
+  const promptText = normalizeInboundPrompt(rawText, {
     botUsername: config.botUsername,
   });
-  if (!prompt) {
+  const attachmentRefs = collectTelegramAttachments(message, {
+    maxCount: config.attachmentMaxCount,
+  });
+  if (!promptText && !attachmentRefs.length) {
     await reply(config.botToken, message, "The text is empty. If you mention the bot, put the actual request after the mention.");
+    return;
+  }
+  if (attachmentRefs.length && config.attachmentsEnabled === false) {
+    await reply(config.botToken, message, "Attachments are disabled in this bridge config. Text still works.");
     return;
   }
 
@@ -1783,6 +1812,46 @@ async function handlePlainText({
   if (!bindingValidation.ok) {
     await reply(config.botToken, message, bindingValidation.message);
     return;
+  }
+
+  let savedAttachments = [];
+  let prompt = promptText;
+  if (attachmentRefs.length) {
+    try {
+      savedAttachments = await saveTelegramAttachments({
+        token: config.botToken,
+        message,
+        storageDir: config.attachmentStorageDir,
+        maxBytes: config.attachmentMaxBytes,
+        maxCount: config.attachmentMaxCount,
+        getFile,
+        downloadFile: downloadTelegramFile,
+      });
+      prompt = formatAttachmentPrompt({
+        text: promptText,
+        attachments: savedAttachments,
+      });
+      logBridgeEvent("telegram_attachments_saved", {
+        chatId: message.chat.id,
+        messageThreadId: message.message_thread_id ?? null,
+        messageId: message.message_id ?? null,
+        count: savedAttachments.length,
+        kinds: savedAttachments.map((item) => item.kind),
+      });
+    } catch (error) {
+      logBridgeEvent("telegram_attachment_error", {
+        chatId: message.chat.id,
+        messageThreadId: message.message_thread_id ?? null,
+        messageId: message.message_id ?? null,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      await reply(
+        config.botToken,
+        message,
+        "I could not download that attachment. Try a smaller image/file, or send the text part without media.",
+      );
+      return;
+    }
   }
 
   binding.lastInboundMessageId = message.message_id ?? null;
@@ -1809,7 +1878,10 @@ async function handlePlainText({
   await subscribeAppServerStream({ config, stream: appServerStream, bindingKey, binding });
 
   const target = buildTargetFromMessage(message);
-  const receipt = await replyPlain(config.botToken, message, getInitialProgressText());
+  const initialProgressText = savedAttachments.length
+    ? `${formatAttachmentReceipt(savedAttachments)}\n${getInitialProgressText()}`
+    : getInitialProgressText();
+  const receipt = await replyPlain(config.botToken, message, initialProgressText);
   const receiptMessageId = receipt[0]?.message_id ?? null;
   rememberOutbound(binding, receipt);
   const progressBubble = startProgressBubble({
@@ -1952,8 +2024,18 @@ async function processMessage({ config, state, message, appServerStream = null, 
     });
     return false;
   }
-  if (typeof message.text !== "string" || !message.text.trim()) {
-    await reply(config.botToken, message, "I only understand text for now. Images and files are coming later.");
+  const ingressText = getMessageIngressText(message);
+  const attachmentRefs = collectTelegramAttachments(message, {
+    maxCount: config.attachmentMaxCount,
+  });
+  if (!ingressText.trim() && !attachmentRefs.length) {
+    await reply(
+      config.botToken,
+      message,
+      hasUnsupportedTelegramMedia(message)
+        ? "I can handle text, images and files now. Voice/audio is still next."
+        : "I can handle text, images and files now. Send a caption if the attachment needs instructions.",
+    );
     return true;
   }
 
@@ -1962,7 +2044,7 @@ async function processMessage({ config, state, message, appServerStream = null, 
     messageThreadId: message.message_thread_id ?? null,
   });
   const binding = getBinding(state, bindingKey);
-  const parsed = parseCommand(message.text);
+  const parsed = ingressText.trim() ? parseCommand(ingressText) : null;
   try {
     if (parsed) {
       return await handleCommand({ config, state, message, bindingKey, binding, parsed });

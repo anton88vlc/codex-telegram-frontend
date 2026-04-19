@@ -7,6 +7,7 @@ Commands below assume they are run from the repository root. Run them from somew
 - config: `config.local.json`
 - state: `state/state.json`
 - project index: `state/bootstrap-result.json`
+- attachments: `state/attachments/`
 - user session: `state/telegram_user.session`
 - bootstrap plan: `admin/bootstrap-plan.json` (ignored runtime file)
 - rehearsal plan: `admin/bootstrap-plan.rehearsal.json` (ignored runtime file)
@@ -108,6 +109,19 @@ Do this in order. Random poking makes the bridge look haunted when it is usually
 7. If launchd is alive but stuck, use `launchctl kickstart -k ...`.
 
 If `self-check` says `app-control: fetch failed`, but `app-server: reachable`, that is not fatal.
+
+## Telegram Attachments
+
+Photos and documents from a bound topic are downloaded by the bot into `state/attachments/`, then sent to Codex as local file paths inside the prompt. That is intentionally boring and inspectable: no hidden cloud storage, no mystery media relay.
+
+Current boundary:
+
+- photos and documents: supported
+- image documents: treated as images
+- voice/audio/video/stickers: not yet
+- default limit: 4 files per message, 20 MB per file
+
+If an attachment fails, check `logs/bridge.events.ndjson` for `telegram_attachment_error`. The file itself is runtime state, so do not commit it.
 It means the bridge is using fallback transport and some UI-aware behavior may be weaker.
 Successful fallback replies include a short transport note in Telegram, so the user knows the request did not use the happy path.
 If both paths fail, Telegram shows a short recovery hint: open `Codex.app`, preferably with `--remote-debugging-port=9222`, then retry.
