@@ -114,7 +114,7 @@ If `self-check` says `app-control: fetch failed`, but `app-server: reachable`, t
 
 Photos and documents from a bound topic are downloaded by the bot into `state/attachments/`, then sent to Codex as local file paths inside the prompt. That is intentionally boring and inspectable: no hidden cloud storage, no mystery media relay.
 
-Voice/audio is different on purpose. The bridge downloads the Telegram audio bytes, sends them to STT, posts a visible transcript bubble in the topic, then sends that transcript to Codex. For built-in Deepgram/OpenAI providers it does not keep the audio file on disk. The optional `command` provider uses a temp file and deletes it after the command returns unless `voiceTranscriptionKeepFiles` is enabled.
+Voice/audio is different on purpose. The bridge downloads the Telegram audio bytes, sends them to STT, posts a short italic quoted transcript in the topic, then sends that transcript to Codex. For built-in Deepgram/OpenAI providers it does not keep the audio file on disk. The optional `command` provider uses a temp file and deletes it after the command returns unless `voiceTranscriptionKeepFiles` is enabled.
 
 Current boundary:
 
@@ -127,10 +127,12 @@ Current boundary:
 
 If an attachment fails, check `logs/bridge.events.ndjson` for `telegram_attachment_error`. The file itself is runtime state, so do not commit it.
 If transcription fails, check `telegram_voice_transcription_error` in the same event log. In normal UX the user only sees a short "could not transcribe" note; provider details stay in logs where they belong.
-It means the bridge is using fallback transport and some UI-aware behavior may be weaker.
-Successful fallback replies include a short transport note in Telegram, so the user knows the request did not use the happy path.
-If both paths fail, Telegram shows a short recovery hint: open `Codex.app`, preferably with `--remote-debugging-port=9222`, then retry.
-If phone-originated Telegram prompts crash the desktop renderer, set `nativeIngressTransport` to `app-server` in `config.local.json`.
+
+## Transport Fallback
+
+If a Telegram reply says fallback was used, the bridge is using `app-server` instead of the preferred `app-control` path. Some UI-aware behavior may be weaker, but the user should at least know what happened instead of staring at silence.
+
+If both paths fail, Telegram shows a short recovery hint: open `Codex.app`, preferably through `npm run codex:launch`, then retry. If phone-originated Telegram prompts crash the desktop renderer, set `nativeIngressTransport` to `app-server` in `config.local.json`.
 
 For the Desktop-first happy path without the old heavy renderer polling, use:
 
@@ -259,7 +261,7 @@ Run without `--dry-run` after checking the preview. Skipping the preview is how 
 
 Notes:
 
-- `labeled-bot` is safer for imports: messages are sent as `Anton:` / `Codex:` by the bot and do not loop back as fresh user turns.
+- `labeled-bot` is safer for imports: messages are sent as `User:` / `Codex:` by the bot and do not loop back as fresh user turns. Override with `--user-label` / `--assistant-label` if you want different visible names.
 - default `--render-mode html` uses the same Telegram renderer as live bridge messages; `--render-mode plain` is only a debugging fallback.
 - default backfill imports only the configured clean tail: user prompts plus configured assistant phases, `final_answer` by default
 - commentary, heartbeat/system-like entries, Codex app directives and memory citations are skipped by default

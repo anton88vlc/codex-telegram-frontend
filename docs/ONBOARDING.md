@@ -129,5 +129,5 @@ Expected UX:
 - final assistant replies attach to the triggering user/surrogate message
 - Telegram-originated prompts get one editable progress bubble and a final reply
 - Telegram photos/documents in a bound topic are saved locally and sent to Codex as attachment paths
-- Telegram voice/audio gets a visible transcript bubble first; Codex replies to that transcript so the mobile flow stays readable
+- Telegram voice/audio gets a short italic quoted transcript first; Codex replies to that transcript so the mobile flow stays readable
 - `/project-status` and `/sync-project dry-run` do not flood working topics with ops walls

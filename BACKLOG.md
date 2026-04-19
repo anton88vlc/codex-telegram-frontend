@@ -35,7 +35,7 @@
 ## P3 - Product Surface
 
 1. ~~Attachments and images base.~~ Telegram photos/documents are downloaded into ignored local storage and forwarded to Codex as local file paths. Native binary attachment transport can still get better later.
-2. ~~Voice / audio ingress base.~~ Telegram voice/audio is transcribed first, shown as a transcript bubble, then forwarded to Codex as text. Next polish is provider UX, live partial transcripts and confidence display.
+2. ~~Voice / audio ingress base.~~ Telegram voice/audio is transcribed first, shown as an italic quoted transcript, then forwarded to Codex as text. Next polish is provider UX, live partial transcripts and confidence display.
 3. Auto-create topic rules for fresh threads without turning Telegram into a dump.
 4. Heartbeat transport as an alternative mode for UI-visible jobs.
 5. Managed-bot onboarding spike: Bot API 9.6 added managed bots and `t.me/newbot/...` links. Investigate whether a manager bot can make first install less BotFather-heavy without adding a creepy SaaS control plane.
@@ -81,3 +81,4 @@
 26. Telegram photos/documents ingress base: bot downloads media into `state/attachments`, builds a prompt with local file paths and image markdown hints, then uses the normal Codex transport/progress/reply flow.
 27. Changed-files UX fix: progress bubbles compare against a turn-start worktree snapshot, so old dirty files are not reported as fresh work; default file list is full instead of `+N more`.
 28. Telegram media albums are grouped by `media_group_id`, so several photos attached at once become one Codex turn, one progress bubble and one reply chain.
+29. Telegram voice/audio ingress with Deepgram/OpenAI/custom-command STT, italic transcript bubble, reply-chain UX and no permanent audio file for built-in providers.

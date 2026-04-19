@@ -43,6 +43,8 @@ TELEGRAM_TEXT_LIMIT = 3500
 TELEGRAM_HTML_TEXT_LIMIT = 3500
 DEFAULT_BACKFILL_ASSISTANT_PHASES = ("final_answer",)
 DEFAULT_BACKFILL_INCLUDE_HEARTBEATS = False
+DEFAULT_BACKFILL_USER_LABEL = "User"
+DEFAULT_BACKFILL_ASSISTANT_LABEL = "Codex"
 CODEX_APP_DIRECTIVE_LINE = re.compile(r"^::[a-z][\w-]*\{.*\}\s*$", re.IGNORECASE)
 MEMORY_CITATION_BLOCK_PATTERN = re.compile(r"<oai-mem-citation>[\s\S]*?(?:</oai-mem-citation>|$)", re.IGNORECASE)
 MEMORY_CITATION_CHILD_BLOCK_PATTERN = re.compile(
@@ -82,8 +84,8 @@ DEFAULT_CLEANUP_TEXT_PREFIXES = (
     "v1 понимает только текстовые сообщения.",
     "На месте.",
     "Тест",
-    "Anton:\nReply with exactly this text",
-    "Anton:\nТест",
+    "User:\nReply with exactly this text",
+    "User:\nТест",
     "Codex:\nTG_SYNC_",
     "Codex:\nTG_TOPIC_",
     "Codex:\nTG_ATTACH_",
@@ -1056,16 +1058,23 @@ def send_bot_transmission(bot_token: str, chat_id: int, topic_id: int, transmiss
     return 1
 
 
-def format_labeled_history_text(item: dict):
-    label = "Anton" if item.get("role") == "user" else "Codex"
+def format_labeled_history_text(item: dict, user_label: str, assistant_label: str):
+    label = user_label if item.get("role") == "user" else assistant_label
     return f"**{label}:**\n{item.get('text', '').strip()}".strip()
 
 
-def build_history_transmissions(messages, sender_mode: str, render_mode: str, render_helper: Path):
+def build_history_transmissions(
+    messages,
+    sender_mode: str,
+    render_mode: str,
+    render_helper: Path,
+    user_label: str = DEFAULT_BACKFILL_USER_LABEL,
+    assistant_label: str = DEFAULT_BACKFILL_ASSISTANT_LABEL,
+):
     base_items = []
     for item in messages:
         if sender_mode == "labeled-bot":
-            base_text = format_labeled_history_text(item)
+            base_text = format_labeled_history_text(item, user_label, assistant_label)
             sender = "bot"
         else:
             base_text = item["text"]
@@ -1213,6 +1222,8 @@ async def command_backfill_thread(args):
             args.sender_mode,
             render_mode=args.render_mode,
             render_helper=args.render_helper,
+            user_label=args.user_label,
+            assistant_label=args.assistant_label,
         )
         ignored_existing_ids = set(args.ignore_message_id or [])
         if args.ignore_live_state:
@@ -1566,6 +1577,11 @@ def build_parser():
     backfill.add_argument("--no-ignore-live-state", dest="ignore_live_state", action="store_false")
     backfill.add_argument("--dry-run", action="store_true")
     backfill.add_argument("--sender-mode", choices=["labeled-bot", "mixed"], default="labeled-bot")
+    backfill.add_argument("--user-label", default=os.getenv("CODEX_TELEGRAM_BACKFILL_USER_LABEL", DEFAULT_BACKFILL_USER_LABEL))
+    backfill.add_argument(
+        "--assistant-label",
+        default=os.getenv("CODEX_TELEGRAM_BACKFILL_ASSISTANT_LABEL", DEFAULT_BACKFILL_ASSISTANT_LABEL),
+    )
     backfill.add_argument("--force", action="store_true")
     backfill.set_defaults(handler=command_backfill_thread, ignore_live_state=True)
 

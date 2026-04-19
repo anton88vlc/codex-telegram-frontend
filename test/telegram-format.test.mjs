@@ -84,13 +84,13 @@ test("renderTelegramChunks leaves unmatched markdown markers literal", () => {
 test("render telegram text CLI exposes canonical HTML/plain chunks", () => {
   const result = spawnSync(process.execPath, ["scripts/render_telegram_text.mjs"], {
     cwd: PROJECT_ROOT,
-    input: JSON.stringify({ texts: ["**Anton:**\n- [x] done"] }),
+    input: JSON.stringify({ texts: ["**User:**\n- [x] done"] }),
     encoding: "utf8",
   });
 
   assert.equal(result.status, 0, result.stderr);
   const payload = JSON.parse(result.stdout);
-  assert.match(payload.rendered[0][0].html, /<b>Anton:<\/b>/);
+  assert.match(payload.rendered[0][0].html, /<b>User:<\/b>/);
   assert.match(payload.rendered[0][0].html, /☑ done/);
-  assert.equal(payload.rendered[0][0].plain, "Anton:\n☑ done");
+  assert.equal(payload.rendered[0][0].plain, "User:\n☑ done");
 });

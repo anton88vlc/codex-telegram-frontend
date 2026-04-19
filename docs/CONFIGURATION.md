@@ -34,7 +34,7 @@ Use this for things that should survive restarts and should not be changed from 
 | `attachmentStorageDir` | `state/attachments` | Local ignored storage for downloaded Telegram media. Do not commit it. |
 | `attachmentMaxBytes` | `20971520` | Per-file attachment limit. Default is 20 MB; enough for screenshots without inviting chaos. |
 | `attachmentMaxCount` | `10` | Max attachments processed from one Telegram message or media album. Telegram albums top out at 10, so the default keeps the whole user intent together. |
-| `voiceTranscriptionEnabled` | `true` | Enables Telegram voice/audio ingestion. The bridge downloads audio bytes, transcribes them, posts a transcript bubble, then sends the transcript to Codex. |
+| `voiceTranscriptionEnabled` | `true` | Enables Telegram voice/audio ingestion. The bridge downloads audio bytes, transcribes them, posts an italic quoted transcript, then sends the transcript to Codex. |
 | `voiceTranscriptionProvider` | `auto` | `auto`, `deepgram`, `openai`, or `command`. `auto` prefers Deepgram first because Telegram voice is usually OGG/Opus; OpenAI is still supported for compatible audio files. |
 | `voiceTranscriptionModel` | provider default | Deepgram defaults to `nova-3`; OpenAI defaults to `gpt-4o-mini-transcribe`. Leave empty unless you have a reason. |
 | `voiceTranscriptionLanguage` | `multi` | Deepgram language hint. `multi` is the phone-friendly default for Russian/English switching; `auto` uses language detection. OpenAI ignores `multi`. |
