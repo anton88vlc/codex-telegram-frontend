@@ -92,9 +92,9 @@ import {
 import { makeOutboundMirrorSignature, readThreadMirrorDelta } from "./lib/thread-rollout.mjs";
 import {
   normalizeTypingHeartbeatIntervalMs,
-  startTypingHeartbeat,
   stopTypingHeartbeats,
 } from "./lib/typing-heartbeat.mjs";
+import { syncTypingHeartbeats } from "./lib/typing-heartbeat-runner.mjs";
 import {
   buildTargetFromBinding,
   buildTargetFromMessage,
@@ -318,93 +318,6 @@ async function loadChangedFilesTextForThread({ config, thread, binding, cache })
   });
   cache.set(cacheKey, text);
   return text || null;
-}
-
-function isTypingHeartbeatBindingEligible(config, binding) {
-  return (
-    config.sendTyping !== false &&
-    config.typingHeartbeatEnabled !== false &&
-    isOutboundMirrorBindingEligible(binding) &&
-    Boolean(binding?.currentTurn)
-  );
-}
-
-function syncTypingHeartbeats({ config, state, heartbeats, onlyBindingKey = null } = {}) {
-  if (!heartbeats) {
-    return { started: 0, stopped: 0, running: 0 };
-  }
-
-  if (config.sendTyping === false || config.typingHeartbeatEnabled === false) {
-    if (onlyBindingKey) {
-      const heartbeat = heartbeats.get(onlyBindingKey);
-      if (heartbeat) {
-        heartbeat.stop();
-        heartbeats.delete(onlyBindingKey);
-        logBridgeEvent("typing_heartbeat_stop", { bindingKey: onlyBindingKey, reason: "disabled" });
-        return { started: 0, stopped: 1, running: heartbeats.size };
-      }
-      return { started: 0, stopped: 0, running: heartbeats.size };
-    }
-    const stopped = stopTypingHeartbeats(heartbeats);
-    if (stopped) {
-      logBridgeEvent("typing_heartbeats_stop_all", { stopped, reason: "disabled" });
-    }
-    return { started: 0, stopped, running: 0 };
-  }
-
-  const eligibleKeys = new Set();
-  let started = 0;
-  let stopped = 0;
-  const bindingEntries = Object.entries(state.bindings ?? {}).filter(([bindingKey]) => {
-    return !onlyBindingKey || bindingKey === onlyBindingKey;
-  });
-
-  for (const [bindingKey, binding] of bindingEntries) {
-    if (!isTypingHeartbeatBindingEligible(config, binding)) {
-      continue;
-    }
-    eligibleKeys.add(bindingKey);
-    if (heartbeats.has(bindingKey)) {
-      continue;
-    }
-    const heartbeat = startTypingHeartbeat({
-      token: config.botToken,
-      target: buildTargetFromBinding(binding),
-      sendTyping,
-      intervalMs: config.typingHeartbeatIntervalMs,
-      onError(error) {
-        logBridgeEvent("typing_heartbeat_error", {
-          bindingKey,
-          threadId: binding.threadId,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      },
-    });
-    if (heartbeat.active) {
-      heartbeats.set(bindingKey, heartbeat);
-      started += 1;
-      logBridgeEvent("typing_heartbeat_start", {
-        bindingKey,
-        threadId: binding.threadId,
-        intervalMs: config.typingHeartbeatIntervalMs,
-      });
-    }
-  }
-
-  for (const [bindingKey, heartbeat] of heartbeats.entries()) {
-    if (onlyBindingKey && bindingKey !== onlyBindingKey) {
-      continue;
-    }
-    if (eligibleKeys.has(bindingKey)) {
-      continue;
-    }
-    heartbeat.stop();
-    heartbeats.delete(bindingKey);
-    stopped += 1;
-    logBridgeEvent("typing_heartbeat_stop", { bindingKey, reason: "idle" });
-  }
-
-  return { started, stopped, running: heartbeats.size };
 }
 
 function renderHelp(config) {
