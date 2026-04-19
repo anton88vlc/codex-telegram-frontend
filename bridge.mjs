@@ -4,7 +4,7 @@ import process from "node:process";
 
 import { validateBindingForSendWithRescue } from "./lib/binding-send-validation.mjs";
 import { sendNativeTurn } from "./lib/codex-native.mjs";
-import { sendCommandResponse } from "./lib/command-response.mjs";
+import { handleCommand } from "./lib/command-handlers.mjs";
 import { DEFAULT_CONFIG_PATH, loadConfig } from "./lib/config.mjs";
 import {
   makeAppServerLiveStream,
@@ -15,8 +15,7 @@ import {
   configureBridgeEventLog,
   logBridgeEvent,
 } from "./lib/bridge-events.mjs";
-import { buildBindingPayload, isAuthorized } from "./lib/bridge-bindings.mjs";
-import { renderBindingStatus, renderHealth } from "./lib/health-report.mjs";
+import { isAuthorized } from "./lib/bridge-bindings.mjs";
 import {
   findFallbackTopicBindingForUnboundGroupMessage,
   normalizeInboundPrompt,
@@ -32,24 +31,13 @@ import {
 import { makePromptPreview } from "./lib/outbound-mirror-messages.mjs";
 import { syncOutboundMirrors } from "./lib/outbound-mirror-runner.mjs";
 import { getInitialProgressText, startProgressBubble } from "./lib/progress-bubble.mjs";
-import { getBoundThreadIdsForChat } from "./lib/project-data.mjs";
-import { sanitizeTopicTitle } from "./lib/project-sync.mjs";
-import {
-  applyProjectSyncPlan,
-  buildSyncContext,
-  loadProjectGroupForMessage,
-  parseSyncProjectArgs,
-  renderProjectStatus,
-  renderSyncPreview,
-  syncAutoProjectTopics,
-} from "./lib/project-sync-runner.mjs";
+import { syncAutoProjectTopics } from "./lib/project-sync-runner.mjs";
 import {
   autoCreatePrivateTopicBinding,
   rememberPrivateTopicTitle,
   shouldAutoCreatePrivateTopicBinding,
 } from "./lib/private-topic-bindings.mjs";
 import { buildSelfCheckReport, formatSelfCheckReport } from "./lib/runtime-health.mjs";
-import { buildSettingsReport } from "./lib/settings-report.mjs";
 import { refreshStatusBars } from "./lib/status-bar-runner.mjs";
 import {
   getBinding,
@@ -59,16 +47,9 @@ import {
   makeMessageKey,
   markProcessedMessage,
   rememberOutboundSuppression,
-  removeBinding,
-  removeOutboundMirror,
   saveStateMerged as saveState,
-  setBinding,
 } from "./lib/state.mjs";
-import {
-  clamp,
-  listProjectThreads,
-  parsePositiveInt,
-} from "./lib/thread-db.mjs";
+import { clamp } from "./lib/thread-db.mjs";
 import { makeOutboundMirrorSignature } from "./lib/thread-rollout.mjs";
 import {
   normalizeTypingHeartbeatIntervalMs,
@@ -245,239 +226,6 @@ function rememberOutboundMirrorSuppression(state, bindingKey, text, { role = "as
   });
   rememberOutboundSuppression(state, bindingKey, signature);
   return signature;
-}
-
-function renderHelp(config) {
-  const mentionHint = config.botUsername
-    ? `If group privacy still blocks plain text, mention the bot: \`@${config.botUsername} your request\`.`
-    : "If group privacy still blocks plain text, temporarily mention the bot in your message.";
-  return [
-    "**Commands**",
-    "`/attach <thread-id>` - bind this chat or topic to a Codex thread",
-    "`/attach-latest` - bind this topic to the newest unbound thread in this project",
-    "`/detach` - remove the binding",
-    "`/status` - show the current binding and thread",
-    "`/health` - show bridge health for this chat/topic and transport paths",
-    "`/settings` - show safe read-only runtime settings",
-    "`/project-status [count]` - show desired thread column, active topics and sync preview",
-    "`/sync-project [count] [dry-run]` - sync managed topics to the current project working set",
-    "`/mode native` - explicitly use native transport",
-    "`/help` - show this message",
-    "",
-    "After `/attach`, normal text from this chat goes to the bound Codex thread.",
-    mentionHint,
-    "v1 is intentionally narrow: **native transport** only. Heartbeat/UI-visible transport is phase 2.",
-    "Final answers from the Codex thread are mirrored back into the bound Telegram chat/topic.",
-  ].join("\n");
-}
-
-async function handleCommand({ config, state, message, bindingKey, binding, parsed }) {
-  switch (parsed.command) {
-    case "/help":
-    case "/start":
-      await sendCommandResponse({
-        config,
-        message,
-        text: renderHelp(config),
-      });
-      return true;
-
-    case "/attach": {
-      const threadId = parsed.args[0];
-      if (!threadId) {
-        await reply(config.botToken, message, "Missing thread id: /attach <thread-id>");
-        return true;
-      }
-      removeOutboundMirror(state, bindingKey);
-      setBinding(state, bindingKey, {
-        threadId,
-        transport: "native",
-        chatId: String(message.chat.id),
-        messageThreadId: message.message_thread_id ?? null,
-        chatTitle: normalizeText(message.chat.title || message.chat.username || message.chat.first_name || ""),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      });
-      const nextBinding = getBinding(state, bindingKey);
-      const sent = await reply(config.botToken, message, `Bound this chat to thread ${threadId} via native transport.`);
-      rememberOutbound(nextBinding, sent);
-      return true;
-    }
-
-    case "/attach-latest": {
-      if (message.message_thread_id == null) {
-        await reply(config.botToken, message, "This command only makes sense inside a forum topic.");
-        return true;
-      }
-      if (binding) {
-        await reply(
-          config.botToken,
-          message,
-          `This topic is already bound to ${binding.threadId}. If you want to move it, run /detach first.`,
-        );
-        return true;
-      }
-
-      const { projectGroup } = await loadProjectGroupForMessage(config, message);
-      if (!projectGroup) {
-        await reply(
-          config.botToken,
-          message,
-          "I cannot find a project mapping for this group. Run bootstrap first, or bind manually.",
-        );
-        return true;
-      }
-
-      const boundThreadIds = getBoundThreadIdsForChat(state, message.chat.id);
-      const candidates = await listProjectThreads(config.threadsDbPath, projectGroup.projectRoot, { limit: 12 });
-      const nextThread = candidates.find((thread) => !boundThreadIds.has(String(thread.id)));
-
-      if (!nextThread) {
-        await reply(config.botToken, message, "I do not see any fresh unbound threads here right now.");
-        return true;
-      }
-
-      const nextBinding = setBinding(
-        state,
-        bindingKey,
-        buildBindingPayload({
-          message,
-          thread: nextThread,
-          chatTitle: projectGroup.groupTitle,
-        }),
-      );
-      removeOutboundMirror(state, bindingKey);
-      const sent = await reply(
-        config.botToken,
-        message,
-        `Bound this topic to a fresh thread.\nthread: ${nextThread.id}\ntitle: ${sanitizeTopicTitle(nextThread.title, nextThread.id)}`,
-      );
-      rememberOutbound(nextBinding, sent);
-      return true;
-    }
-
-    case "/detach":
-      if (!binding) {
-        await reply(config.botToken, message, "There is no binding here already.");
-        return true;
-      }
-      removeBinding(state, bindingKey);
-      removeOutboundMirror(state, bindingKey);
-      await reply(config.botToken, message, `Detached thread ${binding.threadId}.`);
-      return true;
-
-    case "/status":
-      if (!binding) {
-        await reply(config.botToken, message, "No binding here. Use /attach <thread-id>.");
-        return true;
-      }
-      rememberOutbound(binding, await reply(config.botToken, message, await renderBindingStatus(config, bindingKey, binding)));
-      return true;
-
-    case "/health":
-      rememberOutbound(
-        binding,
-        await sendCommandResponse({
-          config,
-          message,
-          text: await renderHealth(config, state, message, bindingKey, binding),
-        }),
-      );
-      return true;
-
-    case "/settings":
-    case "/config":
-      rememberOutbound(
-        binding,
-        await sendCommandResponse({
-          config,
-          message,
-          text: buildSettingsReport({ config, state, bindingKey, binding }),
-        }),
-      );
-      return true;
-
-    case "/project-status": {
-      const requestedLimit = clamp(parsePositiveInt(parsed.args[0], config.syncDefaultLimit), 1, 10);
-      rememberOutbound(
-        binding,
-        await sendCommandResponse({
-          config,
-          message,
-          text: await renderProjectStatus(config, state, message, requestedLimit),
-        }),
-      );
-      return true;
-    }
-
-    case "/sync-project": {
-      const { dryRun, requestedLimit } = parseSyncProjectArgs(parsed.args, config.syncDefaultLimit);
-      const { projectGroup, plan } = await buildSyncContext(config, state, message, requestedLimit);
-      if (!projectGroup || !plan) {
-        await reply(
-          config.botToken,
-          message,
-          "I cannot find a project mapping for this group. Bootstrap is incomplete, or this chat id is different.",
-        );
-        return true;
-      }
-
-      const previewText = [
-        dryRun ? `**Dry-run:** ${projectGroup.groupTitle}` : `**Sync plan:** ${projectGroup.groupTitle}`,
-        `desired thread column: ${plan.summary.desiredCount}`,
-        renderSyncPreview(plan),
-      ].join("\n\n");
-
-      if (dryRun) {
-        await sendCommandResponse({
-          config,
-          message,
-          text: previewText,
-        });
-        return true;
-      }
-
-      await applyProjectSyncPlan({
-        config,
-        state,
-        chatId: message.chat.id,
-        projectGroup,
-        plan,
-        currentBindingKey: bindingKey,
-        sendResponse: (text) =>
-          sendCommandResponse({
-            config,
-            message,
-            text,
-          }),
-      });
-      return true;
-    }
-
-    case "/mode": {
-      const mode = normalizeText(parsed.args[0] || "");
-      if (!binding) {
-        await reply(config.botToken, message, "Bind a thread first: /attach <thread-id>.");
-        return true;
-      }
-      if (mode !== "native") {
-        await reply(
-          config.botToken,
-          message,
-          "v1 only supports native transport. Heartbeat transport is intentionally left for phase 2.",
-        );
-        return true;
-      }
-      binding.transport = "native";
-      binding.updatedAt = new Date().toISOString();
-      rememberOutbound(binding, await reply(config.botToken, message, "OK, transport = native."));
-      return true;
-    }
-
-    default:
-      await reply(config.botToken, message, "Unknown command. /help shows the available options.");
-      return true;
-  }
 }
 
 async function handlePlainText({
@@ -924,7 +672,15 @@ async function processMessage({ config, state, message, appServerStream = null, 
   const parsed = ingressText.trim() ? parseCommand(ingressText) : null;
   try {
     if (parsed) {
-      return await handleCommand({ config, state, message, bindingKey, binding, parsed });
+      return await handleCommand({
+        config,
+        state,
+        message,
+        bindingKey,
+        binding,
+        parsed,
+        rememberOutboundFn: rememberOutbound,
+      });
     }
     let effectiveMessage = message;
     let effectiveBindingKey = bindingKey;
