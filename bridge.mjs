@@ -30,9 +30,14 @@ import {
   shouldPreferAppServer,
 } from "./lib/native-transport-state.mjs";
 import {
-  appendOutboundProgressItem,
-  formatOutboundProgressMirrorText,
-} from "./lib/outbound-progress.mjs";
+  formatOutboundAssistantMirrorText,
+  formatOutboundUserMirrorText,
+  isCommentaryAssistantMirrorMessage,
+  isFinalAssistantMirrorMessage,
+  isPlanMirrorMessage,
+  makePromptPreview,
+} from "./lib/outbound-mirror-messages.mjs";
+import { appendOutboundProgressItem, formatOutboundProgressMirrorText } from "./lib/outbound-progress.mjs";
 import { getInitialProgressText, startProgressBubble } from "./lib/progress-bubble.mjs";
 import {
   getBindingsForChat,
@@ -424,42 +429,6 @@ function isStatusBarBindingEligible(binding) {
   return binding.messageThreadId != null;
 }
 
-function formatOutboundUserMirrorText(text, config = {}) {
-  const normalized = normalizeText(text);
-  if (!normalized) {
-    return "";
-  }
-  const displayName = normalizeText(config.codexUserDisplayName).replace(/\s+/g, " ") || "Codex Desktop user";
-  return `**${displayName} via Codex Desktop**\n\n${normalized}`;
-}
-
-function isFinalAssistantMirrorMessage(message) {
-  return message?.role === "assistant" && (normalizeText(message?.phase) || "final_answer") === "final_answer";
-}
-
-function isCommentaryAssistantMirrorMessage(message) {
-  return message?.role === "assistant" && normalizeText(message?.phase) === "commentary";
-}
-
-function isPlanMirrorMessage(message) {
-  return message?.role === "plan" && normalizeText(message?.phase) === "update_plan";
-}
-
-function formatOutboundAssistantMirrorText(message) {
-  const text = normalizeText(message?.text);
-  if (!text || message?.role !== "assistant") {
-    return text;
-  }
-  if ((normalizeText(message?.phase) || "final_answer") !== "commentary") {
-    return text;
-  }
-  return text
-    .replace(/\r\n/g, "\n")
-    .split("\n")
-    .map((line) => (line.trim() ? `> ${line}` : ">"))
-    .join("\n");
-}
-
 async function upsertOutboundProgressMessage({
   config,
   binding,
@@ -736,14 +705,6 @@ async function syncAppServerStreamProgress({ config, state, stream }) {
   }
 
   return { changed, applied, events: events.length };
-}
-
-function makePromptPreview(text) {
-  const normalized = normalizeText(text).replace(/\s+/g, " ");
-  if (normalized.length <= 160) {
-    return normalized;
-  }
-  return `${normalized.slice(0, 157)}...`;
 }
 
 function isMissingStatusBarMessageError(error) {
