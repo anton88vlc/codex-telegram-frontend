@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 
+import os from "node:os";
+
 const DEFAULT_URL = process.env.CODEX_APP_SERVER_URL || "ws://127.0.0.1:27890";
 const DEFAULT_TIMEOUT_MS = 45_000;
+const DEFAULT_CHAT_CWD = process.env.CODEX_CHAT_START_CWD || os.homedir();
 
 function fail(message, extra = {}, code = 1) {
   process.stdout.write(`${JSON.stringify({ ok: false, error: message, ...extra }, null, 2)}\n`);
@@ -12,7 +15,7 @@ function parseArgs(argv) {
   const out = {
     url: DEFAULT_URL,
     timeoutMs: DEFAULT_TIMEOUT_MS,
-    cwd: null,
+    cwd: DEFAULT_CHAT_CWD,
     prompt: "",
     waitForReply: false,
   };
@@ -26,7 +29,7 @@ function parseArgs(argv) {
         break;
       case "--cwd": {
         const value = argv[++i];
-        out.cwd = value ? value : null;
+        out.cwd = value ? value : DEFAULT_CHAT_CWD;
         break;
       }
       case "--prompt":

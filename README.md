@@ -69,7 +69,7 @@ Two modes matter: `app-control` is the live near-Mac mode with the best Desktop 
 - Voice/audio: Telegram voice is transcribed first, shown as an italic quoted transcript, then sent to Codex as text.
 - Clean bounded history backfill: user prompts plus assistant final answers by default.
 - Quickstart onboarding: latest active Codex project threads become Telegram groups/topics, and Codex Chats become private topics inside the bot direct chat when the bot has Threaded Mode enabled.
-- New messages in an unbound private bot topic can create a fresh projectless Codex Chat and start the first turn in one app-server move.
+- New messages in an unbound private bot topic can create a fresh Codex Chat and start the first turn in one app-server move. The bridge uses your home cwd by default so Codex Desktop treats it like a normal `Chats` item, not a random project thread.
 - Private bot topic preflight for Codex Desktop `Chats`: `npm run bot:topics`.
 - Bootstrap can create/reuse Telegram folder, project groups, topics, bot folder entry and status bars.
 - Optional curated topic auto-sync for fresh Codex threads in already bootstrapped project groups.

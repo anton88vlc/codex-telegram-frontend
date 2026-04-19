@@ -184,7 +184,7 @@ test("sendNativeTurn reports app-server-first failure without app-control attemp
   );
 });
 
-test("createNativeChat starts a projectless app-server thread", async () => {
+test("createNativeChat starts a Codex Chat from the user home cwd by default", async () => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-native-chat-"));
   const argsPath = path.join(dir, "args.json");
   const helper = await writeHelper(
@@ -209,7 +209,7 @@ console.log(JSON.stringify({ ok: true, mode: "chat-start-only", threadId: "threa
   assert.equal(result.threadId, "thread-new");
   assert.deepEqual(args.slice(0, 6), ["--title", "Lab chat", "--timeout-ms", "1000", "--url", "ws://127.0.0.1:27890"]);
   assert.equal(args.includes("--cwd"), true);
-  assert.equal(args[args.indexOf("--cwd") + 1], "");
+  assert.equal(args[args.indexOf("--cwd") + 1], os.homedir());
 });
 
 test("createNativeChat can start a new chat with the first prompt", async () => {

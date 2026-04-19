@@ -52,9 +52,9 @@ Use this for things that should survive restarts and should not be changed from 
 | `nativeWaitForReply` | `false` | Keep this off for the normal happy path. The transport returns as soon as Codex accepts the turn; Telegram gets progress/final through the outbound rollout mirror. Setting it to `true` uses the older renderer polling path and should be treated as a debugging fallback. |
 | `nativePollIntervalMs` | `1000` | Poll interval while waiting for native Codex reply. |
 | `nativeIngressTransport` | `app-control` | Telegram-originated send path: `app-control`, `app-server`, or `auto`. Use `app-server` if renderer app-control crashes the desktop app. |
-| `privateTopicAutoCreateChats` | `true` | If a user writes in an unbound private bot topic, create a new projectless Codex Chat and bind that topic before forwarding the message. This is what makes "new Telegram topic = new Codex Chat" feel native. |
+| `privateTopicAutoCreateChats` | `true` | If a user writes in an unbound private bot topic, create a new Codex Chat and bind that topic before forwarding the message. This is what makes "new Telegram topic = new Codex Chat" feel native. |
 | `nativeChatStartTimeoutMs` | `45000` | Timeout for the app-server `thread/start` helper used by private-topic auto-create. |
-| `nativeChatStartCwd` | `null` | Cwd for auto-created Codex Chats. Keep `null` for projectless `Chats`; set a path only if you intentionally want every private topic to become project-scoped. |
+| `nativeChatStartCwd` | `$HOME` | Cwd for auto-created Codex Chats. Leave unset or `null` for the normal Desktop `Chats` sidebar; set a real project path only if you intentionally want every private topic to become project-scoped. |
 | `appControlCooldownMs` | `300000` | How long to avoid app-control after an app-control send error before trying it again. |
 | `appControlShowThread` | `false` | Experimental: after app-control accepts a turn, ask Codex Desktop to show the thread. Useful for Desktop-first UX, but keep it off if renderer stability is shaky. |
 | `nativeDebugBaseUrl` | `http://127.0.0.1:9222` | Preferred Codex Desktop app-control endpoint. |

@@ -138,6 +138,7 @@ const DEFAULT_APP_SERVER_URL = process.env.CODEX_APP_SERVER_URL || "ws://127.0.0
 const DEFAULT_NATIVE_POLL_INTERVAL_MS = 1_000;
 const DEFAULT_NATIVE_WAIT_FOR_REPLY = false;
 const DEFAULT_NATIVE_CHAT_START_TIMEOUT_MS = 45_000;
+const DEFAULT_NATIVE_CHAT_START_CWD = os.homedir();
 const DEFAULT_OUTBOUND_POLL_INTERVAL_MS = 2_000;
 const DEFAULT_OUTBOUND_MIRROR_PHASES = ["commentary", "final_answer"];
 const DEFAULT_APP_SERVER_STREAM_CONNECT_TIMEOUT_MS = 1_200;
@@ -296,8 +297,8 @@ async function loadConfig(configPath) {
       : DEFAULT_NATIVE_CHAT_START_TIMEOUT_MS,
     nativeChatStartCwd:
       Object.prototype.hasOwnProperty.call(fromFile || {}, "nativeChatStartCwd")
-        ? normalizeText(fromFile.nativeChatStartCwd) || null
-        : null,
+        ? normalizeText(fromFile.nativeChatStartCwd) || DEFAULT_NATIVE_CHAT_START_CWD
+        : DEFAULT_NATIVE_CHAT_START_CWD,
     appControlCooldownMs: Number.isFinite(fromFile?.appControlCooldownMs)
       ? fromFile.appControlCooldownMs
       : DEFAULT_APP_CONTROL_COOLDOWN_MS,
