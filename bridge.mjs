@@ -23,6 +23,7 @@ import {
   parseCommand,
 } from "./lib/message-routing.mjs";
 import { appendTransportNotice, renderNativeSendError } from "./lib/native-ux.mjs";
+import { isOutboundMirrorBindingEligible } from "./lib/outbound-binding-eligibility.mjs";
 import {
   appControlCooldownUntilMs,
   markAppControlCooldown,
@@ -60,7 +61,7 @@ import {
 import { buildSelfCheckReport, formatSelfCheckReport } from "./lib/runtime-health.mjs";
 import { buildSettingsReport } from "./lib/settings-report.mjs";
 import { inspectStateDoctor } from "./lib/state-doctor.mjs";
-import { buildStatusBarMessage, makeStatusBarHash, readRolloutRuntimeStatus } from "./lib/status-bar.mjs";
+import { refreshStatusBars } from "./lib/status-bar-runner.mjs";
 import {
   getBinding,
   getOutboundMirror,
@@ -124,13 +125,10 @@ import {
   downloadTelegramFile,
   editForumTopic,
   editThenSendRichTextChunks,
-  editMessageText,
   getFile,
   getMe,
   getUpdates,
-  pinChatMessage,
   reopenForumTopic,
-  sendMessage,
   sendRichTextChunks,
   sendTyping,
 } from "./lib/telegram.mjs";
@@ -319,22 +317,6 @@ async function loadChangedFilesTextForThread({ config, thread, binding, cache })
   return text || null;
 }
 
-function isOutboundMirrorBindingEligible(binding) {
-  if (!binding?.threadId) {
-    return false;
-  }
-  if ((binding.transport || "native") !== "native") {
-    return false;
-  }
-  if (isClosedSyncBinding(binding)) {
-    return false;
-  }
-  if (!binding.chatId) {
-    return false;
-  }
-  return true;
-}
-
 function isTypingHeartbeatBindingEligible(config, binding) {
   return (
     config.sendTyping !== false &&
@@ -420,13 +402,6 @@ function syncTypingHeartbeats({ config, state, heartbeats, onlyBindingKey = null
   }
 
   return { started, stopped, running: heartbeats.size };
-}
-
-function isStatusBarBindingEligible(binding) {
-  if (!isOutboundMirrorBindingEligible(binding)) {
-    return false;
-  }
-  return binding.messageThreadId != null;
 }
 
 function makeAppServerLiveStream(config) {
@@ -628,11 +603,6 @@ async function syncAppServerStreamProgress({ config, state, stream }) {
   }
 
   return { changed, applied, events: events.length };
-}
-
-function isMissingStatusBarMessageError(error) {
-  const message = error instanceof Error ? error.message : String(error);
-  return /message to edit not found|message_id_invalid|message can't be edited|message not found/i.test(message);
 }
 
 function renderHelp(config) {
@@ -2342,131 +2312,6 @@ async function syncOutboundMirrors({ config, state }) {
   }
 
   return { delivered, suppressed, changed };
-}
-
-async function reserveStatusBarMessage({ config, bindingKey, binding, message }) {
-  const sent = await sendMessage(config.botToken, {
-    chatId: binding.chatId,
-    messageThreadId: binding.messageThreadId,
-    text: message.text,
-    entities: message.entities,
-  });
-  const messageId = sent?.message_id;
-  if (!Number.isInteger(messageId)) {
-    throw new Error(`status bar reserve returned invalid message_id for ${bindingKey}`);
-  }
-
-  if (config.statusBarPin !== false) {
-    try {
-      await pinChatMessage(config.botToken, {
-        chatId: binding.chatId,
-        messageId,
-        disableNotification: true,
-      });
-      binding.statusBarPinnedAt = new Date().toISOString();
-    } catch (error) {
-      logBridgeEvent("status_bar_pin_error", {
-        bindingKey,
-        chatId: binding.chatId,
-        messageThreadId: binding.messageThreadId,
-        messageId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-
-  binding.statusBarMessageId = messageId;
-  return messageId;
-}
-
-async function refreshStatusBars({ config, state, onlyBindingKey = null } = {}) {
-  if (config.statusBarEnabled === false) {
-    return { changed: false, updated: 0 };
-  }
-
-  const bindingEntries = Object.entries(state.bindings ?? {}).filter(([bindingKey, binding]) => {
-    if (onlyBindingKey && bindingKey !== onlyBindingKey) {
-      return false;
-    }
-    return isStatusBarBindingEligible(binding);
-  });
-  if (bindingEntries.length === 0) {
-    return { changed: false, updated: 0 };
-  }
-
-  const threads = await getThreadsByIds(
-    config.threadsDbPath,
-    bindingEntries.map(([, binding]) => binding.threadId),
-  );
-  const threadsById = new Map(threads.map((thread) => [String(thread.id), thread]));
-  let changed = false;
-  let updated = 0;
-
-  for (const [bindingKey, binding] of bindingEntries) {
-    const thread = threadsById.get(String(binding.threadId));
-    if (!thread?.rollout_path || Number(thread.archived) !== 0) {
-      continue;
-    }
-
-    let runtime = null;
-    try {
-      runtime = await readRolloutRuntimeStatus(thread.rollout_path, {
-        tailBytes: config.statusBarTailBytes,
-      });
-    } catch (error) {
-      logBridgeEvent("status_bar_runtime_error", {
-        bindingKey,
-        threadId: binding.threadId,
-        rolloutPath: thread.rollout_path,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-
-    const message = buildStatusBarMessage({
-      binding,
-      thread,
-      runtime,
-      config,
-    });
-    const hash = makeStatusBarHash(JSON.stringify(message));
-    if (binding.statusBarMessageId && binding.statusBarTextHash === hash) {
-      continue;
-    }
-
-    try {
-      if (!binding.statusBarMessageId) {
-        await reserveStatusBarMessage({ config, bindingKey, binding, message });
-      } else {
-        try {
-          await editMessageText(config.botToken, {
-            chatId: binding.chatId,
-            messageId: binding.statusBarMessageId,
-            text: message.text,
-            entities: message.entities,
-          });
-        } catch (error) {
-          if (!isMissingStatusBarMessageError(error)) {
-            throw error;
-          }
-          delete binding.statusBarMessageId;
-          await reserveStatusBarMessage({ config, bindingKey, binding, message });
-        }
-      }
-      binding.statusBarTextHash = hash;
-      binding.statusBarUpdatedAt = new Date().toISOString();
-      state.bindings[bindingKey] = binding;
-      changed = true;
-      updated += 1;
-    } catch (error) {
-      logBridgeEvent("status_bar_update_error", {
-        bindingKey,
-        threadId: binding.threadId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-
-  return { changed, updated };
 }
 
 async function checkpointMessage(statePath, state, update) {
