@@ -15,6 +15,7 @@ import {
   readRecentBridgeEvents,
   summarizeBridgeEvents,
 } from "./lib/bridge-events.mjs";
+import { buildBindingPayload, formatThreadBullet, isAuthorized } from "./lib/bridge-bindings.mjs";
 import {
   findFallbackTopicBindingForUnboundGroupMessage,
   normalizeInboundPrompt,
@@ -241,35 +242,6 @@ async function rerouteUnboundGroupMessageToFallbackTopic({ config, state, messag
 
 function isTelegramServiceMessage(message) {
   return TELEGRAM_SERVICE_MESSAGE_KEYS.some((key) => key in (message || {}));
-}
-
-function formatThreadBullet(thread) {
-  return `- ${sanitizeTopicTitle(thread.title, thread.id)} (${thread.id})`;
-}
-
-function buildBindingPayload({ message, thread, chatTitle }) {
-  return {
-    threadId: String(thread.id),
-    transport: "native",
-    chatId: String(message.chat.id),
-    messageThreadId: message.message_thread_id ?? null,
-    chatTitle: normalizeText(chatTitle || message.chat.title || message.chat.username || message.chat.first_name || ""),
-    threadTitle: sanitizeTopicTitle(thread.title, thread.id),
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-}
-
-function isAuthorized(config, message) {
-  const userId = Number(message?.from?.id);
-  const chatId = String(message?.chat?.id);
-  if (config.allowedUserIds.length && !config.allowedUserIds.includes(userId)) {
-    return false;
-  }
-  if (config.allowedChatIds.length && !config.allowedChatIds.includes(chatId)) {
-    return false;
-  }
-  return true;
 }
 
 function rememberOutbound(binding, sentMessages) {
