@@ -18,7 +18,8 @@
 6. Richer rendering polish: Markdown tables and cleaner local file links.
 7. ~~Onboarding wizard base: doctor, project/thread selection, plan write, optional bootstrap, clean rebuild preview, backfill and smoke.~~
 8. Onboarding wizard polish: safer restore/reuse flows, clearer BotFather/token guidance and nicer selectors.
-9. Agent-led install flow: the public docs should let a new user open Codex in this repo, paste one clear install prompt, and let Codex run doctor/setup/wizard/bootstrap/backfill/smoke while asking only for unavoidable manual Telegram steps like BotFather token, Telegram API credentials and user-session login.
+9. ~~Agent-led install docs: public docs let a new user open Codex in this repo, paste one clear install prompt, and let Codex drive doctor/setup/wizard/bootstrap/backfill/smoke while asking only for unavoidable Telegram steps.~~
+10. Agent-led onboarding automation hardening: make dependency setup, token/API credential wiring and user-session recovery smoother inside the wizard path itself.
 
 ## P2 - Transport And Observability
 
@@ -53,3 +54,4 @@
 10. Clean history import defaults moved into config/plan: message tail size, optional user prompt cap, assistant phases and heartbeat inclusion.
 11. Telegram HTML rendering layer for common Markdown and safe plain-text fallback.
 12. Onboarding wizard base flow with doctor, plan, optional bootstrap, cleanup/backfill preview and smoke.
+13. Agent-led onboarding docs: README install prompt, simplified onboarding guide and lower-level commands reframed as escape hatches.

@@ -243,15 +243,16 @@ function renderHelp() {
     "  npm run codex:launch",
     "",
     "Notes:",
+    "  preferred public setup is agent-led: ask Codex to run doctor, prepare local config, then drive the wizard.",
     "  doctor checks local prerequisites before the wizard gets creative.",
     "  codex:launch starts Codex.app with the app-control debug port when it is not already open.",
     "  scan is read-only and shows candidate Codex projects/threads.",
     "  plan is a preview by default; add --write to update admin/bootstrap-plan.json.",
-    "  wizard is interactive by default and keeps Telegram side effects behind explicit confirmation or flags.",
+    "  wizard is interactive by default and can write/apply/backfill/smoke with explicit confirmation or flags.",
     "  history import defaults come from config.local.json unless a history flag overrides them.",
     "  --cleanup-dry-run previews a clean rebuild for bootstrapped topics; --cleanup deletes visible topic messages except protected root/status ids.",
     "  --rehearsal writes admin/bootstrap-plan.rehearsal.json by default and uses codex-lab/Codex Lab naming.",
-    "  bootstrap/apply is still handled by admin/telegram_user_admin.py bootstrap.",
+    "  lower-level admin/telegram_user_admin.py commands are escape hatches, not the normal install story.",
   ].join("\n");
 }
 

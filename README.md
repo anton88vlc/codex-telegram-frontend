@@ -139,24 +139,17 @@ These are repo-local runtime files and are ignored by git:
 - `admin/bootstrap-plan.json`
 - `admin/bootstrap-plan.rehearsal.json`
 
-## Run
+## Local Commands
 
-Prepare local config and admin dependencies:
+The recommended install path is the agent-led flow above. These commands are the useful escape hatch when you are developing or debugging the bridge directly.
 
-```bash
-cp config.example.json config.local.json
-cp admin/.env.example admin/.env
-python3 -m venv admin/.venv
-admin/.venv/bin/pip install -r admin/requirements.txt
-```
-
-Run the doctor before the wizard gets creative:
+Preflight:
 
 ```bash
 npm run onboard:doctor
 ```
 
-Launch `Codex.app` with a debug port:
+Launch `Codex.app` with the app-control debug port:
 
 ```bash
 npm run codex:launch
@@ -201,15 +194,9 @@ Install or refresh the launchd agent:
 
 That is the right v1. Mirroring the whole sidebar blindly turns the product into a landfill with push notifications.
 
-## Onboarding Wizard
+## Manual Onboarding Escape Hatch
 
-Preflight:
-
-```bash
-npm run onboard:doctor
-```
-
-Interactive guided flow:
+Use this when the agent-led flow needs adult supervision:
 
 ```bash
 npm run onboard:wizard
@@ -219,15 +206,6 @@ Disposable rehearsal surface:
 
 ```bash
 npm run onboard:wizard:rehearsal
-```
-
-Non-interactive rehearsal plan write:
-
-```bash
-npm run onboard:wizard:rehearsal -- \
-  --project /path/to/codex-project \
-  --write \
-  --no-input
 ```
 
 Optional side-effect flags:
@@ -240,37 +218,7 @@ Optional side-effect flags:
 - `--smoke` sends a Telegram smoke prompt and waits for the expected answer.
 - `--smoke-timeout-seconds 240` controls how long the wizard waits for a mirrored smoke answer.
 
-## Onboarding Preview Commands
-
-Inspect projects and recent threads from the local Codex DB:
-
-```bash
-npm run onboard:scan -- \
-  --project-limit 12 \
-  --threads-per-project 5
-```
-
-Generate a bootstrap plan for selected projects:
-
-```bash
-npm run onboard:plan -- \
-  --project /path/to/codex-project \
-  --threads-per-project 3
-```
-
-Create a disposable rehearsal surface:
-
-```bash
-npm run onboard:rehearsal -- \
-  --project /path/to/codex-project
-```
-
-Writing `admin/bootstrap-plan.json` requires `--write`.
-Rehearsal writes to ignored `admin/bootstrap-plan.rehearsal.json`.
-New and reused forum groups default to topic display `Tabs`.
-`bootstrap` merges groups into `state/bootstrap-result.json`, so rehearsal does not wipe the normal `codex` surface.
-See [admin/bootstrap-plan.example.json](admin/bootstrap-plan.example.json) for structure.
-See [docs/ONBOARDING.md](docs/ONBOARDING.md) for the full flow.
+Lower-level `scan`, `plan`, `bootstrap` and `backfill-thread` commands still exist, but they are not the normal user story. See [docs/ONBOARDING.md](docs/ONBOARDING.md) when you need the manual recovery path.
 
 ## Ops Notes
 
