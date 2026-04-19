@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
-import { statSync } from "node:fs";
 import process from "node:process";
 
+import { validateBindingForSendWithRescue } from "./lib/binding-send-validation.mjs";
 import { sendNativeTurn } from "./lib/codex-native.mjs";
 import { sendCommandResponse } from "./lib/command-response.mjs";
 import { DEFAULT_CONFIG_PATH, loadConfig } from "./lib/config.mjs";
@@ -11,7 +11,6 @@ import {
   syncAppServerStreamProgress,
   syncAppServerStreamSubscriptions,
 } from "./lib/app-server-stream-runner.mjs";
-import { isThreadDbOptionalBinding } from "./lib/binding-classification.mjs";
 import {
   configureBridgeEventLog,
   logBridgeEvent,
@@ -34,10 +33,7 @@ import { makePromptPreview } from "./lib/outbound-mirror-messages.mjs";
 import { syncOutboundMirrors } from "./lib/outbound-mirror-runner.mjs";
 import { getInitialProgressText, startProgressBubble } from "./lib/progress-bubble.mjs";
 import { getBoundThreadIdsForChat } from "./lib/project-data.mjs";
-import {
-  isClosedSyncBinding,
-  sanitizeTopicTitle,
-} from "./lib/project-sync.mjs";
+import { sanitizeTopicTitle } from "./lib/project-sync.mjs";
 import {
   applyProjectSyncPlan,
   buildSyncContext,
@@ -67,12 +63,9 @@ import {
   removeOutboundMirror,
   saveStateMerged as saveState,
   setBinding,
-  setOutboundMirror,
 } from "./lib/state.mjs";
 import {
   clamp,
-  findActiveThreadSuccessors,
-  getThreadById,
   listProjectThreads,
   parsePositiveInt,
 } from "./lib/thread-db.mjs";
@@ -276,139 +269,6 @@ function renderHelp(config) {
     "v1 is intentionally narrow: **native transport** only. Heartbeat/UI-visible transport is phase 2.",
     "Final answers from the Codex thread are mirrored back into the bound Telegram chat/topic.",
   ].join("\n");
-}
-
-async function validateBindingForSend(config, binding) {
-  if (isClosedSyncBinding(binding)) {
-    return {
-      ok: false,
-      message: "This sync-managed topic is parked and should not be used as an active work chat. Run `/sync-project` to bring it back into the active set.",
-    };
-  }
-  try {
-    const thread = await getThreadById(config.threadsDbPath, binding.threadId);
-    if (!thread) {
-      if (isThreadDbOptionalBinding(binding)) {
-        logBridgeEvent("binding_thread_db_pending", {
-          threadId: binding.threadId,
-          chatId: binding.chatId,
-          messageThreadId: binding.messageThreadId ?? null,
-          createdBy: binding.createdBy || null,
-          surface: binding.surface || null,
-        });
-        return { ok: true, thread: null };
-      }
-      return {
-        ok: false,
-        message: `This binding points to thread ${binding.threadId}, which is no longer in the local Codex DB. Use /detach and bind it again.`,
-      };
-    }
-    if (Number(thread.archived) !== 0) {
-      return {
-        ok: false,
-        thread,
-        message: `This binding points to archived thread ${binding.threadId}. Use /detach and pick an active thread.`,
-      };
-    }
-    return { ok: true, thread };
-  } catch (error) {
-    logBridgeEvent("binding_validation_error", {
-      threadId: binding.threadId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return { ok: true, thread: null };
-  }
-}
-
-function fileSizeOrZero(filePath) {
-  if (!filePath) {
-    return 0;
-  }
-  try {
-    return Number(statSync(filePath).size) || 0;
-  } catch {
-    return 0;
-  }
-}
-
-function prepareOutboundMirrorAtFileEnd(state, bindingKey, thread) {
-  if (!thread?.rollout_path) {
-    removeOutboundMirror(state, bindingKey);
-    return;
-  }
-  setOutboundMirror(state, bindingKey, {
-    initialized: true,
-    threadId: String(thread.id),
-    rolloutPath: thread.rollout_path,
-    byteOffset: fileSizeOrZero(thread.rollout_path),
-    partialLine: "",
-    lastSignature: null,
-    suppressions: [],
-    pendingMessages: [],
-    replyTargetMessageId: null,
-  });
-}
-
-async function validateBindingForSendWithRescue({ config, state, bindingKey, binding }) {
-  const result = await validateBindingForSend(config, binding);
-  if (result.ok || !result.thread || Number(result.thread.archived) === 0) {
-    return result;
-  }
-
-  let candidates = [];
-  try {
-    candidates = await findActiveThreadSuccessors(config.threadsDbPath, result.thread, { limit: 3 });
-  } catch (error) {
-    logBridgeEvent("binding_archived_rescue_lookup_error", {
-      bindingKey,
-      threadId: binding.threadId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-
-  if (candidates.length !== 1) {
-    logBridgeEvent("binding_archived_rescue_ambiguous", {
-      bindingKey,
-      threadId: binding.threadId,
-      candidates: candidates.map((candidate) => ({
-        id: candidate.id,
-        title: candidate.title,
-        cwd: candidate.cwd,
-      })),
-    });
-    return {
-      ...result,
-      message:
-        candidates.length > 1
-          ? `This Telegram topic points to archived Codex thread ${binding.threadId}, and I found ${candidates.length} possible active replacements. Use /detach and /attach <thread-id> once.`
-          : result.message,
-    };
-  }
-
-  const successor = candidates[0];
-  const now = new Date().toISOString();
-  const nextBinding = setBinding(state, bindingKey, {
-    ...binding,
-    threadId: String(successor.id),
-    threadTitle: successor.title || binding.threadTitle,
-    reboundFromThreadId: binding.threadId,
-    reboundAt: now,
-    updatedAt: now,
-  });
-  prepareOutboundMirrorAtFileEnd(state, bindingKey, successor);
-  logBridgeEvent("binding_archived_rescued", {
-    bindingKey,
-    fromThreadId: binding.threadId,
-    toThreadId: successor.id,
-    title: successor.title,
-    cwd: successor.cwd,
-  });
-  return {
-    ok: true,
-    thread: successor,
-    binding: nextBinding,
-    notice: "Recovered the Telegram binding to the active Codex thread; continuing.",
-  };
 }
 
 async function handleCommand({ config, state, message, bindingKey, binding, parsed }) {
