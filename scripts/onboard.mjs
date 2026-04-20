@@ -376,6 +376,8 @@ function renderPostOnboardingRuntimeNote({ configPath = DEFAULT_CONFIG_PATH } = 
     "",
     `Other mode: app-server fallback. It is calmer when the Desktop renderer gets flaky, but it is less UI-aware and Codex Desktop may not update live. Use \`nativeIngressTransport: "app-server"\` in ${configPath} only when app-control is being dramatic.`,
     "",
+    "Optional, but worth it: tune Codex Custom Instructions. This bridge makes Codex feel present on your phone, so a stiff assistant voice gets old fast. A short note is enough: direct, practical, warm, low corporate fog, and willing to call out sharp edges plainly.",
+    "",
   ].join("\n");
 }
 

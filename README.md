@@ -51,6 +51,8 @@ If you are already inside this repo, `npm run codex:launch` is the same launch w
 
 Codex should handle local config, Keychain/env wiring, bootstrap, backfill and smoke. The human should click/scan/type into local Telegram or terminal prompts, not dump secrets into the conversation transcript. If setup gets weird, use [docs/ONBOARDING.md](docs/ONBOARDING.md).
 
+Optional polish after install: set Codex Custom Instructions to the working style you actually want on your phone. A short "direct, practical, warm, no corporate filler" note changes the feel more than it has any right to.
+
 ## Runtime Boundary
 
 This project is a frontend. It does not replace Codex.

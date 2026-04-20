@@ -77,6 +77,14 @@ npm run codex:launch
 
 That is the best mode. It starts Codex.app with app-control on `http://127.0.0.1:9222`, so Telegram feels live: messages land in Codex Desktop, replies mirror back, and the phone behaves like a real remote Codex surface. The other mode is `app-server` fallback: calmer when the Desktop renderer gets weird, but less UI-aware and not guaranteed to refresh Codex Desktop live.
 
+One optional recommendation: tune Codex Custom Instructions after setup. This project makes Codex feel present on your phone, so the assistant's voice matters more than it does in a random terminal. A tiny note is enough:
+
+```text
+Write like a sharp, practical teammate. Be direct, warm and human. Avoid corporate filler. Say what you are doing, keep me moving, and call out sharp edges plainly.
+```
+
+Do not overthink it. The point is not cosplay; it is making a pocket agent manager feel less like a ticketing system with a Telegram skin.
+
 Quickstart applies the bundled project avatar as a best-effort polish step after Telegram bootstrap. If Telegram refuses it, onboarding keeps going and tells you why. Manual retry:
 
 ```bash
