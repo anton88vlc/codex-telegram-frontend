@@ -34,6 +34,7 @@ import {
   listRecentThreads,
   parsePositiveInt,
 } from "../lib/thread-db.mjs";
+import { normalizeVoiceTranscriptionProvider } from "../lib/voice-transcription.mjs";
 
 const PROJECT_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DEFAULT_THREADS_DB_PATH = path.join(os.homedir(), ".codex", "state_5.sqlite");
@@ -50,6 +51,8 @@ const DEFAULT_ADMIN_SESSION_PATH = path.join(PROJECT_ROOT, "state", "telegram_us
 const DEFAULT_BRIDGE_STATE_PATH = path.join(PROJECT_ROOT, "state", "state.json");
 const DEFAULT_PROJECT_INDEX_PATH = path.join(PROJECT_ROOT, "state", "bootstrap-result.json");
 const DEFAULT_BOT_TOKEN_KEYCHAIN_SERVICE = "codex-telegram-bridge-bot-token";
+const DEFAULT_DEEPGRAM_KEYCHAIN_SERVICE = "codex-telegram-bridge-deepgram-api-key";
+const DEFAULT_OPENAI_KEYCHAIN_SERVICE = "codex-telegram-bridge-openai-api-key";
 const DEFAULT_NATIVE_DEBUG_BASE_URL = DEFAULT_APP_CONTROL_BASE_URL;
 const DEFAULT_QUICKSTART_THREAD_LIMIT = 10;
 const DEFAULT_QUICKSTART_HISTORY_MAX_MESSAGES = 10;
@@ -511,6 +514,70 @@ async function inspectBridgeBotToken(args, config) {
   };
 }
 
+async function inspectVoiceTranscription(config = {}) {
+  if (config.voiceTranscriptionEnabled === false) {
+    return {
+      ok: true,
+      detail: "disabled in config",
+      action: "",
+    };
+  }
+
+  const provider = normalizeVoiceTranscriptionProvider(config.voiceTranscriptionProvider);
+  const command = Array.isArray(config.voiceTranscriptionCommand)
+    ? config.voiceTranscriptionCommand.map(String).filter(Boolean)
+    : [];
+  const deepgramEnv = config.voiceTranscriptionDeepgramKeyEnv || config.voiceTranscriptionApiKeyEnv || "DEEPGRAM_API_KEY";
+  const openAIEnv = config.voiceTranscriptionOpenAIKeyEnv || config.voiceTranscriptionApiKeyEnv || "OPENAI_API_KEY";
+  const deepgramKeychain =
+    config.voiceTranscriptionDeepgramKeychainService ||
+    (provider === "deepgram" ? config.voiceTranscriptionKeychainService : null) ||
+    DEFAULT_DEEPGRAM_KEYCHAIN_SERVICE;
+  const openAIKeychain =
+    config.voiceTranscriptionOpenAIKeychainService ||
+    (provider === "openai" ? config.voiceTranscriptionKeychainService : null) ||
+    DEFAULT_OPENAI_KEYCHAIN_SERVICE;
+  const hasDeepgramConfig =
+    Boolean(process.env[deepgramEnv]) ||
+    Boolean(config.voiceTranscriptionDeepgramApiKey) ||
+    (provider === "deepgram" && Boolean(config.voiceTranscriptionApiKey));
+  const hasOpenAIConfig =
+    Boolean(process.env[openAIEnv]) ||
+    Boolean(config.voiceTranscriptionOpenAIApiKey) ||
+    (provider === "openai" && Boolean(config.voiceTranscriptionApiKey));
+  const [hasDeepgramKeychain, hasOpenAIKeychain] = await Promise.all([
+    hasDeepgramConfig ? Promise.resolve(false) : keychainHasSecret(deepgramKeychain),
+    hasOpenAIConfig ? Promise.resolve(false) : keychainHasSecret(openAIKeychain),
+  ]);
+
+  const sources = [];
+  if (hasDeepgramConfig) sources.push(deepgramEnv);
+  if (hasDeepgramKeychain) sources.push(`Keychain ${deepgramKeychain}`);
+  if (hasOpenAIConfig) sources.push(openAIEnv);
+  if (hasOpenAIKeychain) sources.push(`Keychain ${openAIKeychain}`);
+  if (command.length) sources.push("local command");
+
+  const deepgramOk = hasDeepgramConfig || hasDeepgramKeychain;
+  const openAIOk = hasOpenAIConfig || hasOpenAIKeychain;
+  const commandOk = command.length > 0;
+  const ok =
+    provider === "deepgram"
+      ? deepgramOk
+      : provider === "openai"
+        ? openAIOk
+        : provider === "command"
+          ? commandOk
+          : deepgramOk || openAIOk || commandOk;
+  return {
+    ok,
+    detail: ok
+      ? `${provider}; ${sources.join(", ")}`
+      : `${provider}; missing Deepgram/OpenAI key or local command`,
+    action:
+      "Voice notes are optional. For mobile voice UX, add `DEEPGRAM_API_KEY` or store it in Keychain service `codex-telegram-bridge-deepgram-api-key`, then restart the bridge.",
+  };
+}
+
 function compactErrorMessage(error) {
   const stderr = String(error?.stderr ?? "").trim();
   const stdout = String(error?.stdout ?? "").trim();
@@ -880,7 +947,17 @@ async function buildOnboardingChecks(args) {
   const nativeDebugBaseUrl = config.nativeDebugBaseUrl || DEFAULT_NATIVE_DEBUG_BASE_URL;
   const envFileOk = await pathExists(args.adminEnvPath);
   const envCheck = validateTelegramAdminEnv(envValues, envFileOk, args.adminEnvPath);
-  const [configOk, helperOk, adminPythonOk, sessionFileOk, threadsDbOk, codexAppOk, botTokenCheck, appControl] =
+  const [
+    configOk,
+    helperOk,
+    adminPythonOk,
+    sessionFileOk,
+    threadsDbOk,
+    codexAppOk,
+    botTokenCheck,
+    voiceTranscriptionCheck,
+    appControl,
+  ] =
     await Promise.all([
       pathExists(args.configPath),
       pathExists(args.adminHelperPath),
@@ -889,6 +966,7 @@ async function buildOnboardingChecks(args) {
       pathExists(args.threadsDbPath),
       pathExists("/Applications/Codex.app/Contents/MacOS/Codex"),
       inspectBridgeBotToken(args, config),
+      inspectVoiceTranscription(config),
       checkAppControl(nativeDebugBaseUrl),
     ]);
   const sessionCheck = await inspectAdminSession(args, {
@@ -925,6 +1003,10 @@ async function buildOnboardingChecks(args) {
     }),
     makeCheck("Telegram bot token", botTokenCheck.ok, botTokenCheck.detail, {
       action: botTokenCheck.action,
+    }),
+    makeCheck("voice transcription", voiceTranscriptionCheck.ok, voiceTranscriptionCheck.detail, {
+      required: false,
+      action: voiceTranscriptionCheck.action,
     }),
     makeCheck(
       "app-control debug port",

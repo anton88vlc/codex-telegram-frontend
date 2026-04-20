@@ -366,6 +366,53 @@ test("onboard doctor detects stale Telegram user sessions", () => {
   assert.match(result.stdout, /--login-qr/);
 });
 
+test("onboard doctor warns when voice transcription has no STT key", () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codex-onboard-doctor-voice-"));
+  const configPath = path.join(tmpDir, "config.local.json");
+  fs.writeFileSync(
+    configPath,
+    JSON.stringify(
+      {
+        voiceTranscriptionProvider: "deepgram",
+        voiceTranscriptionDeepgramKeychainService: "codex-telegram-bridge-test-missing-deepgram-key",
+      },
+      null,
+      2,
+    ),
+  );
+
+  const result = spawnSync(
+    process.execPath,
+    [
+      "scripts/onboard.mjs",
+      "doctor",
+      "--config",
+      configPath,
+      "--admin-env",
+      path.join(tmpDir, "admin", ".env"),
+      "--admin-python",
+      path.join(tmpDir, "admin", ".venv", "bin", "python"),
+      "--admin-session",
+      path.join(tmpDir, "state", "telegram_user.session"),
+      "--threads-db",
+      path.join(tmpDir, "state.sqlite"),
+    ],
+    {
+      cwd: PROJECT_ROOT,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        DEEPGRAM_API_KEY: "",
+        OPENAI_API_KEY: "",
+      },
+    },
+  );
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stdout, /\[warn\] voice transcription - deepgram; missing Deepgram\/OpenAI key or local command/);
+  assert.match(result.stdout, /Voice notes are optional/);
+});
+
 test("onboard wizard can write a non-interactive rehearsal plan", () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codex-onboard-"));
   const dbPath = path.join(tmpDir, "state.sqlite");

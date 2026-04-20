@@ -41,6 +41,8 @@ npm run codex:launch
 
 Codex should handle where token/API values are stored locally. Do not make the user cosplay as a secrets manager unless the automatic path fails.
 
+Voice notes are optional, but they need one STT path. The easiest one is Deepgram: let Codex store `DEEPGRAM_API_KEY` in macOS Keychain service `codex-telegram-bridge-deepgram-api-key`, or expose it as env if that is how you run local tools. Without an STT key, text/photos/files still work and the doctor will say voice is the only missing polish.
+
 One sharp rule: do not ask the user to paste bot tokens, API hashes, login codes or 2FA passwords into Codex chat. That chat is a transcript, not a password manager. Use QR login first:
 
 ```bash
