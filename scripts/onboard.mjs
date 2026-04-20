@@ -1167,12 +1167,26 @@ async function promptCredentialSetup(args, rl) {
   const config = await readJsonIfExists(args.configPath, {});
   const updatedEnvValues = await readEnvValues(args.adminEnvPath);
   const existingBotUsername = cleanBotUsername(config.botUsername) || cleanBotUsername(updatedEnvValues.CODEX_TELEGRAM_BOT_USERNAME);
-  if (!existingBotUsername && (await askYesNo(rl, "Add Telegram bot username now?", true))) {
-    const botUsername = cleanBotUsername(await askLine(rl, "Bot username without @"));
-    if (botUsername) {
-      await setConfigValues(args.configPath, { botUsername });
-      await setEnvValues(args.adminEnvPath, { CODEX_TELEGRAM_BOT_USERNAME: botUsername });
-      messages.push(`stored bot username ${botUsername}`);
+  if (!existingBotUsername) {
+    process.stdout.write(
+      [
+        "",
+        "Telegram bot username",
+        "This is the @username of the bot you already created with BotFather. Do not invent a new one here.",
+        "Example: if BotFather shows @cdxanton2026bot, enter cdxanton2026bot.",
+        "If you skip this, bootstrap can still discover it from the bot token later. If no token is available either, bootstrap will stop and ask for it.",
+        "",
+      ].join("\n"),
+    );
+    if (await askYesNo(rl, "Save existing Telegram bot username now?", true)) {
+      const botUsername = cleanBotUsername(
+        await askLine(rl, "Existing BotFather bot username, without @"),
+      );
+      if (botUsername) {
+        await setConfigValues(args.configPath, { botUsername });
+        await setEnvValues(args.adminEnvPath, { CODEX_TELEGRAM_BOT_USERNAME: botUsername });
+        messages.push(`stored bot username ${botUsername}`);
+      }
     }
   }
 

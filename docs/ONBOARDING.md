@@ -45,6 +45,8 @@ If you are already inside this repo, `npm run codex:launch` does the same thing 
 
 Codex should handle where token/API values are stored locally. Do not make the user cosplay as a secrets manager unless the automatic path fails.
 
+When `prepare` asks for the Telegram bot username, it means the username of the bot you already created in BotFather, without `@`. If BotFather shows `@cdxanton2026bot`, enter `cdxanton2026bot`. Do not invent a new bot name at that prompt. If you skip it, bootstrap can usually discover it from the bot token later; if neither value is available, it will stop with a clear "bot username required" error.
+
 Voice notes are optional, but they need one STT path. The easiest one is Deepgram: let Codex store `DEEPGRAM_API_KEY` in macOS Keychain service `codex-telegram-bridge-deepgram-api-key`, or expose it as env if that is how you run local tools. Without an STT key, text/photos/files still work and the doctor will say voice is the only missing polish.
 
 Supported STT paths today are Deepgram, OpenAI, or a local command. Deepgram is still the friendliest default for Telegram OGG/Opus voice notes; OpenAI is fine if that is where your key already lives; local command is the escape hatch for people who run their own thing. Codex-native realtime STT looks promising, but it is not the default yet because it still depends on Codex auth/runtime details.
