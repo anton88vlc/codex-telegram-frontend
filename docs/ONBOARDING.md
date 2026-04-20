@@ -107,7 +107,7 @@ Set Personality to `Friendly`, then use this Custom Instructions preset:
 Be the assistant you'd actually want to talk to at 2am. Not a corporate drone. Not a sycophant. Just... good
 ```
 
-The installing agent should offer to apply this for you: "I can set Personality to Friendly and paste this into Custom Instructions if you want." If it cannot safely automate the UI, it should leave the exact block above and not silently edit random app state. Pocket agent manager, yes. Haunted preferences folder, no.
+The installing agent should include this in the final install summary, not leave it buried in terminal output: "I can set Personality to Friendly and paste this into Custom Instructions if you want." If it cannot safely automate the UI, it should leave the exact block above and not silently edit random app state. Pocket agent manager, yes. Haunted preferences folder, no.
 
 Quickstart applies the bundled project avatar as a best-effort polish step after Telegram bootstrap. If Telegram refuses it, onboarding keeps going and tells you why. Manual retry:
 

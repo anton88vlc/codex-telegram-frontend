@@ -36,6 +36,8 @@ Keep interactive setup in one clear local terminal/input surface. Do not open ex
 Create or reuse the Telegram folder `codex`, scan my pinned Codex threads first and then my latest active Codex project threads and Codex Chats, create one group per detected Codex project, create one topic per selected Codex project thread, map Codex Chats into private topics inside the bot direct chat, import about 10 clean messages into each topic, start the bridge, run a real Telegram smoke test, and leave the repo in a clean documented state.
 
 Default to about 10 active threads total, with pinned Codex threads treated as the user's keep list. Do not ask me to choose projects unless the quickstart preview looks wrong. Keep Telegram as a clean remote Codex working set, not a landfill.
+
+In your final install summary, include the live status, the app-control launch command, any app-server fallback caveat, and the optional Codex Personalization offer from docs/ONBOARDING.md: Personality `Friendly` plus the Custom Instructions preset. Do not leave that buried in command output.
 ```
 
 What still needs a human:

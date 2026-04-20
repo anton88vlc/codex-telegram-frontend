@@ -409,6 +409,8 @@ function renderPostOnboardingRuntimeNote({ configPath = DEFAULT_CONFIG_PATH } = 
     "",
     "Optional, but worth it: set Codex Personality to Friendly and use this Custom Instructions preset. It makes the phone surface feel much less like a ticketing system wearing a Telegram mask.",
     "",
+    "Installing agents: include this in your final install summary, not only in command output.",
+    "",
     "If you want the installing agent to save you from UI spelunking, ask:",
     "",
     "  Please set Codex Personality to Friendly and paste this preset into Custom Instructions.",
