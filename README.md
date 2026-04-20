@@ -27,7 +27,7 @@ Open this repo in Codex and paste this into a fresh thread from the repo root:
 ```text
 Install codex-telegram-frontend on this Mac.
 
-Run the onboarding doctor, prepare local config from examples, guide me through the unavoidable Telegram steps, then run the quickstart onboarding path.
+Run the documented onboarding path in this order: prepare local config from examples, guide me through the unavoidable Telegram steps, run the onboarding doctor, then run the quickstart onboarding path.
 
 Do not ask me to paste bot tokens, Telegram API hashes, login codes or 2FA passwords into Codex chat. Use local terminal prompts, Keychain, ignored config files, browser/Telegram UI and phone/code login instead. QR login is only a fallback.
 
@@ -104,7 +104,7 @@ Voice notes are optional. The supported STT paths today are Deepgram, OpenAI, or
 
 ## Local Commands
 
-Install/development preflight:
+Install/development preflight, in order:
 
 ```bash
 npm run onboard:prepare

@@ -28,6 +28,8 @@ Codex should do the boring parts:
 
 The user should not have to manually choose projects and topics unless quickstart picked a weird working set. The old `scan -> plan -> bootstrap -> backfill` path is still there, but it is not the happy path.
 
+Do not start with `doctor` on a fresh clone. `doctor` is useful after `prepare`, because `prepare` is what creates the local ignored files, admin env and Telegram user session scaffolding that `doctor` checks.
+
 ## Human Steps
 
 Some things still require a human because Telegram does not expose clean automation for them:
