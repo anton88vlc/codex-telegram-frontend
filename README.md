@@ -23,6 +23,8 @@ Install codex-telegram-frontend on this Mac.
 
 Run the onboarding doctor, prepare local config from examples, guide me through the unavoidable Telegram steps, then run the quickstart onboarding path.
 
+Do not ask me to paste bot tokens, Telegram API hashes, login codes or 2FA passwords into Codex chat. Use local hidden prompts, Keychain, ignored config files, browser/Telegram UI, or QR login instead.
+
 Create or reuse the Telegram folder `codex`, scan my latest active Codex project threads and Codex Chats, create one group per detected Codex project, create one topic per selected Codex project thread, map Codex Chats into private topics inside the bot direct chat, import about 10 clean messages into each topic, start the bridge, run a real Telegram smoke test, and leave the repo in a clean documented state.
 
 Default to about 10 latest active threads total. Do not ask me to choose projects unless the quickstart preview looks wrong. Keep Telegram as a clean remote Codex working set, not a landfill.
@@ -31,7 +33,7 @@ Default to about 10 latest active threads total. Do not ask me to choose project
 What still needs a human:
 
 1. Create or reuse a Telegram bot through [@BotFather](https://t.me/BotFather).
-2. Paste Telegram app credentials from [my.telegram.org](https://my.telegram.org/) if the admin helper asks.
+2. Create or reuse Telegram app credentials at [my.telegram.org](https://my.telegram.org/) if the admin helper asks.
 3. Authorize one local Telegram user session so the helper can create folders, groups and topics.
 4. Keep `Codex.app` available. Best path:
 
@@ -39,7 +41,7 @@ What still needs a human:
 npm run codex:launch
 ```
 
-Codex should handle local config, Keychain/env wiring, bootstrap, backfill and smoke. If setup gets weird, use [docs/ONBOARDING.md](docs/ONBOARDING.md).
+Codex should handle local config, Keychain/env wiring, bootstrap, backfill and smoke. The human should click/scan/type into local Telegram or terminal prompts, not dump secrets into the conversation transcript. If setup gets weird, use [docs/ONBOARDING.md](docs/ONBOARDING.md).
 
 ## Runtime Boundary
 

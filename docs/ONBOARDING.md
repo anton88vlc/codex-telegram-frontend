@@ -41,6 +41,20 @@ npm run codex:launch
 
 Codex should handle where token/API values are stored locally. Do not make the user cosplay as a secrets manager unless the automatic path fails.
 
+One sharp rule: do not ask the user to paste bot tokens, API hashes, login codes or 2FA passwords into Codex chat. That chat is a transcript, not a password manager. Use QR login first:
+
+```bash
+npm run onboard:prepare -- --login-qr
+```
+
+If QR login gets stuck or Telegram asks for 2FA, use the local phone-login fallback and let the user type into the terminal prompt:
+
+```bash
+npm run onboard:prepare -- --login-phone
+```
+
+`prepare` checks whether an existing Telegram session is actually authorized before trusting it. If a stale session file is lying around, it removes the session artifacts before retrying login.
+
 If the bot is yours, Codex can also apply the bundled project avatar:
 
 ```bash

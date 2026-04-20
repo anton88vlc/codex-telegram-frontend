@@ -107,6 +107,7 @@ test("onboard CLI supports top-level help", () => {
   assert.match(result.stdout, /--rehearsal/);
   assert.match(result.stdout, /--cleanup-dry-run/);
   assert.match(result.stdout, /prepare/);
+  assert.match(result.stdout, /--login-phone/);
 });
 
 test("onboard prepare creates local config and admin env from safe templates", () => {
@@ -144,6 +145,78 @@ test("onboard prepare creates local config and admin env from safe templates", (
   const envText = fs.readFileSync(adminEnvPath, "utf8");
   assert.match(envText, /API_ID=/);
   assert.match(envText, /API_HASH=/);
+});
+
+test("onboard prepare reauthenticates stale Telegram user sessions", () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codex-onboard-prepare-stale-session-"));
+  const adminDir = path.join(tmpDir, "admin");
+  const stateDir = path.join(tmpDir, "state");
+  fs.mkdirSync(adminDir, { recursive: true });
+  fs.mkdirSync(stateDir, { recursive: true });
+
+  const configPath = path.join(tmpDir, "config.local.json");
+  const adminEnvPath = path.join(adminDir, ".env");
+  const fakePythonPath = path.join(adminDir, "fake-python");
+  const fakeHelperPath = path.join(adminDir, "telegram_user_admin.py");
+  const sessionPath = path.join(stateDir, "telegram_user.session");
+  const callsPath = path.join(tmpDir, "calls.log");
+
+  fs.writeFileSync(fakeHelperPath, "# fake helper for prepare stale session test\n");
+  fs.writeFileSync(sessionPath, "stale session\n");
+  fs.writeFileSync(`${sessionPath}-journal`, "stale journal\n");
+  fs.writeFileSync(
+    fakePythonPath,
+    `#!/usr/bin/env node
+const fs = require("node:fs");
+const callsPath = ${JSON.stringify(callsPath)};
+fs.appendFileSync(callsPath, process.argv.slice(2).join(" ") + "\\n");
+const command = process.argv[process.argv.length - 1];
+if (command === "whoami") {
+  console.log(JSON.stringify({ authorized: false, me: null }));
+  process.exit(0);
+}
+if (command === "login-qr") {
+  console.log(JSON.stringify({ status: "authorized" }));
+  process.exit(0);
+}
+console.log("{}");
+`,
+  );
+  fs.chmodSync(fakePythonPath, 0o755);
+
+  const result = spawnSync(
+    process.execPath,
+    [
+      "scripts/onboard.mjs",
+      "prepare",
+      "--no-input",
+      "--skip-admin-deps",
+      "--login-qr",
+      "--config",
+      configPath,
+      "--admin-env",
+      adminEnvPath,
+      "--admin-python",
+      fakePythonPath,
+      "--admin-helper",
+      fakeHelperPath,
+      "--admin-session",
+      sessionPath,
+    ],
+    {
+      cwd: PROJECT_ROOT,
+      encoding: "utf8",
+    },
+  );
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /removed stale Telegram user session before login/);
+  assert.match(result.stdout, /authorized Telegram user session via QR login/);
+  const calls = fs.readFileSync(callsPath, "utf8");
+  assert.match(calls, /whoami/);
+  assert.match(calls, /login-qr/);
+  assert.equal(fs.existsSync(sessionPath), false);
+  assert.equal(fs.existsSync(`${sessionPath}-journal`), false);
 });
 
 test("onboard doctor prints actionable recovery steps", () => {

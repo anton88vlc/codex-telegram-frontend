@@ -557,7 +557,7 @@ async def command_login_phone(args):
             "type": sent.type.__class__.__name__,
         }, ensure_ascii=False, indent=2), flush=True)
 
-        code = input("Telegram login code: ").strip()
+        code = getpass.getpass("Telegram login code: ").strip()
         try:
             await client.sign_in(phone=phone, code=code, phone_code_hash=sent.phone_code_hash)
         except errors.SessionPasswordNeededError:

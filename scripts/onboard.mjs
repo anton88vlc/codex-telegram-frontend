@@ -100,6 +100,7 @@ function parseArgs(argv) {
     noPrepare: false,
     skipAdminDeps: false,
     loginQr: false,
+    loginPhone: false,
     _projectLimitExplicit: false,
     _threadLimitExplicit: false,
     _threadsPerProjectExplicit: false,
@@ -259,6 +260,9 @@ function parseArgs(argv) {
       case "--login-qr":
         args.loginQr = true;
         break;
+      case "--login-phone":
+        args.loginPhone = true;
+        break;
       case "--help":
       case "-h":
         args.help = true;
@@ -301,7 +305,7 @@ function parseArgs(argv) {
 function renderHelp() {
   return [
     "Usage:",
-    "  node scripts/onboard.mjs prepare [--skip-admin-deps] [--login-qr]",
+    "  node scripts/onboard.mjs prepare [--skip-admin-deps] [--login-qr|--login-phone]",
     "  node scripts/onboard.mjs doctor [--json]",
     "  node scripts/onboard.mjs scan [--project-limit 8] [--threads-per-project 3] [--json]",
     "  node scripts/onboard.mjs quickstart [--thread-limit 10] [--history-max-messages 10] [--preview] [--no-chats]",
@@ -313,6 +317,7 @@ function renderHelp() {
     "Notes:",
     "  preferred public setup is agent-led quickstart: ask Codex to prepare local config, then run quickstart.",
     "  prepare creates missing local config/admin env files, can create the admin venv, and can guide credential/session setup.",
+    "  never paste tokens, API hashes, login codes or 2FA passwords into Codex chat; use local prompts/Telegram UI.",
     "  doctor checks local prerequisites before the wizard gets creative.",
     "  codex:launch starts Codex.app with the app-control debug port when it is not already open.",
     "  scan is read-only and shows candidate Codex projects/threads.",
@@ -504,7 +509,46 @@ function sessionRecoveryAction(errorText) {
   if (text.includes("api_id") || text.includes("api_hash") || text.includes("invalid")) {
     return "Fix Telegram API_ID/API_HASH in `admin/.env`, then rerun `npm run onboard:doctor`.";
   }
-  return "Run `npm run onboard:prepare -- --login-qr` and authorize the local Telegram user session.";
+  return "Run `npm run onboard:prepare -- --login-qr` or `npm run onboard:prepare -- --login-phone` and authorize the local Telegram user session.";
+}
+
+function adminSessionDisplayName(payload) {
+  const me = payload?.me ?? {};
+  return me.username ? `@${me.username}` : me.first_name || me.id || "Telegram user";
+}
+
+async function inspectAdminSessionWithPython(args, python) {
+  const exists = await pathExists(args.adminSessionPath);
+  if (!exists) {
+    return { exists: false, verified: false, authorized: false, detail: args.adminSessionPath };
+  }
+  try {
+    const { stdout } = await execFileAsync(python, [...adminBaseArgs(args), "whoami"], {
+      cwd: PROJECT_ROOT,
+      env: process.env,
+      timeout: 15_000,
+      maxBuffer: 1024 * 1024,
+    });
+    const payload = JSON.parse(stdout);
+    return {
+      exists: true,
+      verified: true,
+      authorized: Boolean(payload.authorized),
+      detail: payload.authorized
+        ? `${args.adminSessionPath} (authorized as ${adminSessionDisplayName(payload)})`
+        : `${args.adminSessionPath} (session file exists but is not authorized)`,
+      payload,
+    };
+  } catch (error) {
+    const message = compactErrorMessage(error);
+    return {
+      exists: true,
+      verified: false,
+      authorized: false,
+      detail: `${args.adminSessionPath} (${message})`,
+      errorText: message,
+    };
+  }
 }
 
 async function inspectAdminSession(args, { envOk, helperOk, adminPythonOk, sessionFileOk }) {
@@ -524,25 +568,17 @@ async function inspectAdminSession(args, { envOk, helperOk, adminPythonOk, sessi
   }
   try {
     const python = await resolveAdminPython(args);
-    const { stdout } = await execFileAsync(python, [...adminBaseArgs(args), "whoami"], {
-      cwd: PROJECT_ROOT,
-      env: process.env,
-      timeout: 15_000,
-      maxBuffer: 1024 * 1024,
-    });
-    const payload = JSON.parse(stdout);
-    if (!payload.authorized) {
+    const session = await inspectAdminSessionWithPython(args, python);
+    if (!session.authorized) {
       return {
         ok: false,
-        detail: `${args.adminSessionPath} (session file exists but is not authorized)`,
-        action: "Run `npm run onboard:prepare -- --login-qr` and authorize the local Telegram user session.",
+        detail: session.detail,
+        action: sessionRecoveryAction(session.errorText),
       };
     }
-    const me = payload.me ?? {};
-    const name = me.username ? `@${me.username}` : me.first_name || me.id || "Telegram user";
     return {
       ok: true,
-      detail: `${args.adminSessionPath} (authorized as ${name})`,
+      detail: session.detail,
       action: "",
     };
   } catch (error) {
@@ -943,16 +979,56 @@ async function promptCredentialSetup(args, rl) {
   return messages;
 }
 
-async function maybeRunLoginQr(args, rl, python) {
-  if (await pathExists(args.adminSessionPath)) {
-    return null;
+async function removeAdminSessionFiles(sessionPath) {
+  const candidates = [sessionPath, `${sessionPath}-journal`, `${sessionPath}-wal`, `${sessionPath}-shm`];
+  const removed = [];
+  for (const candidate of candidates) {
+    if (!(await pathExists(candidate))) {
+      continue;
+    }
+    await fs.rm(candidate, { force: true });
+    removed.push(candidate);
   }
-  const shouldLogin = args.loginQr || (rl && !args.noInput && (await askYesNo(rl, "Authorize Telegram user session with QR login now?", false)));
+  return removed;
+}
+
+function shouldRemoveAdminSessionForLogin(session) {
+  if (!session?.exists) {
+    return false;
+  }
+  if (session.verified) {
+    return !session.authorized;
+  }
+  const errorText = String(session.errorText ?? "").toLowerCase();
+  return errorText.includes("database disk image is malformed") || errorText.includes("not a database");
+}
+
+async function maybeRunTelegramLogin(args, rl, python) {
+  const session = await inspectAdminSessionWithPython(args, python);
+  if (session.authorized) {
+    return `Telegram user session already authorized: ${session.detail}`;
+  }
+
+  const shouldLogin =
+    args.loginQr ||
+    args.loginPhone ||
+    (rl && !args.noInput && (await askYesNo(rl, "Authorize Telegram user session with QR login now?", false)));
   if (!shouldLogin) {
     return null;
   }
-  await runPlainCommand(python, [...adminBaseArgs(args), "login-qr"], { cwd: PROJECT_ROOT });
-  return `authorized Telegram user session: ${args.adminSessionPath}`;
+
+  const messages = [];
+  if (shouldRemoveAdminSessionForLogin(session)) {
+    const removed = await removeAdminSessionFiles(args.adminSessionPath);
+    if (removed.length) {
+      messages.push(`removed stale Telegram user session before login: ${removed.map((filePath) => path.basename(filePath)).join(", ")}`);
+    }
+  }
+
+  const loginCommand = args.loginPhone ? "login-phone" : "login-qr";
+  await runPlainCommand(python, [...adminBaseArgs(args), loginCommand], { cwd: PROJECT_ROOT });
+  messages.push(`authorized Telegram user session via ${args.loginPhone ? "phone login" : "QR login"}: ${args.adminSessionPath}`);
+  return messages.join("\n");
 }
 
 async function prepareLocalSetup(args, rl, { force = false } = {}) {
@@ -973,9 +1049,9 @@ async function prepareLocalSetup(args, rl, { force = false } = {}) {
 
   messages.push(...(await promptCredentialSetup(args, rl)));
   const python = await resolveAdminPython(args);
-  const loginMessage = await maybeRunLoginQr(args, rl, python);
+  const loginMessage = await maybeRunTelegramLogin(args, rl, python);
   if (loginMessage) {
-    messages.push(loginMessage);
+    messages.push(...loginMessage.split("\n"));
   }
   return messages.filter(Boolean);
 }
@@ -1263,6 +1339,10 @@ function adminBaseArgs(args) {
   ];
 }
 
+function isNoCleanHistoryError(error) {
+  return /no clean history messages found/i.test(compactErrorMessage(error));
+}
+
 async function runBootstrap(args, python) {
   return runJsonCommand(python, [
     ...adminBaseArgs(args),
@@ -1309,7 +1389,24 @@ async function runBackfillForSummary(args, python, bootstrapSummary, { dryRun = 
       if (includeHeartbeats) {
         commandArgs.push("--include-heartbeats");
       }
-      results.push(await runJsonCommand(python, commandArgs, { timeoutMs: 240_000 }));
+      try {
+        results.push(await runJsonCommand(python, commandArgs, { timeoutMs: 240_000 }));
+      } catch (error) {
+        if (!isNoCleanHistoryError(error)) {
+          throw error;
+        }
+        const skipped = {
+          status: "skipped",
+          reason: "no clean history messages found",
+          threadId: topic.threadId,
+          chatId: String(group.botApiChatId),
+          topicId: String(topic.topicId),
+        };
+        process.stdout.write(
+          `Skipping history backfill for ${topic.title || topic.threadId}: no clean user/final-answer history found.\n`,
+        );
+        results.push(skipped);
+      }
     }
   }
   return results;
