@@ -67,6 +67,7 @@ These are the useful Telegram platform leads found during the April 2026 API pas
 11. ~~Private-topic enablement guide/check: detect `has_topics_enabled` from `getMe`, explain the BotFather Mini App switch plainly and retry Codex `Chats` topic bootstrap after it is enabled.~~ Live bot enablement and create/delete smoke are green.
 12. ~~Generated project group avatars.~~ Bootstrap now gives project groups a compact branded photo when they do not already have one, with `--refresh-group-avatars` for forced refresh and `--skip-group-avatars` for plain Telegram initials.
 13. Backfill/media polish: evaluate `copyMessages` for preserving Telegram albums/history shape where it beats rebuilding messages from scratch.
+14. Codex-native STT retry watch. Tested against Codex CLI `0.121.0` on 2026-04-20: `thread/realtime/*` exists, but WebSocket realtime requires API-key auth and WebRTC via ChatGPT auth currently returns `404` from `chatgpt.com/backend-api/codex/realtime/calls`. Do not make this the default voice path yet. Revisit when upstream removes the API-key requirement or exposes a stable ChatGPT-auth transcription endpoint.
 
 ## P4 - UX Modes
 
@@ -127,3 +128,4 @@ These are the useful Telegram platform leads found during the April 2026 API pas
 49. Onboarding doctor now checks bad-present setup, not just missing files: malformed Telegram API credentials are called out, stale Telegram user sessions are verified through `whoami`, bot token format is sanity-checked, and recovery output stays short enough for an agent to act on.
 50. Voice/mobile UX polish: General/All rescue bubbles are quieter, voice transcript progress no longer repeats obvious status text, progress headers now say `Working...`, and pinned status bars use compact `ctx` plus an explicit `fast on/off` flag.
 51. Per-topic queue and steer base: active topics queue normal Telegram prompts while Codex is already working, show queue count in the status bar, drain queued prompts after final mirror completion, and expose `/steer <text>` for explicit app-control-only guidance.
+52. Codex-native STT spike: verified the official-ish realtime path instead of guessing. It is real in app-server, but not ready as a zero-touch onboarding default without an API key.
