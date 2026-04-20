@@ -6,12 +6,12 @@
   "private": true,
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/anton88vlc/codex-telegram-frontend.git"
+    "url": "git+https://github.com/pix0010/codex-telegram-frontend.git"
   },
   "bugs": {
-    "url": "https://github.com/anton88vlc/codex-telegram-frontend/issues"
+    "url": "https://github.com/pix0010/codex-telegram-frontend/issues"
   },
-  "homepage": "https://github.com/anton88vlc/codex-telegram-frontend#readme",
+  "homepage": "https://github.com/pix0010/codex-telegram-frontend#readme",
   "type": "module",
   "scripts": {
     "start": "node bridge.mjs",
