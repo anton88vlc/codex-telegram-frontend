@@ -839,7 +839,10 @@ async function ensureAdminDeps(args) {
   return { changed: true, message: `created admin Python venv: ${venvDir}` };
 }
 
-async function askSecretLine(question) {
+async function askSecretLine(question, rl = null) {
+  if (rl) {
+    return askLine(rl, `${question} (local terminal; visible here, not pasted into Codex chat)`);
+  }
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     return "";
   }
@@ -863,6 +866,15 @@ async function askSecretLine(question) {
   process.stdout.write("\n");
   secretRl.close();
   return answer.trim();
+}
+
+function looksLikeShellCommand(value) {
+  const text = String(value ?? "").trim();
+  return /\b(cd|git|node|npm|python|sh|bash|zsh)\b/i.test(text) || text.includes("--");
+}
+
+function isValidPhoneLoginValue(value) {
+  return /^\+\d{8,15}$/.test(String(value ?? "").trim());
 }
 
 async function hasBridgeBotToken(args) {
@@ -1148,12 +1160,12 @@ async function promptCredentialSetup(args, rl) {
   }
   if (apiMissing && (await askYesNo(rl, "Add these Telegram API credentials to admin .env now?", true))) {
     const apiId = await askLine(rl, "Telegram API_ID / api_id from my.telegram.org/apps");
-    const apiHash = await askSecretLine("Telegram API_HASH / api_hash from my.telegram.org/apps (hidden)");
+    const apiHash = await askSecretLine("Telegram API_HASH / api_hash from my.telegram.org/apps", rl);
     const problems = [];
-    if (apiId && !isValidTelegramApiId(apiId)) {
+    if (apiId && (looksLikeShellCommand(apiId) || !isValidTelegramApiId(apiId))) {
       problems.push("API_ID must be digits only, for example 12345678.");
     }
-    if (apiHash && !isValidTelegramApiHash(apiHash)) {
+    if (apiHash && (looksLikeShellCommand(apiHash) || !isValidTelegramApiHash(apiHash))) {
       problems.push("API_HASH must be the 32-character api_hash from my.telegram.org/apps.");
     }
     if (problems.length) {
@@ -1191,7 +1203,7 @@ async function promptCredentialSetup(args, rl) {
   }
 
   if (!(await hasBridgeBotToken(args)) && (await askYesNo(rl, "Store Telegram bot token locally now?", true))) {
-    const token = await askSecretLine("Telegram bot token (hidden)");
+    const token = await askSecretLine("Telegram bot token", rl);
     if (token) {
       messages.push(await storeBotToken(args, token));
     }
@@ -1247,7 +1259,30 @@ async function maybeRunTelegramLogin(args, rl, python) {
 
   const usePhoneLogin = args.loginPhone || !args.loginQr;
   const loginCommand = usePhoneLogin ? "login-phone" : "login-qr";
-  await runPlainCommand(python, [...adminBaseArgs(args), loginCommand], { cwd: PROJECT_ROOT });
+  const loginArgs = [...adminBaseArgs(args), loginCommand];
+  if (usePhoneLogin) {
+    process.stdout.write(
+      [
+        "",
+        "Telegram user login",
+        "Enter the phone number for the Telegram account that should create folders, groups and topics.",
+        "Use international format with + and country code, for example +34600111222.",
+        "After this, Telegram will send a login code to your Telegram app. Enter that code in this same terminal.",
+        "",
+      ].join("\n"),
+    );
+    let phone = "";
+    while (rl && !args.noInput && !isValidPhoneLoginValue(phone)) {
+      phone = await askLine(rl, "Telegram phone number, with +country code");
+      if (!phone || looksLikeShellCommand(phone) || !isValidPhoneLoginValue(phone)) {
+        process.stdout.write("Phone should look like +34600111222. Do not paste commands here.\n");
+      }
+    }
+    if (phone) {
+      loginArgs.push("--phone", phone);
+    }
+  }
+  await runPlainCommand(python, loginArgs, { cwd: PROJECT_ROOT });
   messages.push(`authorized Telegram user session via ${usePhoneLogin ? "phone login" : "QR login"}: ${args.adminSessionPath}`);
   return messages.join("\n");
 }

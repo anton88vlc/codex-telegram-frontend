@@ -551,7 +551,10 @@ async def command_login_phone(args):
             print(json.dumps(payload, ensure_ascii=False, indent=2))
             return
 
-        phone = args.phone or input("Telegram phone (international format): ").strip()
+        phone = args.phone or input("Telegram phone number, with +country code: ").strip()
+        if not phone.startswith("+"):
+            raise SystemExit("Phone number must include +country code, for example +34600111222.")
+        print("Sending Telegram login code. Check your Telegram app, then enter the code here.", flush=True)
         sent = await client.send_code_request(phone)
         print(json.dumps({
             "status": "code_sent",
@@ -559,11 +562,11 @@ async def command_login_phone(args):
             "type": sent.type.__class__.__name__,
         }, ensure_ascii=False, indent=2), flush=True)
 
-        code = getpass.getpass("Telegram login code: ").strip()
+        code = input("Telegram login code from Telegram app: ").strip()
         try:
             await client.sign_in(phone=phone, code=code, phone_code_hash=sent.phone_code_hash)
         except errors.SessionPasswordNeededError:
-            password = getpass.getpass("Telegram 2FA password: ")
+            password = getpass.getpass("Telegram 2FA password (hidden): ")
             await client.sign_in(password=password)
 
         payload = {
