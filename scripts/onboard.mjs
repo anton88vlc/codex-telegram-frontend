@@ -107,6 +107,7 @@ function parseArgs(argv) {
     prepare: false,
     noPrepare: false,
     skipAdminDeps: false,
+    skipBotAvatar: false,
     loginQr: false,
     loginPhone: false,
     _projectLimitExplicit: false,
@@ -268,6 +269,9 @@ function parseArgs(argv) {
       case "--skip-admin-deps":
         args.skipAdminDeps = true;
         break;
+      case "--skip-bot-avatar":
+        args.skipBotAvatar = true;
+        break;
       case "--login-qr":
         args.loginQr = true;
         break;
@@ -319,7 +323,7 @@ function renderHelp() {
     "  node scripts/onboard.mjs prepare [--skip-admin-deps] [--login-qr|--login-phone]",
     "  node scripts/onboard.mjs doctor [--json]",
     "  node scripts/onboard.mjs scan [--project-limit 8] [--threads-per-project 3] [--json]",
-    "  node scripts/onboard.mjs quickstart [--thread-limit 10] [--history-max-messages 10] [--preview] [--no-chats]",
+    "  node scripts/onboard.mjs quickstart [--thread-limit 10] [--history-max-messages 10] [--preview] [--no-chats] [--skip-bot-avatar]",
     "  node scripts/onboard.mjs plan --project /path/to/repo [--project /path/to/other] [--threads-per-project 3] [--history-max-messages 40] [--history-assistant-phase final_answer] [--group-prefix 'Codex - '] [--folder-title codex] [--topic-display tabs|list] [--write]",
     "  node scripts/onboard.mjs plan --rehearsal --project /path/to/repo [--write]",
     "  node scripts/onboard.mjs wizard [--rehearsal] [--write] [--apply] [--cleanup-dry-run|--cleanup] [--backfill-dry-run|--backfill] [--smoke]",
@@ -332,7 +336,7 @@ function renderHelp() {
     "  doctor checks local prerequisites before the wizard gets creative.",
     "  codex:launch starts Codex.app with the app-control debug port when it is not already open.",
     "  scan is read-only and shows candidate Codex projects/threads.",
-    "  quickstart is automatic: pinned Codex threads first, then latest active threads and Chats, bounded clean history, bootstrap, backfill and smoke.",
+    "  quickstart is automatic: pinned Codex threads first, then latest active threads and Chats, bounded clean history, bootstrap, best-effort bot avatar, backfill and smoke.",
     "  plan is a preview by default; add --write to update admin/bootstrap-plan.json.",
     "  wizard is the manual escape hatch and can write/apply/backfill/smoke with explicit confirmation or flags.",
     "  history import defaults come from config.local.json unless a history flag overrides them.",
@@ -1365,6 +1369,22 @@ async function runBootstrap(args, python) {
   ]);
 }
 
+async function runBotAvatarPolish(args, python) {
+  if (args.skipBotAvatar) {
+    process.stdout.write("Skipping bot avatar polish because --skip-bot-avatar was passed.\n");
+    return null;
+  }
+  try {
+    process.stdout.write("Applying bundled bot avatar if this Telegram user owns the bot.\n");
+    return await runJsonCommand(python, [...adminBaseArgs(args), "set-bot-avatar"], { timeoutMs: 120_000 });
+  } catch (error) {
+    process.stdout.write(
+      `Skipping bot avatar polish: ${compactErrorMessage(error)}. The bridge still works; run \`npm run bot:avatar\` later if you care about the icon.\n`,
+    );
+    return null;
+  }
+}
+
 async function runBackfillForSummary(args, python, bootstrapSummary, { dryRun = true } = {}) {
   const onboarding = bootstrapSummary?.onboarding ?? {};
   const historyMaxMessages = onboarding.historyMaxMessages ?? args.historyMaxMessages;
@@ -1765,6 +1785,7 @@ async function commandQuickstart(args) {
     let bootstrapSummary = null;
     if (await shouldRunStep(args, rl, args.apply, "Run Telegram bootstrap now?")) {
       bootstrapSummary = await runBootstrap(args, python);
+      await runBotAvatarPolish(args, python);
     }
 
     if (await shouldRunStep(args, rl, args.cleanupDryRun, "Run clean rebuild cleanup dry-run now?")) {

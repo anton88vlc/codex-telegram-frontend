@@ -75,7 +75,7 @@ Two modes matter: `app-control` is the live near-Mac mode with the best Desktop 
 - Private bot topic preflight for Codex Desktop `Chats`: `npm run bot:topics`.
 - Bootstrap can create/reuse Telegram folder, project groups, topics, bot folder entry and status bars.
 - Optional curated topic auto-sync for fresh Codex threads in already bootstrapped project groups.
-- Bot polish: command menu, profile text, suggested admin rights and bundled avatar.
+- Bot polish: command menu, profile text, suggested admin rights and bundled avatar. Quickstart applies the avatar best-effort; `npm run bot:avatar` is the manual retry.
 - Structured event log at `logs/bridge.events.ndjson`; `/health` samples it.
 - Local state doctor for stale topic bindings, orphan mirror state and bootstrap-index drift.
 
