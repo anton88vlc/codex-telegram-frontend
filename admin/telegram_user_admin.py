@@ -9,6 +9,7 @@ import getpass
 import re
 import sqlite3
 import subprocess
+import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -31,6 +32,7 @@ DEFAULT_RESULT_PATH = PROJECT_ROOT / "state" / "bootstrap-result.json"
 DEFAULT_BRIDGE_STATE_PATH = PROJECT_ROOT / "state" / "state.json"
 DEFAULT_RENDER_HELPER_PATH = PROJECT_ROOT / "scripts" / "render_telegram_text.mjs"
 DEFAULT_BOT_AVATAR_PATH = PROJECT_ROOT / "assets" / "bot-avatar.png"
+DEFAULT_GROUP_AVATAR_SIZE = 640
 DEFAULT_FOLDER_TITLE = "codex"
 DEFAULT_TOPIC_DISPLAY = "tabs"
 PRIVATE_CHAT_TOPICS_SURFACE = "private-chat-topics"
@@ -612,6 +614,105 @@ async def ensure_forum_group(client: TelegramClient, title: str, about: str, top
             await ensure_forum_display(client, entity, topic_display)
             return entity, True
     raise RuntimeError(f"Could not resolve created group for {title}")
+
+
+def chat_has_custom_photo(channel) -> bool:
+    photo = getattr(channel, "photo", None)
+    if photo is None or isinstance(photo, types.ChatPhotoEmpty):
+        return False
+    return True
+
+
+def project_avatar_label(title: str) -> str:
+    cleaned = re.sub(r"^codex(?:\s+lab)?\s*[-–—]\s*", "", title, flags=re.IGNORECASE).strip()
+    words = [word for word in re.split(r"[^A-Za-z0-9]+", cleaned) if word]
+    if not words:
+        return "C"
+    if len(words) == 1:
+        word = words[0].upper()
+        return word[:3] if len(word) <= 4 else f"{word[0]}{word[-1]}"
+    initials = "".join(word[0].upper() for word in words[:3])
+    return initials[:3]
+
+
+def project_avatar_colors(title: str):
+    palette = (
+        ((37, 99, 235), (6, 182, 212), (240, 249, 255)),
+        ((20, 184, 166), (132, 204, 22), (236, 253, 245)),
+        ((245, 158, 11), (239, 68, 68), (255, 251, 235)),
+        ((99, 102, 241), (168, 85, 247), (245, 243, 255)),
+        ((14, 165, 233), (45, 212, 191), (240, 253, 250)),
+        ((100, 116, 139), (15, 23, 42), (248, 250, 252)),
+    )
+    index = sum(title.encode("utf8")) % len(palette)
+    return palette[index]
+
+
+def find_avatar_font(size: int):
+    from PIL import ImageFont
+
+    for font_path in (
+        "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+        "/System/Library/Fonts/Supplemental/Arial.ttf",
+        "/Library/Fonts/Arial Unicode.ttf",
+        "/System/Library/Fonts/SFNS.ttf",
+    ):
+        try:
+            return ImageFont.truetype(font_path, size=size)
+        except Exception:
+            continue
+    return ImageFont.load_default()
+
+
+def render_project_avatar(title: str, output_path: Path, size: int = DEFAULT_GROUP_AVATAR_SIZE):
+    from PIL import Image, ImageDraw
+
+    start, end, text_color = project_avatar_colors(title)
+    label = project_avatar_label(title)
+    image = Image.new("RGB", (size, size), start)
+    pixels = image.load()
+    for y in range(size):
+        blend_y = y / max(size - 1, 1)
+        for x in range(size):
+            blend_x = x / max(size - 1, 1)
+            blend = (blend_x + blend_y) / 2
+            pixels[x, y] = tuple(int(start[i] * (1 - blend) + end[i] * blend) for i in range(3))
+
+    draw = ImageDraw.Draw(image, "RGBA")
+    inset = int(size * 0.09)
+    draw.rounded_rectangle(
+        (inset, inset, size - inset, size - inset),
+        radius=int(size * 0.18),
+        outline=(255, 255, 255, 64),
+        width=max(2, int(size * 0.012)),
+    )
+    for offset in range(-size, size, int(size * 0.18)):
+        draw.line((offset, size, offset + size, 0), fill=(255, 255, 255, 18), width=max(1, int(size * 0.006)))
+
+    font = find_avatar_font(int(size * (0.34 if len(label) >= 3 else 0.42)))
+    bbox = draw.textbbox((0, 0), label, font=font)
+    text_width = bbox[2] - bbox[0]
+    text_height = bbox[3] - bbox[1]
+    position = ((size - text_width) / 2, (size - text_height) / 2 - int(size * 0.025))
+    draw.text((position[0] + 3, position[1] + 5), label, font=font, fill=(0, 0, 0, 70))
+    draw.text(position, label, font=font, fill=text_color)
+    image.save(output_path, "PNG")
+
+
+async def ensure_group_avatar(client: TelegramClient, channel, title: str, force: bool = False):
+    if chat_has_custom_photo(channel) and not force:
+        return {"status": "skipped", "reason": "existing-photo"}
+    with tempfile.TemporaryDirectory(prefix="codex-group-avatar-") as tmpdir:
+        image_path = Path(tmpdir) / "group-avatar.png"
+        render_project_avatar(title, image_path)
+        uploaded = await client.upload_file(str(image_path))
+        await client(
+            functions.channels.EditPhotoRequest(
+                channel=channel,
+                photo=types.InputChatUploadedPhoto(file=uploaded),
+            )
+        )
+    return {"status": "ok", "label": project_avatar_label(title)}
 
 
 async def ensure_bot_member_and_admin(client: TelegramClient, channel, bot_username: str):
@@ -1301,8 +1402,20 @@ async def command_bootstrap(args):
                 "groupId": group.id,
                 "botApiChatId": chat_id,
                 "createdGroup": created_group,
+                "avatar": None,
                 "topics": [],
             }
+            if not args.skip_group_avatars:
+                try:
+                    group_summary["avatar"] = await ensure_group_avatar(
+                        client,
+                        group,
+                        project["groupTitle"],
+                        force=args.refresh_group_avatars,
+                    )
+                except Exception as exc:
+                    group_summary["avatar"] = {"status": "skipped", "reason": str(exc)}
+                    summary["warnings"].append(f"Could not set group avatar for {project['groupTitle']}: {exc}")
 
             for topic_plan in project.get("topics", []):
                 topic, created_topic = await ensure_topic(client, group, topic_plan["title"])
@@ -1713,6 +1826,8 @@ def build_parser():
     bootstrap.add_argument("--replace-result", action="store_true")
     bootstrap.add_argument("--skip-folder", action="store_true")
     bootstrap.add_argument("--skip-bot-folder", action="store_true")
+    bootstrap.add_argument("--skip-group-avatars", action="store_true")
+    bootstrap.add_argument("--refresh-group-avatars", action="store_true")
     bootstrap.set_defaults(handler=command_bootstrap)
 
     backfill = subparsers.add_parser("backfill-thread")

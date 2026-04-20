@@ -248,6 +248,7 @@ admin/.venv/bin/python admin/telegram_user_admin.py bootstrap \
 `bootstrap` creates or updates the Telegram folder from the plan by default and puts project groups plus the bot direct chat there.
 If the plan contains the `private-chat-topics` surface, `bootstrap` creates/reuses topics inside the bot direct chat via Bot API. That depends on Telegram's private-topic mode for bots; if it is not enabled, the helper records a warning instead of pretending those Chats are projects.
 It also forces forum topics to display as `Tabs`; pass `--topic-display list` only for manual debugging.
+For project groups, bootstrap generates a compact branded avatar from the group title when the group has no custom photo yet. It will not overwrite a human-picked photo unless you pass `--refresh-group-avatars`; use `--skip-group-avatars` if you want raw Telegram initials.
 It merges groups into `state/bootstrap-result.json`; pass `--replace-result` only for an intentional clean rebuild.
 Use `--skip-folder` only when debugging folder automation. Use `--skip-bot-folder` if the bot direct chat should stay out of the folder for a one-off test.
 Bot username is read from `config.local.json -> botUsername`, `CODEX_TELEGRAM_BOT_USERNAME`, or `--bot-username`.

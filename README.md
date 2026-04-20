@@ -73,9 +73,9 @@ Two modes matter: `app-control` is the live near-Mac mode with the best Desktop 
 - Quickstart onboarding: pinned Codex threads are included first, latest active Codex project threads become Telegram groups/topics, and existing Codex Chats become private topics inside the bot direct chat when the bot has Threaded Mode enabled.
 - New private bot topics are not auto-created as Desktop `Chats` by default. The app-server `thread/start` path is useful, but it does not yet behave exactly like pressing `New chat` in Codex Desktop, so the safe default is explicit `/attach` instead of fake magic.
 - Private bot topic preflight for Codex Desktop `Chats`: `npm run bot:topics`.
-- Bootstrap can create/reuse Telegram folder, project groups, topics, bot folder entry and status bars.
+- Bootstrap can create/reuse Telegram folder, project groups, topics, bot folder entry, generated project group avatars and status bars.
 - Optional curated topic auto-sync for fresh Codex threads in already bootstrapped project groups.
-- Bot polish: command menu, profile text, suggested admin rights and bundled avatar. Quickstart applies the avatar best-effort; `npm run bot:avatar` is the manual retry.
+- Bot polish: generated group avatars, command menu, profile text, suggested admin rights and bundled bot avatar. Quickstart applies the bot avatar best-effort; `npm run bot:avatar` is the manual retry.
 - Structured event log at `logs/bridge.events.ndjson`; `/health` samples it.
 - Local state doctor for stale topic bindings, orphan mirror state and bootstrap-index drift.
 

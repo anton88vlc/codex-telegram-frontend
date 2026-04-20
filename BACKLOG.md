@@ -64,7 +64,8 @@ These are the useful Telegram platform leads found during the April 2026 API pas
 9. ~~Add the bot direct chat to the `codex` Telegram folder during bootstrap when possible.~~
 10. ~~Bot avatar polish: bundled default avatar plus `bot:avatar` command using Telegram MTProto `photos.uploadProfilePhoto(bot=...)`.~~ Replace with official Bot API `setMyProfilePhoto` once the helper is wired.
 11. ~~Private-topic enablement guide/check: detect `has_topics_enabled` from `getMe`, explain the BotFather Mini App switch plainly and retry Codex `Chats` topic bootstrap after it is enabled.~~ Live bot enablement and create/delete smoke are green.
-12. Backfill/media polish: evaluate `copyMessages` for preserving Telegram albums/history shape where it beats rebuilding messages from scratch.
+12. ~~Generated project group avatars.~~ Bootstrap now gives project groups a compact branded photo when they do not already have one, with `--refresh-group-avatars` for forced refresh and `--skip-group-avatars` for plain Telegram initials.
+13. Backfill/media polish: evaluate `copyMessages` for preserving Telegram albums/history shape where it beats rebuilding messages from scratch.
 
 ## P4 - UX Modes
 
