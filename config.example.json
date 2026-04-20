@@ -17,6 +17,7 @@
   "codexUserDisplayName": "Codex Desktop user",
   "statusBarEnabled": true,
   "statusBarPin": true,
+  "statusBarFastMode": null,
   "statusBarTailBytes": 524288,
   "worktreeSummaryEnabled": true,
   "worktreeSummaryMaxFiles": 0,

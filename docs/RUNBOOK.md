@@ -364,7 +364,7 @@ Notes:
 - Telegram frontend copy is English-first.
 - Mirrored user prompts and final answers keep the original thread language.
 - User-facing replies render through Telegram HTML parse mode with plain-text fallback.
-- Progress bubbles are honest in-place status updates, not true Codex token streaming yet.
+- `Working...` bubbles are honest in-place status updates, not true Codex token streaming yet.
 - Codex-originated commentary is folded into one editable progress message with recent visible updates by default.
 - `Changed files` appears in the same progress bubble when the current turn changes the thread cwd git worktree. The bridge captures a baseline snapshot at turn start, so old dirty files do not show up as fresh work on a later prompt.
 - Set `outboundProgressMode: "generic"` to hide progress details, or `outboundProgressMode: "verbatim"` to mirror raw commentary.

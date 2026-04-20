@@ -93,8 +93,8 @@ test("buildStatusBarText stays compact and shows remaining rate limits", () => {
   assert.equal(
     text,
     [
-      "gpt-5.4 | xhigh",
-      "context: 179k / 258k (69%)",
+      "gpt-5.4 | xhigh | fast off",
+      "ctx: 179k / 258k (69%)",
       "5h: 88% left, reset 23:58 (2h 58m); week: 82% left, reset 18:55 (6d 21h)",
       "status: pinned, running 21:00, mirror on",
     ].join("\n"),
@@ -128,6 +128,22 @@ test("buildStatusBarText shows latest progress activity time", () => {
   });
 
   assert.match(text, /status: pinned, running 21:07, mirror on/);
+});
+
+test("buildStatusBarText can show fast mode when configured", () => {
+  const text = buildStatusBarText({
+    binding: {},
+    thread: {
+      model: "gpt-5.4",
+      reasoning_effort: "xhigh",
+    },
+    runtime: null,
+    config: {
+      statusBarFastMode: true,
+    },
+  });
+
+  assert.match(text, /^gpt-5\.4 \| xhigh \| fast on/);
 });
 
 test("buildStatusBarMessage marks reset times as Telegram date_time entities", () => {

@@ -6,6 +6,7 @@ import {
   collectTelegramVoiceRefs,
   formatVoiceTranscriptBubble,
   formatVoiceTranscriptPrompt,
+  formatVoiceTranscriptionReceipt,
   transcribeTelegramVoice,
 } from "../lib/voice-transcription.mjs";
 
@@ -123,4 +124,8 @@ test("formats transcript bubble and Codex prompt", () => {
   assert.match(prompt, /^Context before voice/);
   assert.match(prompt, /\[Telegram voice transcript\]/);
   assert.match(prompt, /stt deepgram\/nova-3/);
+});
+
+test("voice transcription receipt stays quiet because the transcript bubble is enough", () => {
+  assert.equal(formatVoiceTranscriptionReceipt([{ text: "Привет" }]), "");
 });

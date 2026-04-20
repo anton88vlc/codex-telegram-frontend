@@ -6,7 +6,7 @@ import { getInitialProgressText, getProgressStepTexts } from "../lib/progress-bu
 test("progress bubble stays honest about long waits", () => {
   const allText = [getInitialProgressText(), ...getProgressStepTexts()].join("\n");
 
-  assert.match(getInitialProgressText(), /Waiting for a reply/);
+  assert.equal(getInitialProgressText(), "Working...");
   assert.match(allText, /may recover or time out/);
   assert.match(allText, /clear transport error/);
   assert.doesNotMatch(allText, /not stuck/i);

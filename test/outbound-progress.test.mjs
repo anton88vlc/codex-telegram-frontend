@@ -33,7 +33,7 @@ test("formatOutboundProgressMirrorText keeps recent commentary in one progress b
   assert.match(text, /last activity: 21:31/);
   assert.match(text, /> Inspecting current Telegram state/);
   assert.match(text, /> Running smoke checks/);
-  assert.match(text, /\n\n\*\*Progress\*\*\nlast activity: 21:31$/);
+  assert.match(text, /\n\n\*\*Working\.\.\.\*\*\nlast activity: 21:31$/);
 });
 
 test("formatOutboundProgressMirrorText shows todo plan below live updates", () => {
@@ -55,7 +55,7 @@ test("formatOutboundProgressMirrorText shows todo plan below live updates", () =
   assert.match(text, /^> Editing parser and progress bubble/);
   assert.match(text, /2\. \[>\] Patch mirror/);
   assert.match(text, /\n\n\*\*Todo\*\*/);
-  assert.match(text, /\n\n\*\*Progress\*\*\nlast activity: 21:32$/);
+  assert.match(text, /\n\n\*\*Working\.\.\.\*\*\nlast activity: 21:32$/);
 });
 
 test("formatOutboundProgressMirrorText shows changed files above progress footer", () => {
@@ -77,7 +77,7 @@ test("formatOutboundProgressMirrorText shows changed files above progress footer
   assert.match(text, /^> Editing progress bubble/);
   assert.match(text, /\*\*Changed files\*\*/);
   assert.match(text, /- `bridge\.mjs` \+3 -1/);
-  assert.match(text, /\n\n\*\*Progress\*\*\nlast activity: 21:33$/);
+  assert.match(text, /\n\n\*\*Working\.\.\.\*\*\nlast activity: 21:33$/);
 });
 
 test("formatOutboundProgressMirrorText generic mode hides commentary details", () => {
@@ -91,7 +91,7 @@ test("formatOutboundProgressMirrorText generic mode hides commentary details", (
     },
   });
 
-  assert.equal(text, "**Progress**\nCodex is working...\nlast activity: 21:31");
+  assert.equal(text, "**Working...**\nCodex is working...\nlast activity: 21:31");
 });
 
 test("formatOutboundProgressMirrorText preserves updates when completed", () => {
@@ -111,5 +111,5 @@ test("formatOutboundProgressMirrorText preserves updates when completed", () => 
 
   assert.match(text, /Done\. Final answer below\./);
   assert.match(text, /^> Committed docs/);
-  assert.match(text, /\n\n\*\*Progress\*\*\nDone\. Final answer below\.$/);
+  assert.match(text, /\n\n\*\*Working\.\.\.\*\*\nDone\. Final answer below\.$/);
 });
