@@ -27,6 +27,7 @@ DEFAULT_ENV_PATH = ROOT / ".env"
 DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config.local.json"
 DEFAULT_SESSION_PATH = PROJECT_ROOT / "state" / "telegram_user.session"
 DEFAULT_QR_PATH = PROJECT_ROOT / "state" / "login-qr.png"
+DEFAULT_LOGIN_CODE_PATH = PROJECT_ROOT / "state" / "telegram_login_code.json"
 DEFAULT_PLAN_PATH = ROOT / "bootstrap-plan.json"
 DEFAULT_RESULT_PATH = PROJECT_ROOT / "state" / "bootstrap-result.json"
 DEFAULT_BRIDGE_STATE_PATH = PROJECT_ROOT / "state" / "state.json"
@@ -554,13 +555,47 @@ async def command_login_phone(args):
         phone = args.phone or input("Telegram phone number, with +country code: ").strip()
         if not phone.startswith("+"):
             raise SystemExit("Phone number must include +country code, for example +34600111222.")
-        print("Sending Telegram login code. Check your Telegram app, then enter the code here.", flush=True)
+
+        if args.code:
+            phone_code_hash = args.phone_code_hash
+            if not phone_code_hash and args.code_state.exists():
+                try:
+                    code_state = json.loads(args.code_state.read_text(encoding="utf-8"))
+                    if code_state.get("phone") == phone:
+                        phone_code_hash = code_state.get("phone_code_hash")
+                except Exception:
+                    phone_code_hash = None
+            if not phone_code_hash:
+                raise SystemExit("Telegram phone_code_hash is missing. Run login-phone --send-code-only first.")
+            try:
+                await client.sign_in(phone=phone, code=args.code.strip(), phone_code_hash=phone_code_hash)
+            except errors.SessionPasswordNeededError:
+                if not args.password:
+                    raise SystemExit("Telegram 2FA password required. Rerun with --password or use the manual helper.")
+                await client.sign_in(password=args.password)
+            payload = {
+                "status": "authorized",
+                "me": me_payload(await client.get_me()),
+                "session_path": str(args.session),
+            }
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+            return
+
+        print("Sending Telegram login code. Check your Telegram app.", flush=True)
         sent = await client.send_code_request(phone)
-        print(json.dumps({
+        payload = {
             "status": "code_sent",
             "phone": phone,
             "type": sent.type.__class__.__name__,
-        }, ensure_ascii=False, indent=2), flush=True)
+            "phone_code_hash": sent.phone_code_hash,
+        }
+        if args.code_state:
+            args.code_state.parent.mkdir(parents=True, exist_ok=True)
+            args.code_state.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print(json.dumps(payload, ensure_ascii=False, indent=2), flush=True)
+
+        if args.send_code_only:
+            return
 
         code = input("Telegram login code from Telegram app: ").strip()
         try:
@@ -1816,6 +1851,11 @@ def build_parser():
 
     login_phone = subparsers.add_parser("login-phone")
     login_phone.add_argument("--phone", default=None)
+    login_phone.add_argument("--code", default=None)
+    login_phone.add_argument("--phone-code-hash", default=None)
+    login_phone.add_argument("--password", default=None)
+    login_phone.add_argument("--code-state", type=Path, default=DEFAULT_LOGIN_CODE_PATH)
+    login_phone.add_argument("--send-code-only", action="store_true")
     login_phone.set_defaults(handler=command_login_phone)
 
     bootstrap = subparsers.add_parser("bootstrap")

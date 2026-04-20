@@ -141,6 +141,8 @@ function parseArgs(argv) {
     skipBotAvatar: false,
     loginQr: false,
     loginPhone: false,
+    loginPhoneNumber: null,
+    loginCode: null,
     _projectLimitExplicit: false,
     _threadLimitExplicit: false,
     _threadsPerProjectExplicit: false,
@@ -309,6 +311,13 @@ function parseArgs(argv) {
       case "--login-phone":
         args.loginPhone = true;
         break;
+      case "--phone":
+      case "--login-phone-number":
+        args.loginPhoneNumber = rest[++index];
+        break;
+      case "--login-code":
+        args.loginCode = rest[++index];
+        break;
       case "--help":
       case "-h":
         args.help = true;
@@ -351,7 +360,7 @@ function parseArgs(argv) {
 function renderHelp() {
   return [
     "Usage:",
-    "  node scripts/onboard.mjs prepare [--skip-admin-deps] [--login-phone|--login-qr]",
+    "  node scripts/onboard.mjs prepare [--skip-admin-deps] [--login-phone|--login-qr] [--phone +34600111222] [--login-code 12345]",
     "  node scripts/onboard.mjs doctor [--json]",
     "  node scripts/onboard.mjs scan [--project-limit 8] [--threads-per-project 3] [--json]",
     "  node scripts/onboard.mjs quickstart [--thread-limit 10] [--history-max-messages 10] [--preview] [--no-chats] [--skip-bot-avatar]",
@@ -810,8 +819,8 @@ async function setConfigValues(filePath, updates) {
   await writeJsonFile(filePath, { ...config, ...updates });
 }
 
-async function runPlainCommand(command, args, { cwd = PROJECT_ROOT } = {}) {
-  process.stdout.write(`\n$ ${[command, ...args].join(" ")}\n`);
+async function runPlainCommand(command, args, { cwd = PROJECT_ROOT, displayArgs = args } = {}) {
+  process.stdout.write(`\n$ ${[command, ...displayArgs].join(" ")}\n`);
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd,
@@ -827,6 +836,15 @@ async function runPlainCommand(command, args, { cwd = PROJECT_ROOT } = {}) {
       reject(new Error(`${command} failed with exit code ${code}`));
     });
   });
+}
+
+async function runPlainCommandWithPromptPaused(rl, command, args, options = {}) {
+  try {
+    rl?.pause?.();
+    await runPlainCommand(command, args, options);
+  } finally {
+    rl?.resume?.();
+  }
 }
 
 async function ensureAdminDeps(args) {
@@ -875,6 +893,15 @@ function looksLikeShellCommand(value) {
 
 function isValidPhoneLoginValue(value) {
   return /^\+\d{8,15}$/.test(String(value ?? "").trim());
+}
+
+function normalizeTelegramLoginCode(value) {
+  return String(value ?? "").trim().replace(/\s+/g, "");
+}
+
+function isValidTelegramLoginCode(value) {
+  const text = normalizeTelegramLoginCode(value);
+  return /^[0-9A-Za-z]{3,32}$/.test(text) && !looksLikeShellCommand(text);
 }
 
 async function hasBridgeBotToken(args) {
@@ -1257,7 +1284,6 @@ async function maybeRunTelegramLogin(args, rl, python) {
 
   const usePhoneLogin = args.loginPhone || !args.loginQr;
   const loginCommand = usePhoneLogin ? "login-phone" : "login-qr";
-  const loginArgs = [...adminBaseArgs(args), loginCommand];
   if (usePhoneLogin) {
     process.stdout.write(
       [
@@ -1269,22 +1295,40 @@ async function maybeRunTelegramLogin(args, rl, python) {
         "",
       ].join("\n"),
     );
-    let phone = "";
+    let phone = args.loginPhoneNumber ?? "";
     while (rl && !args.noInput && !isValidPhoneLoginValue(phone)) {
       phone = await askLine(rl, "Telegram phone number, with +country code");
       if (!phone || looksLikeShellCommand(phone) || !isValidPhoneLoginValue(phone)) {
         process.stdout.write("Phone should look like +34600111222. Do not paste commands here.\n");
       }
     }
-    if (phone) {
-      loginArgs.push("--phone", phone);
+    if (!isValidPhoneLoginValue(phone)) {
+      throw new Error("Telegram phone number is required for phone login. Use --phone +34600111222 or run prepare interactively.");
     }
-  }
-  try {
-    rl?.pause?.();
-    await runPlainCommand(python, loginArgs, { cwd: PROJECT_ROOT });
-  } finally {
-    rl?.resume?.();
+    const codeStatePath = path.join(path.dirname(args.adminSessionPath), "telegram_login_code.json");
+    const sendCodeArgs = [...adminBaseArgs(args), loginCommand];
+    sendCodeArgs.push("--phone", phone);
+    sendCodeArgs.push("--send-code-only", "--code-state", codeStatePath);
+    await runPlainCommandWithPromptPaused(rl, python, sendCodeArgs, { cwd: PROJECT_ROOT });
+
+    let code = args.loginCode ?? "";
+    while (rl && !args.noInput && !isValidTelegramLoginCode(code)) {
+      code = normalizeTelegramLoginCode(await askLine(rl, "Telegram login code from Telegram app"));
+      if (!code || !isValidTelegramLoginCode(code)) {
+        process.stdout.write("Telegram code should be the short code from the Telegram app. Do not paste commands here.\n");
+      }
+    }
+    if (!isValidTelegramLoginCode(code)) {
+      throw new Error("Telegram login code is required after sending the code. Use --login-code 12345 or rerun prepare interactively.");
+    }
+    const signInArgs = [...adminBaseArgs(args), loginCommand];
+    signInArgs.push("--phone", phone, "--code", code);
+    signInArgs.push("--code-state", codeStatePath);
+    const displayArgs = signInArgs.map((arg, index) => (signInArgs[index - 1] === "--code" ? "<telegram-code>" : arg));
+    await runPlainCommandWithPromptPaused(rl, python, signInArgs, { cwd: PROJECT_ROOT, displayArgs });
+  } else {
+    const loginArgs = [...adminBaseArgs(args), loginCommand];
+    await runPlainCommandWithPromptPaused(rl, python, loginArgs, { cwd: PROJECT_ROOT });
   }
   messages.push(`authorized Telegram user session via ${usePhoneLogin ? "phone login" : "QR login"}: ${args.adminSessionPath}`);
   return messages.join("\n");

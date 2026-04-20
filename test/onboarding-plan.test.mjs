@@ -170,13 +170,17 @@ test("onboard prepare reauthenticates stale Telegram user sessions with phone lo
 const fs = require("node:fs");
 const callsPath = ${JSON.stringify(callsPath)};
 fs.appendFileSync(callsPath, process.argv.slice(2).join(" ") + "\\n");
-const command = process.argv[process.argv.length - 1];
+const command = process.argv.includes("login-phone") ? "login-phone" : process.argv[process.argv.length - 1];
 if (command === "whoami") {
   console.log(JSON.stringify({ authorized: false, me: null }));
   process.exit(0);
 }
 if (command === "login-phone") {
-  console.log(JSON.stringify({ status: "authorized" }));
+  if (process.argv.includes("--send-code-only")) {
+    console.log(JSON.stringify({ status: "code_sent", phone_code_hash: "fake_hash" }));
+  } else {
+    console.log(JSON.stringify({ status: "authorized" }));
+  }
   process.exit(0);
 }
 console.log("{}");
@@ -202,6 +206,10 @@ console.log("{}");
       fakeHelperPath,
       "--admin-session",
       sessionPath,
+      "--phone",
+      "+10000000000",
+      "--login-code",
+      "12345",
     ],
     {
       cwd: PROJECT_ROOT,
