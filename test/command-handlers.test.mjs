@@ -27,6 +27,8 @@ test("renderHelp includes the bot mention hint when privacy mode blocks plain te
   const text = renderHelp(config);
 
   assert.match(text, /\/attach <thread-id>/);
+  assert.match(text, /\/queue/);
+  assert.match(text, /\/steer <text>/);
   assert.match(text, /@codexbot your request/);
 });
 
@@ -175,4 +177,87 @@ test("handleCommand updates native mode on an existing binding", async () => {
   assert.equal(binding.transport, "native");
   assert.equal(binding.updatedAt, "2026-04-19T13:00:00.000Z");
   assert.equal(remembered[0][0], binding);
+});
+
+test("handleCommand renders and clears the topic queue", async () => {
+  const binding = {
+    threadId: "thread-1",
+    currentTurn: { source: "telegram" },
+    turnQueue: [{ id: "q1", prompt: "queued work", promptPreview: "queued work" }],
+  };
+  const replies = [];
+
+  await handleCommand({
+    config,
+    state: {},
+    message: makeMessage(),
+    bindingKey: "group:-1001:topic:3",
+    binding,
+    parsed: { command: "/queue", args: [] },
+    replyFn: async (token, message, text) => {
+      replies.push(text);
+      return [{ message_id: 82 }];
+    },
+  });
+
+  assert.match(replies[0], /\*\*Queue\*\*/);
+  assert.match(replies[0], /queued work/);
+
+  await handleCommand({
+    config,
+    state: {},
+    message: makeMessage(),
+    bindingKey: "group:-1001:topic:3",
+    binding,
+    parsed: { command: "/cancel-queue", args: [] },
+    replyFn: async (token, message, text) => {
+      replies.push(text);
+      return [{ message_id: 83 }];
+    },
+  });
+
+  assert.equal(binding.turnQueue.length, 0);
+  assert.match(replies[1], /Canceled 1 queued prompt/);
+});
+
+test("handleCommand steers an active turn through app-control only", async () => {
+  const binding = {
+    threadId: "thread-1",
+    currentTurn: { source: "telegram" },
+  };
+  const suppressions = [];
+  const replies = [];
+  const nativeCalls = [];
+
+  await handleCommand({
+    config: {
+      ...config,
+      nativeHelperPath: "/tmp/app-control.js",
+      nativeTimeoutMs: 120000,
+      nativeDebugBaseUrl: "http://127.0.0.1:9222",
+      nativePollIntervalMs: 1000,
+      appControlShowThread: false,
+    },
+    state: {},
+    message: makeMessage(),
+    bindingKey: "group:-1001:topic:3",
+    binding,
+    parsed: { command: "/steer", args: ["focus", "tests"] },
+    rememberOutboundMirrorSuppressionFn: (...args) => suppressions.push(args),
+    replyFn: async (token, message, text) => {
+      replies.push(text);
+      return [{ message_id: 84 }];
+    },
+    sendNativeTurnFn: async (...args) => {
+      nativeCalls.push(args);
+      return { transportPath: "app-control" };
+    },
+    shouldPreferAppServerFn: () => false,
+  });
+
+  assert.equal(nativeCalls[0][0].fallbackHelperPath, null);
+  assert.equal(nativeCalls[0][0].prompt, "focus tests");
+  assert.equal(binding.currentTurn.steerCount, 1);
+  assert.equal(suppressions[0][2], "focus tests");
+  assert.equal(replies[0], "Steered into the current turn.");
 });

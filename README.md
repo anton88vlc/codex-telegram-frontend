@@ -59,7 +59,8 @@ Two modes matter: `app-control` is the live near-Mac mode with the best Desktop 
 - Telegram Bot API long polling for direct chats and forum topics.
 - Bindings: `/attach`, `/attach-latest`, `/detach`, `/status`.
 - Ops: `/health`, `/settings`, `/project-status`, `/sync-project`, `/mode native`.
-- Telegram-menu-safe aliases: `/attach_latest`, `/project_status`, `/sync_project`, `/mode_native`.
+- Topic queues: normal messages wait behind a running turn; `/queue`, `/pause`, `/resume`, `/cancel-queue` and `/steer <text>` handle the cockpit bits.
+- Telegram-menu-safe aliases: `/attach_latest`, `/project_status`, `/sync_project`, `/mode_native`, `/cancel_queue`.
 - App-control send-only by default: Codex accepts the turn, Telegram gets progress/final from the rollout mirror.
 - In-place progress bubble with live steps, Todo, changed files and final state.
 - Native Telegram typing heartbeat while Codex is working.

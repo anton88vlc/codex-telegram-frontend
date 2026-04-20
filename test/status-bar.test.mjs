@@ -146,6 +146,28 @@ test("buildStatusBarText can show fast mode when configured", () => {
   assert.match(text, /^gpt-5\.4 \| xhigh \| fast on/);
 });
 
+test("buildStatusBarText includes queued prompt count", () => {
+  const text = buildStatusBarText({
+    binding: {
+      statusBarMessageId: 123,
+      currentTurn: {
+        startedAt: "2026-04-18T19:00:00.000Z",
+      },
+      turnQueue: [
+        { prompt: "one" },
+        { prompt: "two" },
+      ],
+    },
+    thread: {
+      model: "gpt-5.4",
+      reasoning_effort: "xhigh",
+    },
+    config: {},
+  });
+
+  assert.match(text, /status: pinned, running 21:00, queue 2, mirror on/);
+});
+
 test("buildStatusBarMessage marks reset times as Telegram date_time entities", () => {
   const runtime = {
     lastTokenUsage: { total_tokens: 179315 },

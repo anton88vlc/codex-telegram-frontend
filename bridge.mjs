@@ -46,6 +46,7 @@ import {
   groupTelegramMediaGroupUpdates,
   hasUnsupportedTelegramMedia,
 } from "./lib/telegram-attachments.mjs";
+import { drainTurnQueues } from "./lib/turn-queue-runner.mjs";
 import { captureWorktreeBaseline, loadChangedFilesTextForThread } from "./lib/worktree-summary.mjs";
 import { getMe, getUpdates } from "./lib/telegram.mjs";
 
@@ -362,6 +363,20 @@ async function main() {
       });
     }
 
+    let queueResult = { changed: false };
+    try {
+      queueResult = await drainTurnQueues({
+        config,
+        state,
+        appServerStream,
+        typingHeartbeats,
+      });
+    } catch (error) {
+      logBridgeEvent("turn_queue_error", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
     let statusBarResult = { changed: false };
     try {
       statusBarResult = await refreshStatusBars({ config, state });
@@ -379,7 +394,13 @@ async function main() {
       });
     }
 
-    if (topicAutoSyncResult.changed || appServerStreamResult.changed || syncResult.changed || statusBarResult.changed) {
+    if (
+      topicAutoSyncResult.changed ||
+      appServerStreamResult.changed ||
+      syncResult.changed ||
+      queueResult.changed ||
+      statusBarResult.changed
+    ) {
       await saveState(config.statePath, state);
     }
 

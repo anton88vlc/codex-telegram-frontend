@@ -29,17 +29,18 @@ These are the useful Telegram platform leads found during the April 2026 API pas
 
 1. ~~In-place commentary/progress bubbles instead of silence followed by one final answer.~~
 2. True streaming from Codex. Current progress is honest rollout/commentary mirroring, not raw app-server event streaming.
-3. ~~Ops command reply policy corrected: help, health, settings, project-status and sync previews answer where they were asked instead of silently jumping to bot DM.~~
-4. Dedicated ops topic or configurable explicit ops routing, so genuinely noisy admin flows can move away without surprising the user.
-5. ~~Telegram HTML rendering for bold, italic, code, code fences, lists, task lists, links, blockquotes, spoilers and plain fallback.~~
-6. ~~Richer rendering polish: Markdown tables and cleaner local file links.~~
-7. ~~Onboarding wizard base: doctor, project/thread selection, plan write, optional bootstrap, clean rebuild preview, backfill and smoke.~~
-8. ~~Onboarding polish base: safer reuse preview, clearer selectors and actionable recovery hints when setup is incomplete.~~
-9. ~~Agent-led install docs: public docs let a new user open Codex in this repo, paste one clear install prompt, and let Codex drive doctor/setup/wizard/bootstrap/backfill/smoke while asking only for unavoidable Telegram steps.~~
-10. ~~Agent-led onboarding automation hardening base: `onboard:prepare` creates local config/admin env files, can set up the admin Python venv, guides credential wiring and can run QR login before the wizard path.~~
-11. ~~Onboarding recovery hardening for bad-but-present Telegram credentials/session errors, not only missing files.~~
-12. ~~Real clean-install audit hardening: agents must not collect secrets in Codex chat, `prepare` verifies stale sessions before skipping login, phone login is an explicit local fallback and quickstart backfill skips empty threads instead of killing the whole run.~~
-13. ~~Pinned Codex threads are first-class quickstart inputs.~~ Quickstart reads `pinned-thread-ids` from Codex Desktop global state, includes those threads before the recent activity tail and keeps the phone working set aligned with the Desktop sidebar.
+3. ~~Per-topic turn queue and explicit steer command.~~ Normal messages sent while a topic has an active turn are queued; `/queue`, `/pause`, `/resume`, `/cancel-queue` manage the queue; `/steer <text>` is the explicit app-control-only intervention path.
+4. ~~Ops command reply policy corrected: help, health, settings, project-status and sync previews answer where they were asked instead of silently jumping to bot DM.~~
+5. Dedicated ops topic or configurable explicit ops routing, so genuinely noisy admin flows can move away without surprising the user.
+6. ~~Telegram HTML rendering for bold, italic, code, code fences, lists, task lists, links, blockquotes, spoilers and plain fallback.~~
+7. ~~Richer rendering polish: Markdown tables and cleaner local file links.~~
+8. ~~Onboarding wizard base: doctor, project/thread selection, plan write, optional bootstrap, clean rebuild preview, backfill and smoke.~~
+9. ~~Onboarding polish base: safer reuse preview, clearer selectors and actionable recovery hints when setup is incomplete.~~
+10. ~~Agent-led install docs: public docs let a new user open Codex in this repo, paste one clear install prompt, and let Codex drive doctor/setup/wizard/bootstrap/backfill/smoke while asking only for unavoidable Telegram steps.~~
+11. ~~Agent-led onboarding automation hardening base: `onboard:prepare` creates local config/admin env files, can set up the admin Python venv, guides credential wiring and can run QR login before the wizard path.~~
+12. ~~Onboarding recovery hardening for bad-but-present Telegram credentials/session errors, not only missing files.~~
+13. ~~Real clean-install audit hardening: agents must not collect secrets in Codex chat, `prepare` verifies stale sessions before skipping login, phone login is an explicit local fallback and quickstart backfill skips empty threads instead of killing the whole run.~~
+14. ~~Pinned Codex threads are first-class quickstart inputs.~~ Quickstart reads `pinned-thread-ids` from Codex Desktop global state, includes those threads before the recent activity tail and keeps the phone working set aligned with the Desktop sidebar.
 
 ## P2 - Transport And Observability
 
@@ -125,3 +126,4 @@ These are the useful Telegram platform leads found during the April 2026 API pas
 48. Inbound turn runner extracted: Telegram-originated prompts, voice transcript replies, attachment receipts, progress bubbles and native send/error handling now live in `lib/inbound-turn-runner.mjs` with focused tests. `bridge.mjs` is finally boring enough to read without a helmet.
 49. Onboarding doctor now checks bad-present setup, not just missing files: malformed Telegram API credentials are called out, stale Telegram user sessions are verified through `whoami`, bot token format is sanity-checked, and recovery output stays short enough for an agent to act on.
 50. Voice/mobile UX polish: General/All rescue bubbles are quieter, voice transcript progress no longer repeats obvious status text, progress headers now say `Working...`, and pinned status bars use compact `ctx` plus an explicit `fast on/off` flag.
+51. Per-topic queue and steer base: active topics queue normal Telegram prompts while Codex is already working, show queue count in the status bar, drain queued prompts after final mirror completion, and expose `/steer <text>` for explicit app-control-only guidance.

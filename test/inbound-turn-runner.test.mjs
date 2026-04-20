@@ -152,6 +152,61 @@ test("handlePlainText starts a send-only native turn and leaves progress for the
   assert.equal(calls.events.at(-1)[0], "native_send_deferred_reply");
 });
 
+test("handlePlainText queues normal messages while a turn is running", async () => {
+  const calls = {};
+  const state = { bindings: {} };
+  const binding = makeBinding({
+    currentTurn: {
+      source: "telegram",
+      startedAt: "2026-04-20T08:00:00.000Z",
+    },
+  });
+
+  await handlePlainText({
+    config: makeConfig({ turnQueueEnabled: true, turnQueueMaxItems: 10 }),
+    state,
+    message: makeMessage({ message_id: 42, text: "next thought" }),
+    bindingKey: "group:-1001:topic:3",
+    binding,
+    ...makeSendOnlyDeps(calls),
+  });
+
+  assert.equal(calls.native, undefined);
+  assert.equal(binding.turnQueue.length, 1);
+  assert.equal(binding.turnQueue[0].prompt, "next thought");
+  assert.equal(binding.turnQueue[0].replyToMessageId, 42);
+  assert.equal(binding.turnQueue[0].queueMessageId, 50);
+  assert.equal(calls.replyPlain[0][2], "Queued. I'll run this next.");
+  assert.equal(calls.status.length, 1);
+  assert.equal(calls.events.at(-1)[0], "turn_queued");
+});
+
+test("handlePlainText rejects queue overflow without sending to Codex", async () => {
+  const calls = {};
+  const replies = [];
+  const binding = makeBinding({
+    currentTurn: { source: "telegram" },
+    turnQueue: [{ id: "q1", prompt: "already queued" }],
+  });
+
+  await handlePlainText({
+    config: makeConfig({ turnQueueEnabled: true, turnQueueMaxItems: 1 }),
+    state: { bindings: {} },
+    message: makeMessage({ message_id: 43, text: "overflow" }),
+    bindingKey: "group:-1001:topic:3",
+    binding,
+    ...makeSendOnlyDeps(calls),
+    replyFn: async (token, message, text) => {
+      replies.push(text);
+      return [{ message_id: 71 }];
+    },
+  });
+
+  assert.equal(calls.native, undefined);
+  assert.equal(binding.turnQueue.length, 1);
+  assert.match(replies[0], /Queue is full/);
+});
+
 test("handlePlainText replies on the transcript bubble when a voice message was transcribed", async () => {
   const calls = {};
   const replies = [];

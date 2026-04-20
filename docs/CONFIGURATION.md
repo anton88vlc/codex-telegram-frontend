@@ -53,6 +53,8 @@ Use this for things that should survive restarts and should not be changed from 
 | `nativeWaitForReply` | `false` | Keep this off for the normal happy path. The transport returns as soon as Codex accepts the turn; Telegram gets progress/final through the outbound rollout mirror. Setting it to `true` uses the older renderer polling path and should be treated as a debugging fallback. |
 | `nativePollIntervalMs` | `1000` | Poll interval while waiting for native Codex reply. |
 | `nativeIngressTransport` | `app-control` | Telegram-originated send path: `app-control`, `app-server`, or `auto`. Use `app-server` if renderer app-control crashes the desktop app. |
+| `turnQueueEnabled` | `true` | When a topic already has an active Codex turn, new normal messages are queued instead of being shoved into the running turn. Use `/steer` for explicit intervention. |
+| `turnQueueMaxItems` | `10` | Max queued prompts per bound Telegram topic. This is a guardrail, not a productivity challenge. |
 | `privateTopicAutoCreateChats` | `false` | Experimental. If enabled, the first message in an unbound private bot topic starts an app-server thread and binds it. Keep this off for normal use: today it is not the same thing as creating a visible `New chat` in Codex Desktop. |
 | `nativeChatStartTimeoutMs` | `45000` | Timeout for the experimental app-server `thread/start` helper used by private-topic auto-create. |
 | `nativeChatStartCwd` | `$HOME` | Cwd for experimental auto-created app-server threads. Leave unset or `null` for the home default; set a real project path only if you intentionally want every private topic to become project-scoped. |
@@ -115,6 +117,10 @@ Working commands today:
 - `/status` - shows current binding status.
 - `/health` - checks current chat/topic, project mapping and transport endpoints.
 - `/settings` or `/config` - shows safe read-only runtime settings without secrets.
+- `/queue` - shows queued prompts for this topic.
+- `/pause` and `/resume` - pause/resume the topic queue.
+- `/cancel-queue` - clears queued prompts in this topic.
+- `/steer <text>` - explicitly sends guidance into the currently running Codex turn. It needs live `app-control`; normal text queues instead.
 - `/project-status [count]` - previews desired project thread working set.
 - `/sync-project [count] dry-run` - safe preview for topic rename/reopen/create/park.
 - `/sync-project [count]` - applies that working-set sync.
@@ -122,12 +128,13 @@ Working commands today:
 
 Auto-sync uses the same sync plan as `/project-status` and `/sync-project`, but only when `topicAutoSyncEnabled` is explicitly true. It creates/reopens/renames/parks sync-managed topics inside the configured working-set limit. It does not delete topics and does not mutate manual bindings.
 
-Telegram's command menu prefers underscores, so the bridge also accepts `/attach_latest`, `/project_status`, `/sync_project` and `/mode_native`. The old hyphen commands still work; the menu-safe aliases are just less annoying in real Telegram clients.
+Telegram's command menu prefers underscores, so the bridge also accepts `/attach_latest`, `/project_status`, `/sync_project`, `/mode_native` and `/cancel_queue`. The old hyphen commands still work; the menu-safe aliases are just less annoying in real Telegram clients.
 
 What commands mutate:
 
 - bindings in `state/state.json`
 - project/topic sync state
+- topic queue state
 - Telegram forum topics when `/sync-project` is not dry-run
 
 What commands do not mutate:

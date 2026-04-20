@@ -33,6 +33,10 @@ test("parseCommand maps Telegram-menu-safe aliases to canonical commands", () =>
     command: "/mode",
     args: ["native"],
   });
+  assert.deepEqual(parseCommand("/cancel_queue"), {
+    command: "/cancel-queue",
+    args: [],
+  });
 });
 
 test("stripLeadingBotMention removes a leading bot mention", () => {
