@@ -26,7 +26,14 @@ import {
   formatScanSummary,
 } from "../lib/onboarding-plan.mjs";
 import { DEFAULT_APP_CONTROL_BASE_URL, checkAppControl } from "../lib/app-control-launcher.mjs";
-import { listProjectThreads, listRecentProjects, listRecentThreads, listRecentWorkItems, parsePositiveInt } from "../lib/thread-db.mjs";
+import {
+  DEFAULT_CODEX_GLOBAL_STATE_PATH,
+  listProjectThreads,
+  listQuickstartWorkItems,
+  listRecentProjects,
+  listRecentThreads,
+  parsePositiveInt,
+} from "../lib/thread-db.mjs";
 
 const PROJECT_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DEFAULT_THREADS_DB_PATH = path.join(os.homedir(), ".codex", "state_5.sqlite");
@@ -73,6 +80,7 @@ function parseArgs(argv) {
     folderTitle: null,
     topicDisplay: DEFAULT_TOPIC_DISPLAY,
     threadsDbPath: DEFAULT_THREADS_DB_PATH,
+    codexGlobalStatePath: DEFAULT_CODEX_GLOBAL_STATE_PATH,
     outputPath: DEFAULT_OUTPUT_PATH,
     json: false,
     preview: false,
@@ -176,6 +184,9 @@ function parseArgs(argv) {
         break;
       case "--threads-db":
         args.threadsDbPath = rest[++index];
+        break;
+      case "--codex-global-state":
+        args.codexGlobalStatePath = rest[++index];
         break;
       case "--output":
         args.outputPath = rest[++index];
@@ -321,7 +332,7 @@ function renderHelp() {
     "  doctor checks local prerequisites before the wizard gets creative.",
     "  codex:launch starts Codex.app with the app-control debug port when it is not already open.",
     "  scan is read-only and shows candidate Codex projects/threads.",
-    "  quickstart is automatic: latest active Codex threads and Chats, bounded clean history, bootstrap, backfill and smoke.",
+    "  quickstart is automatic: pinned Codex threads first, then latest active threads and Chats, bounded clean history, bootstrap, backfill and smoke.",
     "  plan is a preview by default; add --write to update admin/bootstrap-plan.json.",
     "  wizard is the manual escape hatch and can write/apply/backfill/smoke with explicit confirmation or flags.",
     "  history import defaults come from config.local.json unless a history flag overrides them.",
@@ -1527,7 +1538,11 @@ async function loadProjectsWithThreads(args) {
 }
 
 async function loadQuickstartProjectsWithThreads(args) {
-  const threads = await listRecentWorkItems(args.threadsDbPath, { limit: args.threadLimit });
+  const quickstart = await listQuickstartWorkItems(args.threadsDbPath, {
+    limit: args.threadLimit,
+    globalStatePath: args.codexGlobalStatePath,
+  });
+  const threads = quickstart.threads;
   const projectsByRoot = new Map();
   const chatThreads = [];
   for (const thread of threads) {
@@ -1561,6 +1576,7 @@ async function loadQuickstartProjectsWithThreads(args) {
   return {
     projectsWithThreads: [...projectsByRoot.values()],
     chatThreads,
+    pinnedThreadCount: quickstart.selectedPinnedThreadCount,
   };
 }
 
@@ -1702,7 +1718,7 @@ async function commandQuickstart(args) {
       process.stdout.write(`${recoveryPlan}\n\n`);
     }
 
-    const { projectsWithThreads, chatThreads } = await loadQuickstartProjectsWithThreads(args);
+    const { projectsWithThreads, chatThreads, pinnedThreadCount } = await loadQuickstartProjectsWithThreads(args);
     const selectedThreadCount = projectsWithThreads.reduce((sum, project) => sum + (project.threads?.length ?? 0), 0);
     const selectedChatCount = chatThreads.length;
     if (!selectedThreadCount && !selectedChatCount) {
@@ -1721,6 +1737,9 @@ async function commandQuickstart(args) {
     process.stdout.write(
       `Quickstart selected ${selectedThreadCount} project thread(s) and ${selectedChatCount} Codex Chat(s) across ${plan.projects.length} surface(s).\n\n`,
     );
+    if (pinnedThreadCount) {
+      process.stdout.write(`Included ${pinnedThreadCount} pinned Codex thread(s) before the recent activity tail.\n\n`);
+    }
     process.stdout.write(`${formatBootstrapPlanSummary(plan)}\n`);
     process.stdout.write(`\n${await buildReusePreview(args, plan)}\n`);
     if (args.json) {

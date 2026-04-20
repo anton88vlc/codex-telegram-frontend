@@ -1,11 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
-import { findActiveThreadSuccessors, getThreadsByIds } from "../lib/thread-db.mjs";
+import { findActiveThreadSuccessors, getThreadsByIds, listQuickstartWorkItems } from "../lib/thread-db.mjs";
 
 function runSqlite(dbPath, sql) {
   const result = spawnSync("sqlite3", [dbPath, sql], {
@@ -86,6 +86,57 @@ test("findActiveThreadSuccessors finds the latest active same-title same-cwd thr
       rows.map((row) => row.id),
       ["candidate-new", "candidate-old"],
     );
+  } finally {
+    await rm(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test("listQuickstartWorkItems includes pinned Codex threads before the recent tail", async () => {
+  const tmpDir = await mkdtemp(path.join(os.tmpdir(), "codex-thread-db-pinned-"));
+  try {
+    const dbPath = path.join(tmpDir, "state.sqlite");
+    const globalStatePath = path.join(tmpDir, ".codex-global-state.json");
+    runSqlite(
+      dbPath,
+      `
+        create table threads (
+          id text primary key,
+          title text,
+          cwd text,
+          archived integer default 0,
+          updated_at integer,
+          updated_at_ms integer,
+          source text,
+          rollout_path text,
+          model_provider text,
+          model text,
+          reasoning_effort text,
+          tokens_used integer,
+          agent_nickname text,
+          agent_role text
+        );
+        insert into threads values ('recent', 'Recent thread', '/tmp/app', 0, 30, 30000, 'local', '/tmp/recent.jsonl', '', 'gpt-5.4', 'xhigh', 30, '', '');
+        insert into threads values ('pinned', 'Pinned thread', '/tmp/app', 0, 10, 10000, 'local', '/tmp/pinned.jsonl', '', 'gpt-5.4', 'xhigh', 10, '', '');
+        insert into threads values ('archived-pinned', 'Archived pinned thread', '/tmp/app', 1, 40, 40000, 'local', '/tmp/archived.jsonl', '', 'gpt-5.4', 'xhigh', 40, '', '');
+      `,
+    );
+    await writeFile(
+      globalStatePath,
+      `${JSON.stringify({ "pinned-thread-ids": ["pinned", "archived-pinned"] }, null, 2)}\n`,
+      "utf8",
+    );
+
+    const result = await listQuickstartWorkItems(dbPath, { limit: 2, globalStatePath });
+
+    assert.deepEqual(
+      result.threads.map((thread) => thread.id),
+      ["pinned", "recent"],
+    );
+    assert.deepEqual(
+      result.threads.map((thread) => thread.codexPinned),
+      [true, false],
+    );
+    assert.equal(result.selectedPinnedThreadCount, 1);
   } finally {
     await rm(tmpDir, { recursive: true, force: true });
   }

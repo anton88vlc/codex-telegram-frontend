@@ -25,9 +25,9 @@ Run the onboarding doctor, prepare local config from examples, guide me through 
 
 Do not ask me to paste bot tokens, Telegram API hashes, login codes or 2FA passwords into Codex chat. Use local hidden prompts, Keychain, ignored config files, browser/Telegram UI, or QR login instead.
 
-Create or reuse the Telegram folder `codex`, scan my latest active Codex project threads and Codex Chats, create one group per detected Codex project, create one topic per selected Codex project thread, map Codex Chats into private topics inside the bot direct chat, import about 10 clean messages into each topic, start the bridge, run a real Telegram smoke test, and leave the repo in a clean documented state.
+Create or reuse the Telegram folder `codex`, scan my pinned Codex threads first and then my latest active Codex project threads and Codex Chats, create one group per detected Codex project, create one topic per selected Codex project thread, map Codex Chats into private topics inside the bot direct chat, import about 10 clean messages into each topic, start the bridge, run a real Telegram smoke test, and leave the repo in a clean documented state.
 
-Default to about 10 latest active threads total. Do not ask me to choose projects unless the quickstart preview looks wrong. Keep Telegram as a clean remote Codex working set, not a landfill.
+Default to about 10 active threads total, with pinned Codex threads treated as the user's keep list. Do not ask me to choose projects unless the quickstart preview looks wrong. Keep Telegram as a clean remote Codex working set, not a landfill.
 ```
 
 What still needs a human:
@@ -70,7 +70,7 @@ Two modes matter: `app-control` is the live near-Mac mode with the best Desktop 
 - Attachments: photos/documents, including media albums, are saved to ignored local storage and forwarded to Codex as file paths.
 - Voice/audio: Telegram voice is transcribed first, shown as an italic quoted transcript, then sent to Codex as text.
 - Clean bounded history backfill: user prompts plus assistant final answers by default.
-- Quickstart onboarding: latest active Codex project threads become Telegram groups/topics, and existing Codex Chats become private topics inside the bot direct chat when the bot has Threaded Mode enabled.
+- Quickstart onboarding: pinned Codex threads are included first, latest active Codex project threads become Telegram groups/topics, and existing Codex Chats become private topics inside the bot direct chat when the bot has Threaded Mode enabled.
 - New private bot topics are not auto-created as Desktop `Chats` by default. The app-server `thread/start` path is useful, but it does not yet behave exactly like pressing `New chat` in Codex Desktop, so the safe default is explicit `/attach` instead of fake magic.
 - Private bot topic preflight for Codex Desktop `Chats`: `npm run bot:topics`.
 - Bootstrap can create/reuse Telegram folder, project groups, topics, bot folder entry and status bars.

@@ -8,7 +8,7 @@ Model:
 - Telegram group = Codex project
 - Telegram topic = Codex thread
 - bot direct chat with private topics = Codex Desktop `Chats`
-- quickstart bootstrap plan = latest active Codex project threads plus Chats, grouped into the right Telegram surface
+- quickstart bootstrap plan = pinned Codex threads first, then latest active Codex project threads plus Chats, grouped into the right Telegram surface
 - history import = bounded clean tail, only useful user prompts plus assistant final answers
 
 ## Recommended Path
@@ -20,7 +20,7 @@ Codex should do the boring parts:
 1. Run `npm run onboard:prepare`.
 2. Run `npm run onboard:doctor`.
 3. Guide the few unavoidable Telegram steps.
-4. Run quickstart: scan the latest active Codex project threads and Chats, create a compact project/topic surface and import about 10 clean messages per topic.
+4. Run quickstart: scan pinned Codex threads first, then the latest active Codex project threads and Chats, create a compact project/topic surface and import about 10 clean messages per topic.
 5. Check the reuse preview so repeat runs reuse known groups/topics instead of creating Telegram confetti.
 6. Bootstrap Telegram folder/groups/topics, put the bot direct chat in the same folder when possible, start the bridge and run a smoke.
 
@@ -75,7 +75,7 @@ Quickstart is the product path:
 npm run onboard:quickstart
 ```
 
-By default it scans the 10 latest active Codex work items across the local Codex DB. Project threads become topics inside project groups. Codex Chats become private topics inside the bot direct chat when the bot has Threaded Mode enabled. Then it writes the bootstrap plan, applies Telegram surfaces, imports 10 clean messages per topic and runs a smoke. That is the "make my phone usable" button.
+By default it reads Codex Desktop's pinned thread list from `~/.codex/.codex-global-state.json`, includes those threads first, then fills the rest of the 10-item working set from latest active Codex work items in the local Codex DB. Project threads become topics inside project groups. Codex Chats become private topics inside the bot direct chat when the bot has Threaded Mode enabled. Then it writes the bootstrap plan, applies Telegram surfaces, imports 10 clean messages per topic and runs a smoke. That is the "make my phone usable" button.
 
 If private bot topics are not enabled yet, quickstart should keep project onboarding alive and report the Chats surface warning plainly. Rough beta edges are fine; silent fake project groups are not.
 
@@ -146,7 +146,7 @@ For bot-private Codex `Chats` topics, use `npm run bot:topics -- --smoke --chat-
 
 ## Good Defaults
 
-- quickstart thread limit: 10 latest active threads total
+- quickstart thread limit: about 10 active threads total, with pinned Codex threads included first
 - quickstart `historyMaxMessages`: 10
 - quickstart Codex Chats surface: private topics in the bot direct chat
 - manual wizard `threads-per-project`: 3

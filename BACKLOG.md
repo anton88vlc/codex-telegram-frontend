@@ -39,6 +39,7 @@ These are the useful Telegram platform leads found during the April 2026 API pas
 10. ~~Agent-led onboarding automation hardening base: `onboard:prepare` creates local config/admin env files, can set up the admin Python venv, guides credential wiring and can run QR login before the wizard path.~~
 11. ~~Onboarding recovery hardening for bad-but-present Telegram credentials/session errors, not only missing files.~~
 12. ~~Real clean-install audit hardening: agents must not collect secrets in Codex chat, `prepare` verifies stale sessions before skipping login, phone login is an explicit local fallback and quickstart backfill skips empty threads instead of killing the whole run.~~
+13. ~~Pinned Codex threads are first-class quickstart inputs.~~ Quickstart reads `pinned-thread-ids` from Codex Desktop global state, includes those threads before the recent activity tail and keeps the phone working set aligned with the Desktop sidebar.
 
 ## P2 - Transport And Observability
 
