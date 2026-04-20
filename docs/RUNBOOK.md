@@ -24,8 +24,10 @@ Keep `Codex.app` open for real work. Prefer `app-control` on `http://127.0.0.1:9
 Start the happy path with:
 
 ```bash
-npm run codex:launch
+/Applications/Codex.app/Contents/MacOS/Codex --remote-debugging-port=9222
 ```
+
+If you are inside the repo, `npm run codex:launch` is the same launch through the project helper. If you are in `~/code`, it is not: npm needs this repo's `package.json`.
 
 If Codex is already open without the debug port, close it first. The launcher does not kill active Codex windows. Good tools do not yoink the steering wheel.
 
@@ -115,7 +117,7 @@ npm run once
 Do this in order. Random poking makes the bridge look haunted when it is usually just missing one boring prerequisite.
 
 1. Make sure `Codex.app` is open.
-2. Prefer `npm run codex:launch`; otherwise the bridge can still try the local app-server fallback.
+2. Prefer launching Codex with `/Applications/Codex.app/Contents/MacOS/Codex --remote-debugging-port=9222`; if you are inside this repo, `npm run codex:launch` is the helper for the same thing.
 3. Run `npm run self-check`.
 4. Run `npm run state:doctor`; if it reports safe repairs, apply them.
 5. Check `/health`; it samples `logs/bridge.events.ndjson`.
@@ -147,7 +149,7 @@ If transcription fails, check `telegram_voice_transcription_error` in the same e
 
 If a Telegram reply says fallback was used, the bridge is using `app-server` instead of the preferred `app-control` path. Some UI-aware behavior may be weaker, but the user should at least know what happened instead of staring at silence.
 
-If both paths fail, Telegram shows a short recovery hint: open `Codex.app`, preferably through `npm run codex:launch`, then retry. If phone-originated Telegram prompts crash the desktop renderer, set `nativeIngressTransport` to `app-server` in `config.local.json`.
+If both paths fail, Telegram shows a short recovery hint: open `Codex.app`, preferably with `--remote-debugging-port=9222`, then retry. If phone-originated Telegram prompts crash the desktop renderer, set `nativeIngressTransport` to `app-server` in `config.local.json`.
 
 For the Desktop-first happy path without the old heavy renderer polling, use:
 

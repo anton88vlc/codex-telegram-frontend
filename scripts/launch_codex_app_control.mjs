@@ -141,7 +141,7 @@ async function main() {
     fail(
       [
         `Codex.app is already running, but app-control is not reachable at ${baseUrl}.`,
-        "Close Codex.app, then run `npm run codex:launch` again.",
+        "Close Codex.app, then run this repo helper again, or launch Codex directly with `/Applications/Codex.app/Contents/MacOS/Codex --remote-debugging-port=9222`.",
         "Not killing it automatically. That kind of convenience is how ghosts are born.",
       ].join("\n"),
       2,
@@ -198,4 +198,3 @@ async function main() {
 }
 
 main().catch((error) => fail(error instanceof Error ? error.message : String(error)));
-

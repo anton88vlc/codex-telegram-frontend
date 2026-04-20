@@ -25,7 +25,7 @@ import {
   formatBootstrapPlanSummary,
   formatScanSummary,
 } from "../lib/onboarding-plan.mjs";
-import { DEFAULT_APP_CONTROL_BASE_URL, checkAppControl } from "../lib/app-control-launcher.mjs";
+import { DEFAULT_APP_CONTROL_BASE_URL, DEFAULT_CODEX_APP_BINARY, checkAppControl } from "../lib/app-control-launcher.mjs";
 import {
   DEFAULT_CODEX_GLOBAL_STATE_PATH,
   listProjectThreads,
@@ -57,6 +57,13 @@ const DEFAULT_NATIVE_DEBUG_BASE_URL = DEFAULT_APP_CONTROL_BASE_URL;
 const DEFAULT_QUICKSTART_THREAD_LIMIT = 10;
 const DEFAULT_QUICKSTART_HISTORY_MAX_MESSAGES = 10;
 const DEFAULT_CHATS_SURFACE_TITLE = "Codex - Chats";
+
+function shellDoubleQuote(value) {
+  return `"${String(value).replaceAll("\\", "\\\\").replaceAll('"', '\\"').replaceAll("$", "\\$").replaceAll("`", "\\`")}"`;
+}
+
+const CODEX_APP_CONTROL_DIRECT_COMMAND = `${DEFAULT_CODEX_APP_BINARY} --remote-debugging-port=9222`;
+const CODEX_REPO_LAUNCH_COMMAND = `cd ${shellDoubleQuote(PROJECT_ROOT)} && npm run codex:launch`;
 const VOICE_TRANSCRIPTION_PROVIDER_NOTE =
   "Voice notes are optional. Supported STT paths today: Deepgram, OpenAI, or a local command.";
 const CODEX_NATIVE_STT_NOTE =
@@ -334,14 +341,14 @@ function renderHelp() {
     "  node scripts/onboard.mjs plan --project /path/to/repo [--project /path/to/other] [--threads-per-project 3] [--history-max-messages 40] [--history-assistant-phase final_answer] [--group-prefix 'Codex - '] [--folder-title codex] [--topic-display tabs|list] [--write]",
     "  node scripts/onboard.mjs plan --rehearsal --project /path/to/repo [--write]",
     "  node scripts/onboard.mjs wizard [--rehearsal] [--write] [--apply] [--cleanup-dry-run|--cleanup] [--backfill-dry-run|--backfill] [--smoke]",
-    "  npm run codex:launch",
+    `  ${CODEX_APP_CONTROL_DIRECT_COMMAND}`,
     "",
     "Notes:",
     "  preferred public setup is agent-led quickstart: ask Codex to prepare local config, then run quickstart.",
     "  prepare creates missing local config/admin env files, can create the admin venv, and can guide credential/session setup.",
     "  never paste tokens, API hashes, login codes or 2FA passwords into Codex chat; use local prompts/Telegram UI.",
     "  doctor checks local prerequisites before the wizard gets creative.",
-    "  codex:launch starts Codex.app with the app-control debug port; that is the best live Telegram UX.",
+    "  codex:launch is a repo-local helper for the same debug launch; run it from this project directory.",
     `  ${VOICE_TRANSCRIPTION_PROVIDER_NOTE}`,
     "  scan is read-only and shows candidate Codex projects/threads.",
     "  quickstart is automatic: pinned Codex threads first, then latest active threads and Chats, bounded clean history, bootstrap, best-effort bot avatar, backfill and smoke.",
@@ -359,7 +366,11 @@ function renderPostOnboardingRuntimeNote({ configPath = DEFAULT_CONFIG_PATH } = 
     "",
     "Next: launch Codex in the live Desktop mode:",
     "",
-    "  npm run codex:launch",
+    `  ${CODEX_APP_CONTROL_DIRECT_COMMAND}`,
+    "",
+    "If you are inside this repo, the helper is fine too:",
+    "",
+    `  ${CODEX_REPO_LAUNCH_COMMAND}`,
     "",
     "This opens Codex.app with app-control on http://127.0.0.1:9222. It is the good mode: Telegram messages land in Codex Desktop, replies mirror back, and your phone feels like a real Codex surface.",
     "",
@@ -1030,10 +1041,10 @@ async function buildOnboardingChecks(args) {
     makeCheck(
       "app-control debug port",
       appControlOk,
-      appControlOk ? nativeDebugBaseUrl : `${nativeDebugBaseUrl}; run npm run codex:launch`,
+      appControlOk ? nativeDebugBaseUrl : `${nativeDebugBaseUrl}; launch Codex with --remote-debugging-port=9222`,
       {
         required: false,
-        action: "Run `npm run codex:launch` for the best live Telegram <-> Codex Desktop UX.",
+        action: `Run \`${CODEX_APP_CONTROL_DIRECT_COMMAND}\`, or run \`npm run codex:launch\` from this repo, for the best live Telegram <-> Codex Desktop UX.`,
       },
     ),
   ];

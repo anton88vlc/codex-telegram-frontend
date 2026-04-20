@@ -38,8 +38,10 @@ What still needs a human:
 4. Keep `Codex.app` available. Best path:
 
 ```bash
-npm run codex:launch
+/Applications/Codex.app/Contents/MacOS/Codex --remote-debugging-port=9222
 ```
+
+If you are already inside this repo, `npm run codex:launch` is the same launch wrapped in a safer helper. From anywhere else, use the direct command above or `cd` into the repo first.
 
 Codex should handle local config, Keychain/env wiring, bootstrap, backfill and smoke. The human should click/scan/type into local Telegram or terminal prompts, not dump secrets into the conversation transcript. If setup gets weird, use [docs/ONBOARDING.md](docs/ONBOARDING.md).
 
@@ -48,7 +50,7 @@ Codex should handle local config, Keychain/env wiring, bootstrap, backfill and s
 This project is a frontend. It does not replace Codex.
 
 - Preferred send path: `app-control` on `http://127.0.0.1:9222`.
-- Start it with `npm run codex:launch` or launch Codex with `--remote-debugging-port=9222`.
+- Start it with `/Applications/Codex.app/Contents/MacOS/Codex --remote-debugging-port=9222`, or run `npm run codex:launch` from this repo.
 - `app-server` fallback is resilience, not the happy path.
 - If `Codex.app` is closed or crashed, the bridge should say that plainly in Telegram.
 
@@ -109,6 +111,7 @@ npm run onboard:wizard:rehearsal
 Run the bridge:
 
 ```bash
+cd /path/to/codex-telegram-frontend
 npm run codex:launch
 npm start
 ```

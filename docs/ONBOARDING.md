@@ -36,8 +36,10 @@ Some things still require a human because Telegram does not expose clean automat
 4. Keep `Codex.app` available. Best path:
 
 ```bash
-npm run codex:launch
+/Applications/Codex.app/Contents/MacOS/Codex --remote-debugging-port=9222
 ```
+
+If you are already inside this repo, `npm run codex:launch` does the same thing with a small safety wrapper. From `~/code` or any other directory, npm will not magically find this project's `package.json`; either use the direct command above or `cd` into the repo first.
 
 Codex should handle where token/API values are stored locally. Do not make the user cosplay as a secrets manager unless the automatic path fails.
 
@@ -60,6 +62,12 @@ npm run onboard:prepare -- --login-phone
 `prepare` checks whether an existing Telegram session is actually authorized before trusting it. If a stale session file is lying around, it removes the session artifacts before retrying login.
 
 At the end of onboarding, leave the user with the tiny runtime map:
+
+```bash
+/Applications/Codex.app/Contents/MacOS/Codex --remote-debugging-port=9222
+```
+
+If the agent is standing inside the repo, this helper is fine too:
 
 ```bash
 npm run codex:launch
