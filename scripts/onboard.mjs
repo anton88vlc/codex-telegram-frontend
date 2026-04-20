@@ -57,6 +57,10 @@ const DEFAULT_NATIVE_DEBUG_BASE_URL = DEFAULT_APP_CONTROL_BASE_URL;
 const DEFAULT_QUICKSTART_THREAD_LIMIT = 10;
 const DEFAULT_QUICKSTART_HISTORY_MAX_MESSAGES = 10;
 const DEFAULT_CHATS_SURFACE_TITLE = "Codex - Chats";
+const VOICE_TRANSCRIPTION_PROVIDER_NOTE =
+  "Voice notes are optional. Supported STT paths today: Deepgram, OpenAI, or a local command.";
+const CODEX_NATIVE_STT_NOTE =
+  "Codex-native realtime STT is promising, but it is not the default yet because it still depends on Codex auth/runtime details.";
 const execFileAsync = promisify(execFile);
 
 function fail(message) {
@@ -337,7 +341,8 @@ function renderHelp() {
     "  prepare creates missing local config/admin env files, can create the admin venv, and can guide credential/session setup.",
     "  never paste tokens, API hashes, login codes or 2FA passwords into Codex chat; use local prompts/Telegram UI.",
     "  doctor checks local prerequisites before the wizard gets creative.",
-    "  codex:launch starts Codex.app with the app-control debug port when it is not already open.",
+    "  codex:launch starts Codex.app with the app-control debug port; that is the best live Telegram UX.",
+    `  ${VOICE_TRANSCRIPTION_PROVIDER_NOTE}`,
     "  scan is read-only and shows candidate Codex projects/threads.",
     "  quickstart is automatic: pinned Codex threads first, then latest active threads and Chats, bounded clean history, bootstrap, best-effort bot avatar, backfill and smoke.",
     "  plan is a preview by default; add --write to update admin/bootstrap-plan.json.",
@@ -346,6 +351,20 @@ function renderHelp() {
     "  --cleanup-dry-run previews a clean rebuild for bootstrapped topics; --cleanup deletes visible topic messages except protected root/status ids.",
     "  --rehearsal writes admin/bootstrap-plan.rehearsal.json by default and uses codex-lab/Codex Lab naming.",
     "  lower-level admin/telegram_user_admin.py commands are escape hatches, not the normal install story.",
+  ].join("\n");
+}
+
+function renderPostOnboardingRuntimeNote({ configPath = DEFAULT_CONFIG_PATH } = {}) {
+  return [
+    "",
+    "Next: launch Codex in the live Desktop mode:",
+    "",
+    "  npm run codex:launch",
+    "",
+    "This opens Codex.app with app-control on http://127.0.0.1:9222. It is the good mode: Telegram messages land in Codex Desktop, replies mirror back, and your phone feels like a real Codex surface.",
+    "",
+    `Other mode: app-server fallback. It is calmer when the Desktop renderer gets flaky, but it is less UI-aware and Codex Desktop may not update live. Use \`nativeIngressTransport: "app-server"\` in ${configPath} only when app-control is being dramatic.`,
+    "",
   ].join("\n");
 }
 
@@ -572,9 +591,9 @@ async function inspectVoiceTranscription(config = {}) {
     ok,
     detail: ok
       ? `${provider}; ${sources.join(", ")}`
-      : `${provider}; missing Deepgram/OpenAI key or local command`,
+      : `${provider}; missing STT provider (Deepgram/OpenAI key or local command)`,
     action:
-      "Voice notes are optional. For mobile voice UX, add `DEEPGRAM_API_KEY` or store it in Keychain service `codex-telegram-bridge-deepgram-api-key`, then restart the bridge.",
+      `${VOICE_TRANSCRIPTION_PROVIDER_NOTE} For the easiest mobile voice UX, add \`DEEPGRAM_API_KEY\` or store it in Keychain service \`codex-telegram-bridge-deepgram-api-key\`. OpenAI also works via \`OPENAI_API_KEY\`, and local command is the escape hatch. ${CODEX_NATIVE_STT_NOTE} Restart the bridge after changing STT settings.`,
   };
 }
 
@@ -1912,7 +1931,7 @@ async function commandQuickstart(args) {
       }
     }
 
-    process.stdout.write("\nOnboarding quickstart finished.\n");
+    process.stdout.write(`\nOnboarding quickstart finished.\n${renderPostOnboardingRuntimeNote({ configPath: args.configPath })}`);
   } finally {
     rl?.close();
   }
@@ -2093,7 +2112,7 @@ async function commandWizard(args) {
       }
     }
 
-    process.stdout.write("\nOnboarding wizard finished.\n");
+    process.stdout.write(`\nOnboarding wizard finished.\n${renderPostOnboardingRuntimeNote({ configPath: args.configPath })}`);
   } finally {
     rl?.close();
   }

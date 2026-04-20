@@ -54,6 +54,8 @@ This project is a frontend. It does not replace Codex.
 
 Two modes matter: `app-control` is the live near-Mac mode with the best Desktop mirror, and `app-server` is the calmer remote mode when you just need Telegram to keep moving. Default to `app-control`; switch `nativeIngressTransport` to `app-server` if the Desktop renderer gets dramatic.
 
+Voice notes are optional. The supported STT paths today are Deepgram, OpenAI, or a local command. Deepgram is the friendliest default for Telegram voice notes; OpenAI is handy if that key is already your normal local setup; local command is for people who like owning the whole stack.
+
 ## What Works
 
 - Telegram Bot API long polling for direct chats and forum topics.
@@ -149,6 +151,7 @@ Secrets can come from env, local config or macOS Keychain:
 - bot token: `CODEX_TELEGRAM_BOT_TOKEN` or Keychain service `codex-telegram-bridge-bot-token`
 - Deepgram STT: `DEEPGRAM_API_KEY` or `codex-telegram-bridge-deepgram-api-key`
 - OpenAI STT: `OPENAI_API_KEY` or `codex-telegram-bridge-openai-api-key`
+- local STT: `voiceTranscriptionCommand` in `config.local.json`
 - Telegram user helper: `admin/.env` with `API_ID` and `API_HASH`
 
 Full config map: [docs/CONFIGURATION.md](docs/CONFIGURATION.md).

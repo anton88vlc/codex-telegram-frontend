@@ -43,6 +43,8 @@ Codex should handle where token/API values are stored locally. Do not make the u
 
 Voice notes are optional, but they need one STT path. The easiest one is Deepgram: let Codex store `DEEPGRAM_API_KEY` in macOS Keychain service `codex-telegram-bridge-deepgram-api-key`, or expose it as env if that is how you run local tools. Without an STT key, text/photos/files still work and the doctor will say voice is the only missing polish.
 
+Supported STT paths today are Deepgram, OpenAI, or a local command. Deepgram is still the friendliest default for Telegram OGG/Opus voice notes; OpenAI is fine if that is where your key already lives; local command is the escape hatch for people who run their own thing. Codex-native realtime STT looks promising, but it is not the default yet because it still depends on Codex auth/runtime details.
+
 One sharp rule: do not ask the user to paste bot tokens, API hashes, login codes or 2FA passwords into Codex chat. That chat is a transcript, not a password manager. Use QR login first:
 
 ```bash
@@ -56,6 +58,14 @@ npm run onboard:prepare -- --login-phone
 ```
 
 `prepare` checks whether an existing Telegram session is actually authorized before trusting it. If a stale session file is lying around, it removes the session artifacts before retrying login.
+
+At the end of onboarding, leave the user with the tiny runtime map:
+
+```bash
+npm run codex:launch
+```
+
+That is the best mode. It starts Codex.app with app-control on `http://127.0.0.1:9222`, so Telegram feels live: messages land in Codex Desktop, replies mirror back, and the phone behaves like a real remote Codex surface. The other mode is `app-server` fallback: calmer when the Desktop renderer gets weird, but less UI-aware and not guaranteed to refresh Codex Desktop live.
 
 Quickstart applies the bundled project avatar as a best-effort polish step after Telegram bootstrap. If Telegram refuses it, onboarding keeps going and tells you why. Manual retry:
 

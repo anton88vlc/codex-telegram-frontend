@@ -409,8 +409,9 @@ test("onboard doctor warns when voice transcription has no STT key", () => {
   );
 
   assert.notEqual(result.status, 0);
-  assert.match(result.stdout, /\[warn\] voice transcription - deepgram; missing Deepgram\/OpenAI key or local command/);
-  assert.match(result.stdout, /Voice notes are optional/);
+  assert.match(result.stdout, /\[warn\] voice transcription - deepgram; missing STT provider \(Deepgram\/OpenAI key or local command\)/);
+  assert.match(result.stdout, /Supported STT paths today: Deepgram, OpenAI, or a local command/);
+  assert.match(result.stdout, /Codex-native realtime STT is promising, but it is not the default yet/);
 });
 
 test("onboard wizard can write a non-interactive rehearsal plan", () => {
@@ -528,6 +529,8 @@ test("onboard quickstart writes latest active threads without manual selection",
 
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Quickstart selected 3 project thread/);
+  assert.match(result.stdout, /Next: launch Codex in the live Desktop mode/);
+  assert.match(result.stdout, /nativeIngressTransport: "app-server"/);
   const plan = JSON.parse(fs.readFileSync(outputPath, "utf8"));
   assert.equal(plan.onboarding.historyMaxMessages, 10);
   assert.equal(plan.onboarding.threadsPerProject, 3);
