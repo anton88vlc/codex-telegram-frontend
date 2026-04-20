@@ -147,7 +147,7 @@ test("onboard prepare creates local config and admin env from safe templates", (
   assert.match(envText, /API_HASH=/);
 });
 
-test("onboard prepare reauthenticates stale Telegram user sessions", () => {
+test("onboard prepare reauthenticates stale Telegram user sessions with phone login", () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codex-onboard-prepare-stale-session-"));
   const adminDir = path.join(tmpDir, "admin");
   const stateDir = path.join(tmpDir, "state");
@@ -175,7 +175,7 @@ if (command === "whoami") {
   console.log(JSON.stringify({ authorized: false, me: null }));
   process.exit(0);
 }
-if (command === "login-qr") {
+if (command === "login-phone") {
   console.log(JSON.stringify({ status: "authorized" }));
   process.exit(0);
 }
@@ -191,7 +191,7 @@ console.log("{}");
       "prepare",
       "--no-input",
       "--skip-admin-deps",
-      "--login-qr",
+      "--login-phone",
       "--config",
       configPath,
       "--admin-env",
@@ -211,10 +211,10 @@ console.log("{}");
 
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /removed stale Telegram user session before login/);
-  assert.match(result.stdout, /authorized Telegram user session via QR login/);
+  assert.match(result.stdout, /authorized Telegram user session via phone login/);
   const calls = fs.readFileSync(callsPath, "utf8");
   assert.match(calls, /whoami/);
-  assert.match(calls, /login-qr/);
+  assert.match(calls, /login-phone/);
   assert.equal(fs.existsSync(sessionPath), false);
   assert.equal(fs.existsSync(`${sessionPath}-journal`), false);
 });
@@ -246,7 +246,7 @@ test("onboard doctor prints actionable recovery steps", () => {
   assert.notEqual(result.status, 0);
   assert.match(result.stdout, /Recovery plan:/);
   assert.match(result.stdout, /npm run onboard:prepare/);
-  assert.match(result.stdout, /--login-qr/);
+  assert.match(result.stdout, /--login-phone/);
 });
 
 test("onboard doctor treats placeholder admin env as incomplete", () => {
@@ -363,7 +363,7 @@ test("onboard doctor detects stale Telegram user sessions", () => {
 
   assert.notEqual(result.status, 0);
   assert.match(result.stdout, /session file exists but is not authorized/);
-  assert.match(result.stdout, /--login-qr/);
+  assert.match(result.stdout, /--login-phone/);
 });
 
 test("onboard doctor warns when voice transcription has no STT key", () => {

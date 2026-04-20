@@ -90,7 +90,7 @@ These are not product settings; they are local machine plumbing.
 - Bot token: env var from `botTokenEnv`, `botToken` in local config, or macOS Keychain.
 - STT key for voice: prefer `DEEPGRAM_API_KEY` or Keychain service `codex-telegram-bridge-deepgram-api-key`; OpenAI also works through `OPENAI_API_KEY` or `codex-telegram-bridge-openai-api-key`.
 - Telegram user API credentials: `admin/.env` with `API_ID` and `API_HASH`.
-- Telegram user session: `state/telegram_user.session`, created by `login-qr` or `login-phone`.
+- Telegram user session: `state/telegram_user.session`, created by phone login by default or QR login as a fallback.
 - launchd overrides: `CODEX_TELEGRAM_CONFIG`, `CODEX_TELEGRAM_LAUNCHD_LABEL`, `CODEX_TELEGRAM_KEYCHAIN_SERVICE`.
 
 Run the doctor before blaming Telegram:

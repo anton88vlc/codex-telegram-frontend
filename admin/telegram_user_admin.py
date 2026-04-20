@@ -1300,7 +1300,7 @@ async def command_bootstrap(args):
     await client.connect()
     try:
         if not await client.is_user_authorized():
-            raise SystemExit("Session is not authorized. Run login-qr first.")
+            raise SystemExit("Session is not authorized. Run login-phone first.")
         me = await client.get_me()
 
         summary = {
@@ -1478,7 +1478,7 @@ async def command_backfill_thread(args):
     await client.connect()
     try:
         if not await client.is_user_authorized():
-            raise SystemExit("Session is not authorized. Run login-qr first.")
+            raise SystemExit("Session is not authorized. Run login-phone first.")
         transmissions = build_history_transmissions(
             messages,
             args.sender_mode,
@@ -1609,7 +1609,7 @@ async def command_cleanup_topic(args):
     await client.connect()
     try:
         if not await client.is_user_authorized():
-            raise SystemExit("Session is not authorized. Run login-qr first.")
+            raise SystemExit("Session is not authorized. Run login-phone first.")
         candidates = await collect_topic_cleanup_candidates(
             client,
             args.chat_id,
@@ -1651,7 +1651,7 @@ async def command_pin_message(args):
     await client.connect()
     try:
         if not await client.is_user_authorized():
-            raise SystemExit("Session is not authorized. Run login-qr first.")
+            raise SystemExit("Session is not authorized. Run login-phone first.")
         entity = await client.get_entity(args.chat_id)
         await client(
             functions.messages.UpdatePinnedMessageRequest(
@@ -1685,7 +1685,7 @@ async def command_send_topic_message(args):
     await client.connect()
     try:
         if not await client.is_user_authorized():
-            raise SystemExit("Session is not authorized. Run login-qr first.")
+            raise SystemExit("Session is not authorized. Run login-phone first.")
         entity = await client.get_entity(args.chat_id)
         message = await client.send_message(
             entity,
@@ -1728,7 +1728,7 @@ async def command_set_bot_avatar(args):
     await client.connect()
     try:
         if not await client.is_user_authorized():
-            raise SystemExit("Session is not authorized. Run login-qr first.")
+            raise SystemExit("Session is not authorized. Run login-phone first.")
         bot = await client.get_input_entity(bot_username)
         uploaded = await client.upload_file(str(image_path))
         result = await client(functions.photos.UploadProfilePhotoRequest(bot=bot, file=uploaded))
@@ -1758,7 +1758,7 @@ async def command_wait_topic_text(args):
     await client.connect()
     try:
         if not await client.is_user_authorized():
-            raise SystemExit("Session is not authorized. Run login-qr first.")
+            raise SystemExit("Session is not authorized. Run login-phone first.")
         entity = await client.get_entity(args.chat_id)
         while asyncio.get_running_loop().time() <= deadline:
             async for message in client.iter_messages(entity, limit=args.scan_limit, reply_to=args.topic_id):

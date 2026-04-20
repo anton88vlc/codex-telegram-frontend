@@ -49,16 +49,20 @@ Voice notes are optional, but they need one STT path. The easiest one is Deepgra
 
 Supported STT paths today are Deepgram, OpenAI, or a local command. Deepgram is still the friendliest default for Telegram OGG/Opus voice notes; OpenAI is fine if that is where your key already lives; local command is the escape hatch for people who run their own thing. Codex-native realtime STT looks promising, but it is not the default yet because it still depends on Codex auth/runtime details.
 
-One sharp rule: do not ask the user to paste bot tokens, API hashes, login codes or 2FA passwords into Codex chat. That chat is a transcript, not a password manager. Use QR login first:
+One sharp rule: do not ask the user to paste bot tokens, API hashes, login codes or 2FA passwords into Codex chat. That chat is a transcript, not a password manager.
 
-```bash
-npm run onboard:prepare -- --login-qr
-```
-
-If QR login gets stuck or Telegram asks for 2FA, use the local phone-login fallback and let the user type into the terminal prompt:
+Use phone/code login as the happy path:
 
 ```bash
 npm run onboard:prepare -- --login-phone
+```
+
+The helper asks for the phone number, Telegram login code and 2FA password in the local terminal. That is the right place for them. Do not ask the user to paste those values back into Codex chat.
+
+QR login still exists, but treat it as a fallback. It is flaky enough in this flow that leading with it is just asking for little gremlins:
+
+```bash
+npm run onboard:prepare -- --login-qr
 ```
 
 `prepare` checks whether an existing Telegram session is actually authorized before trusting it. If a stale session file is lying around, it removes the session artifacts before retrying login.

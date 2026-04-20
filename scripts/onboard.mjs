@@ -349,7 +349,7 @@ function parseArgs(argv) {
 function renderHelp() {
   return [
     "Usage:",
-    "  node scripts/onboard.mjs prepare [--skip-admin-deps] [--login-qr|--login-phone]",
+    "  node scripts/onboard.mjs prepare [--skip-admin-deps] [--login-phone|--login-qr]",
     "  node scripts/onboard.mjs doctor [--json]",
     "  node scripts/onboard.mjs scan [--project-limit 8] [--threads-per-project 3] [--json]",
     "  node scripts/onboard.mjs quickstart [--thread-limit 10] [--history-max-messages 10] [--preview] [--no-chats] [--skip-bot-avatar]",
@@ -362,6 +362,7 @@ function renderHelp() {
     "  preferred public setup is agent-led quickstart: ask Codex to prepare local config, then run quickstart.",
     "  prepare creates missing local config/admin env files, can create the admin venv, and can guide credential/session setup.",
     "  never paste tokens, API hashes, login codes or 2FA passwords into Codex chat; use local prompts/Telegram UI.",
+    "  phone/code login is the default Telegram user-session path; QR login is only a fallback.",
     "  doctor checks local prerequisites before the wizard gets creative.",
     "  codex:launch is a repo-local helper for the same debug launch; run it from this project directory.",
     `  ${VOICE_TRANSCRIPTION_PROVIDER_NOTE}`,
@@ -644,7 +645,7 @@ function sessionRecoveryAction(errorText) {
   if (text.includes("api_id") || text.includes("api_hash") || text.includes("invalid")) {
     return "Fix Telegram API_ID/API_HASH in `admin/.env`, then rerun `npm run onboard:doctor`.";
   }
-  return "Run `npm run onboard:prepare -- --login-qr` or `npm run onboard:prepare -- --login-phone` and authorize the local Telegram user session.";
+  return "Run `npm run onboard:prepare -- --login-phone` and authorize the local Telegram user session. Use `--login-qr` only if you explicitly want the QR fallback.";
 }
 
 function adminSessionDisplayName(payload) {
@@ -691,7 +692,7 @@ async function inspectAdminSession(args, { envOk, helperOk, adminPythonOk, sessi
     return {
       ok: false,
       detail: args.adminSessionPath,
-      action: "Run `npm run onboard:prepare -- --login-qr` and authorize the local Telegram user session.",
+      action: "Run `npm run onboard:prepare -- --login-phone` and authorize the local Telegram user session.",
     };
   }
   if (!envOk || !helperOk || !adminPythonOk) {
@@ -1162,7 +1163,7 @@ async function maybeRunTelegramLogin(args, rl, python) {
   const shouldLogin =
     args.loginQr ||
     args.loginPhone ||
-    (rl && !args.noInput && (await askYesNo(rl, "Authorize Telegram user session with QR login now?", false)));
+    (rl && !args.noInput && (await askYesNo(rl, "Authorize Telegram user session with phone/code login now?", true)));
   if (!shouldLogin) {
     return null;
   }
@@ -1175,9 +1176,10 @@ async function maybeRunTelegramLogin(args, rl, python) {
     }
   }
 
-  const loginCommand = args.loginPhone ? "login-phone" : "login-qr";
+  const usePhoneLogin = args.loginPhone || !args.loginQr;
+  const loginCommand = usePhoneLogin ? "login-phone" : "login-qr";
   await runPlainCommand(python, [...adminBaseArgs(args), loginCommand], { cwd: PROJECT_ROOT });
-  messages.push(`authorized Telegram user session via ${args.loginPhone ? "phone login" : "QR login"}: ${args.adminSessionPath}`);
+  messages.push(`authorized Telegram user session via ${usePhoneLogin ? "phone login" : "QR login"}: ${args.adminSessionPath}`);
   return messages.join("\n");
 }
 

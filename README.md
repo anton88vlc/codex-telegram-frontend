@@ -29,7 +29,7 @@ Install codex-telegram-frontend on this Mac.
 
 Run the onboarding doctor, prepare local config from examples, guide me through the unavoidable Telegram steps, then run the quickstart onboarding path.
 
-Do not ask me to paste bot tokens, Telegram API hashes, login codes or 2FA passwords into Codex chat. Use local hidden prompts, Keychain, ignored config files, browser/Telegram UI, or QR login instead.
+Do not ask me to paste bot tokens, Telegram API hashes, login codes or 2FA passwords into Codex chat. Use local terminal prompts, Keychain, ignored config files, browser/Telegram UI and phone/code login instead. QR login is only a fallback.
 
 Create or reuse the Telegram folder `codex`, scan my pinned Codex threads first and then my latest active Codex project threads and Codex Chats, create one group per detected Codex project, create one topic per selected Codex project thread, map Codex Chats into private topics inside the bot direct chat, import about 10 clean messages into each topic, start the bridge, run a real Telegram smoke test, and leave the repo in a clean documented state.
 
