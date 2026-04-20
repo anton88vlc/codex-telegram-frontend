@@ -277,7 +277,7 @@ Apply the bundled bot avatar after the user-side Telegram session is authorized:
 npm run bot:avatar
 ```
 
-This calls `photos.uploadProfilePhoto(bot=...)` through MTProto, so the logged-in Telegram user must own the bot. BotFather/Bot API cannot do this cleanly.
+This currently calls `photos.uploadProfilePhoto(bot=...)` through MTProto, so the logged-in Telegram user must own the bot. Telegram now has official Bot API profile-photo support, but this repo has not wired that path yet. Until then, the MTProto helper is the practical route and `bot:avatar` stays best-effort polish, not a setup blocker.
 
 ## Telegram Ops Commands
 

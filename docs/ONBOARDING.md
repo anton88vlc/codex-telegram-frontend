@@ -15,6 +15,8 @@ Model:
 
 Use Codex as the installer. Open this repo in Codex and paste the install prompt from [README.md](../README.md#install-with-codex).
 
+Tiny reality check before you start: this is a local macOS bridge. It is happiest when `Codex.app` is open with the app-control debug port. If you want a hosted cloud service, this is not that. If you want your phone to feel like a remote surface for the Codex running on your Mac, you are in the right place.
+
 Codex should do the boring parts:
 
 1. Run `npm run onboard:prepare`.
