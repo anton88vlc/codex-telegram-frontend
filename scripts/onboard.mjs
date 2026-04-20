@@ -1190,15 +1190,13 @@ async function promptCredentialSetup(args, rl) {
         "",
       ].join("\n"),
     );
-    if (await askYesNo(rl, "Save existing Telegram bot username now?", true)) {
-      const botUsername = cleanBotUsername(
-        await askLine(rl, "Existing BotFather bot username, without @"),
-      );
-      if (botUsername) {
-        await setConfigValues(args.configPath, { botUsername });
-        await setEnvValues(args.adminEnvPath, { CODEX_TELEGRAM_BOT_USERNAME: botUsername });
-        messages.push(`stored bot username ${botUsername}`);
-      }
+    const botUsername = cleanBotUsername(
+      await askLine(rl, "Existing BotFather bot username, without @ (leave empty to skip)"),
+    );
+    if (botUsername) {
+      await setConfigValues(args.configPath, { botUsername });
+      await setEnvValues(args.adminEnvPath, { CODEX_TELEGRAM_BOT_USERNAME: botUsername });
+      messages.push(`stored bot username ${botUsername}`);
     }
   }
 
@@ -1282,7 +1280,12 @@ async function maybeRunTelegramLogin(args, rl, python) {
       loginArgs.push("--phone", phone);
     }
   }
-  await runPlainCommand(python, loginArgs, { cwd: PROJECT_ROOT });
+  try {
+    rl?.pause?.();
+    await runPlainCommand(python, loginArgs, { cwd: PROJECT_ROOT });
+  } finally {
+    rl?.resume?.();
+  }
   messages.push(`authorized Telegram user session via ${usePhoneLogin ? "phone login" : "QR login"}: ${args.adminSessionPath}`);
   return messages.join("\n");
 }
