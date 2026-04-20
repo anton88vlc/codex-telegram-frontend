@@ -571,7 +571,11 @@ async def command_login_phone(args):
                 await client.sign_in(phone=phone, code=args.code.strip(), phone_code_hash=phone_code_hash)
             except errors.SessionPasswordNeededError:
                 if not args.password:
-                    raise SystemExit("Telegram 2FA password required. Rerun with --password or use the manual helper.")
+                    print(json.dumps({
+                        "status": "password_required",
+                        "session_path": str(args.session),
+                    }, ensure_ascii=False, indent=2))
+                    return
                 await client.sign_in(password=args.password)
             payload = {
                 "status": "authorized",
@@ -592,7 +596,12 @@ async def command_login_phone(args):
         if args.code_state:
             args.code_state.parent.mkdir(parents=True, exist_ok=True)
             args.code_state.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        print(json.dumps(payload, ensure_ascii=False, indent=2), flush=True)
+        print(json.dumps({
+            "status": payload["status"],
+            "phone": payload["phone"],
+            "type": payload["type"],
+            "code_state": str(args.code_state),
+        }, ensure_ascii=False, indent=2), flush=True)
 
         if args.send_code_only:
             return

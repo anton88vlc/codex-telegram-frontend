@@ -143,6 +143,7 @@ function parseArgs(argv) {
     loginPhone: false,
     loginPhoneNumber: null,
     loginCode: null,
+    loginPassword: null,
     _projectLimitExplicit: false,
     _threadLimitExplicit: false,
     _threadsPerProjectExplicit: false,
@@ -317,6 +318,9 @@ function parseArgs(argv) {
         break;
       case "--login-code":
         args.loginCode = rest[++index];
+        break;
+      case "--login-password":
+        args.loginPassword = rest[++index];
         break;
       case "--help":
       case "-h":
@@ -847,6 +851,33 @@ async function runPlainCommandWithPromptPaused(rl, command, args, options = {}) 
   }
 }
 
+async function runLoggedCommandCapture(command, args, { cwd = PROJECT_ROOT, displayArgs = args } = {}) {
+  process.stdout.write(`\n$ ${[command, ...displayArgs].join(" ")}\n`);
+  try {
+    const { stdout, stderr } = await execFileAsync(command, args, {
+      cwd,
+      env: process.env,
+      maxBuffer: 10 * 1024 * 1024,
+    });
+    if (stdout) process.stdout.write(stdout);
+    if (stderr) process.stderr.write(stderr);
+    return { stdout: String(stdout ?? ""), stderr: String(stderr ?? "") };
+  } catch (error) {
+    if (error.stdout) process.stdout.write(String(error.stdout));
+    if (error.stderr) process.stderr.write(String(error.stderr));
+    throw new Error(`${command} failed with exit code ${error.code ?? "unknown"}`);
+  }
+}
+
+async function runLoggedCommandCaptureWithPromptPaused(rl, command, args, options = {}) {
+  try {
+    rl?.pause?.();
+    return await runLoggedCommandCapture(command, args, options);
+  } finally {
+    rl?.resume?.();
+  }
+}
+
 async function ensureAdminDeps(args) {
   if (await pathExists(args.adminPythonPath)) {
     return { changed: false, message: `admin Python exists: ${args.adminPythonPath}` };
@@ -886,6 +917,55 @@ async function askSecretLine(question, rl = null) {
   return answer.trim();
 }
 
+async function askHiddenLine(question, rl = null) {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    return "";
+  }
+  rl?.pause?.();
+  const stdin = process.stdin;
+  const wasRaw = Boolean(stdin.isRaw);
+  process.stdout.write(`${question}: `);
+  return new Promise((resolve, reject) => {
+    let answer = "";
+    const cleanup = () => {
+      stdin.off("data", onData);
+      if (typeof stdin.setRawMode === "function") {
+        stdin.setRawMode(wasRaw);
+      }
+      stdin.pause();
+      rl?.resume?.();
+    };
+    const finish = () => {
+      cleanup();
+      process.stdout.write("\n");
+      resolve(answer.trim());
+    };
+    const onData = (chunk) => {
+      for (const char of chunk.toString("utf8")) {
+        if (char === "\u0003") {
+          cleanup();
+          reject(new Error("Interrupted while reading hidden input."));
+          return;
+        }
+        if (char === "\r" || char === "\n") {
+          finish();
+          return;
+        }
+        if (char === "\u007f" || char === "\b") {
+          answer = answer.slice(0, -1);
+          continue;
+        }
+        answer += char;
+      }
+    };
+    if (typeof stdin.setRawMode === "function") {
+      stdin.setRawMode(true);
+    }
+    stdin.resume();
+    stdin.on("data", onData);
+  });
+}
+
 function looksLikeShellCommand(value) {
   const text = String(value ?? "").trim();
   return /\b(cd|git|node|npm|python|sh|bash|zsh)\b/i.test(text) || text.includes("--");
@@ -902,6 +982,28 @@ function normalizeTelegramLoginCode(value) {
 function isValidTelegramLoginCode(value) {
   const text = normalizeTelegramLoginCode(value);
   return /^[0-9A-Za-z]{3,32}$/.test(text) && !looksLikeShellCommand(text);
+}
+
+function parseJsonObjectFromOutput(output) {
+  const text = String(output ?? "");
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) {
+    return null;
+  }
+  try {
+    return JSON.parse(text.slice(start, end + 1));
+  } catch {
+    return null;
+  }
+}
+
+function redactLoginDisplayArgs(args) {
+  return args.map((arg, index) => {
+    if (args[index - 1] === "--code") return "<telegram-code>";
+    if (args[index - 1] === "--password") return "<telegram-2fa-password>";
+    return arg;
+  });
 }
 
 async function hasBridgeBotToken(args) {
@@ -1321,11 +1423,38 @@ async function maybeRunTelegramLogin(args, rl, python) {
     if (!isValidTelegramLoginCode(code)) {
       throw new Error("Telegram login code is required after sending the code. Use --login-code 12345 or rerun prepare interactively.");
     }
+    let password = args.loginPassword ?? "";
+    if (!password && rl && !args.noInput) {
+      process.stdout.write("If your Telegram account has a 2FA cloud password, enter it now. If not, press Enter.\n");
+      password = await askHiddenLine("Telegram 2FA password, if enabled (hidden)", rl);
+    }
     const signInArgs = [...adminBaseArgs(args), loginCommand];
     signInArgs.push("--phone", phone, "--code", code);
+    if (password) {
+      signInArgs.push("--password", password);
+    }
     signInArgs.push("--code-state", codeStatePath);
-    const displayArgs = signInArgs.map((arg, index) => (signInArgs[index - 1] === "--code" ? "<telegram-code>" : arg));
-    await runPlainCommandWithPromptPaused(rl, python, signInArgs, { cwd: PROJECT_ROOT, displayArgs });
+    const signInResult = await runLoggedCommandCaptureWithPromptPaused(rl, python, signInArgs, {
+      cwd: PROJECT_ROOT,
+      displayArgs: redactLoginDisplayArgs(signInArgs),
+    });
+    const signInPayload = parseJsonObjectFromOutput(signInResult.stdout);
+    if (signInPayload?.status === "password_required") {
+      while (rl && !args.noInput && !password) {
+        password = await askHiddenLine("Telegram 2FA password (hidden)", rl);
+        if (!password) {
+          process.stdout.write("Telegram 2FA password is required for this account. Leave it only if your account has no 2FA.\n");
+        }
+      }
+      if (!password) {
+        throw new Error("Telegram 2FA password is required for this account. Rerun prepare interactively or pass --login-password.");
+      }
+      const passwordArgs = [...signInArgs, "--password", password];
+      await runLoggedCommandCaptureWithPromptPaused(rl, python, passwordArgs, {
+        cwd: PROJECT_ROOT,
+        displayArgs: redactLoginDisplayArgs(passwordArgs),
+      });
+    }
   } else {
     const loginArgs = [...adminBaseArgs(args), loginCommand];
     await runPlainCommandWithPromptPaused(rl, python, loginArgs, { cwd: PROJECT_ROOT });

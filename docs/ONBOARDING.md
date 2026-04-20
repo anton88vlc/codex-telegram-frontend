@@ -61,7 +61,7 @@ Use phone/code login as the happy path:
 npm run onboard:prepare -- --login-phone
 ```
 
-The helper asks for the phone number, Telegram login code and 2FA password in the local terminal. That is the right place for them. Do not ask the user to paste those values back into Codex chat.
+The helper asks for the phone number, Telegram login code and optional 2FA cloud password in the local terminal. That is the right place for them. Do not ask the user to paste those values back into Codex chat.
 
 QR login still exists, but treat it as a fallback. It is flaky enough in this flow that leading with it is just asking for little gremlins:
 
