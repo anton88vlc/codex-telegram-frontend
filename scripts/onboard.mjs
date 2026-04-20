@@ -57,6 +57,7 @@ const DEFAULT_NATIVE_DEBUG_BASE_URL = DEFAULT_APP_CONTROL_BASE_URL;
 const DEFAULT_QUICKSTART_THREAD_LIMIT = 10;
 const DEFAULT_QUICKSTART_HISTORY_MAX_MESSAGES = 10;
 const DEFAULT_CHATS_SURFACE_TITLE = "Codex - Chats";
+const TELEGRAM_API_APPS_URL = "https://my.telegram.org/apps";
 
 function shellDoubleQuote(value) {
   return `"${String(value).replaceAll("\\", "\\\\").replaceAll('"', '\\"').replaceAll("$", "\\$").replaceAll("`", "\\`")}"`;
@@ -68,6 +69,7 @@ const VOICE_TRANSCRIPTION_PROVIDER_NOTE =
   "Voice notes are optional. Supported STT paths today: Deepgram, OpenAI, or a local command.";
 const CODEX_NATIVE_STT_NOTE =
   "Codex-native realtime STT is promising, but it is not the default yet because it still depends on Codex auth/runtime details.";
+let interactiveSetupGuidePrinted = false;
 const CODEX_CUSTOM_INSTRUCTIONS_PRESET = `## User Context
 
 - The user's name is ____
@@ -501,35 +503,76 @@ function hasRealEnvValue(values, key) {
   return Boolean(value) && !isPlaceholderValue(value);
 }
 
+function isValidTelegramApiId(value) {
+  const text = String(value ?? "").trim();
+  return /^\d+$/.test(text) && Number.parseInt(text, 10) > 0;
+}
+
+function isValidTelegramApiHash(value) {
+  return /^[a-f0-9]{32}$/i.test(String(value ?? "").trim());
+}
+
+function formatTelegramApiCredentialsGuide() {
+  return [
+    "",
+    "Telegram API credentials needed",
+    "Why: the user-side helper creates folders, groups and topics as your Telegram account. BotFather cannot do that part.",
+    `Open: ${TELEGRAM_API_APPS_URL}`,
+    "What to do there:",
+    "1. Log in with the same Telegram account you use on this Mac.",
+    "2. Open API development tools / Your applications.",
+    "3. Create an app if there is no reusable one. Any harmless title is fine, for example \"Codex Telegram Frontend\".",
+    "4. Copy api_id into Telegram API_ID and api_hash into Telegram API_HASH below.",
+    "Keep these values in this local terminal. Do not paste them into the Codex chat transcript.",
+    "",
+  ].join("\n");
+}
+
+function maybePrintInteractiveSetupGuide(args, rl) {
+  if (interactiveSetupGuidePrinted || !rl || args.noInput) {
+    return;
+  }
+  interactiveSetupGuidePrinted = true;
+  process.stdout.write(
+    [
+      "",
+      "Interactive onboarding input is happening in this terminal.",
+      "Keep this one window frontmost until the command finishes. The Codex chat may look busy while it waits.",
+      "If an agent opened multiple Terminal windows, that is not required. Use one clear terminal/input surface and close the extras.",
+      "",
+    ].join("\n"),
+  );
+}
+
 function validateTelegramAdminEnv(values, envFileOk, envPath) {
   if (!envFileOk) {
     return {
       ok: false,
       detail: envPath,
-      action: "Run `npm run onboard:prepare` and paste Telegram API_ID/API_HASH from my.telegram.org when asked.",
+      action: `Run \`npm run onboard:prepare\`, open ${TELEGRAM_API_APPS_URL} when prompted, then paste api_id/api_hash into the local terminal.`,
     };
   }
   if (!hasRealEnvValue(values, "API_ID") || !hasRealEnvValue(values, "API_HASH")) {
     return {
       ok: false,
       detail: `${envPath} (API_ID/API_HASH required)`,
-      action: "Run `npm run onboard:prepare` and paste Telegram API_ID/API_HASH from my.telegram.org when asked.",
+      action: `Run \`npm run onboard:prepare\`, open ${TELEGRAM_API_APPS_URL} when prompted, then paste api_id/api_hash into the local terminal.`,
     };
   }
   const apiId = String(values.API_ID).trim();
   const apiHash = String(values.API_HASH).trim();
-  if (!/^\d+$/.test(apiId) || Number.parseInt(apiId, 10) <= 0) {
+  if (!isValidTelegramApiId(apiId)) {
     return {
       ok: false,
       detail: `${envPath} (API_ID must be a positive number)`,
-      action: "Run `npm run onboard:prepare` and paste a fresh numeric Telegram API_ID from my.telegram.org.",
+      action: `Run \`npm run onboard:prepare\` and paste a fresh numeric api_id from ${TELEGRAM_API_APPS_URL}.`,
     };
   }
-  if (!/^[a-f0-9]{32}$/i.test(apiHash)) {
+  if (!isValidTelegramApiHash(apiHash)) {
     return {
       ok: false,
       detail: `${envPath} (API_HASH should be a 32-character hex string)`,
-      action: "Run `npm run onboard:prepare` and paste a fresh Telegram API_HASH from my.telegram.org.",
+      action: `Run \`npm run onboard:prepare\` and paste a fresh api_hash from ${TELEGRAM_API_APPS_URL}.`,
     };
   }
   return {
@@ -1100,10 +1143,22 @@ async function promptCredentialSetup(args, rl) {
   const messages = [];
   const envValues = await readEnvValues(args.adminEnvPath);
   const apiMissing = !hasRealEnvValue(envValues, "API_ID") || !hasRealEnvValue(envValues, "API_HASH");
-  if (apiMissing && (await askYesNo(rl, "Add Telegram API_ID/API_HASH to admin .env now?", true))) {
-    const apiId = await askLine(rl, "Telegram API_ID");
-    const apiHash = await askSecretLine("Telegram API_HASH (hidden)");
-    if (apiId && apiHash) {
+  if (apiMissing) {
+    process.stdout.write(formatTelegramApiCredentialsGuide());
+  }
+  if (apiMissing && (await askYesNo(rl, "Add these Telegram API credentials to admin .env now?", true))) {
+    const apiId = await askLine(rl, "Telegram API_ID / api_id from my.telegram.org/apps");
+    const apiHash = await askSecretLine("Telegram API_HASH / api_hash from my.telegram.org/apps (hidden)");
+    const problems = [];
+    if (apiId && !isValidTelegramApiId(apiId)) {
+      problems.push("API_ID must be digits only, for example 12345678.");
+    }
+    if (apiHash && !isValidTelegramApiHash(apiHash)) {
+      problems.push("API_HASH must be the 32-character api_hash from my.telegram.org/apps.");
+    }
+    if (problems.length) {
+      process.stdout.write(`Did not save Telegram API credentials:\n${problems.map((problem) => `- ${problem}`).join("\n")}\n`);
+    } else if (apiId && apiHash) {
       await setEnvValues(args.adminEnvPath, { API_ID: apiId, API_HASH: apiHash });
       messages.push(`updated Telegram API credentials in ${args.adminEnvPath}`);
     }
@@ -1185,6 +1240,7 @@ async function maybeRunTelegramLogin(args, rl, python) {
 
 async function prepareLocalSetup(args, rl, { force = false } = {}) {
   await ensureLocalDirs();
+  maybePrintInteractiveSetupGuide(args, rl);
   const messages = [];
   messages.push((await ensureConfigFile(args)).message);
   messages.push((await ensureAdminEnvFile(args)).message);

@@ -33,8 +33,8 @@ The user should not have to manually choose projects and topics unless quickstar
 Some things still require a human because Telegram does not expose clean automation for them:
 
 1. Create or reuse a Telegram bot through [@BotFather](https://t.me/BotFather).
-2. Create or reuse Telegram app credentials at [my.telegram.org](https://my.telegram.org/) if the user-side admin helper needs them.
-3. Authorize one local Telegram user session when prompted.
+2. Create or reuse Telegram app credentials at [my.telegram.org/apps](https://my.telegram.org/apps) if the user-side admin helper needs them. Telegram calls them `api_id` and `api_hash`; they are not the bot token.
+3. Authorize one local Telegram user session when prompted. Phone/code login is the happy path.
 4. Keep `Codex.app` available. Best path:
 
 ```bash
@@ -118,6 +118,10 @@ Prepare is the setup preflight. It creates missing local config/admin env files,
 ```bash
 npm run onboard:prepare
 ```
+
+Keep this in one obvious local terminal/input surface. Do not spawn random extra Terminal windows. If the agent cannot run an interactive prompt cleanly, it should ask the user to run the exact command from the repo root instead.
+
+When Telegram asks for `API_ID` / `API_HASH`, open [my.telegram.org/apps](https://my.telegram.org/apps), log in with the same Telegram account, create an app if needed, then copy `api_id` and `api_hash` into the local terminal prompt. The script prints this guide before asking; if it does not, something is stale.
 
 Quickstart is the product path:
 

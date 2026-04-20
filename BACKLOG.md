@@ -39,7 +39,7 @@ These are the useful Telegram platform leads found during the April 2026 API pas
 10. ~~Agent-led install docs: public docs let a new user open Codex in this repo, paste one clear install prompt, and let Codex drive doctor/setup/wizard/bootstrap/backfill/smoke while asking only for unavoidable Telegram steps.~~
 11. ~~Agent-led onboarding automation hardening base: `onboard:prepare` creates local config/admin env files, can set up the admin Python venv, guides credential wiring and uses phone/code login as the default Telegram session path.~~
 12. ~~Onboarding recovery hardening for bad-but-present Telegram credentials/session errors, not only missing files.~~
-13. ~~Real clean-install audit hardening: agents must not collect secrets in Codex chat, `prepare` verifies stale sessions before skipping login, phone login is an explicit local fallback and quickstart backfill skips empty threads instead of killing the whole run.~~
+13. ~~Real clean-install audit hardening: agents must not collect secrets in Codex chat, `prepare` explains Telegram API credentials before asking, verifies stale sessions before skipping login, phone login is the default path and quickstart backfill skips empty threads instead of killing the whole run.~~
 14. ~~Pinned Codex threads are first-class quickstart inputs.~~ Quickstart reads `pinned-thread-ids` from Codex Desktop global state, includes those threads before the recent activity tail and keeps the phone working set aligned with the Desktop sidebar.
 
 ## P2 - Transport And Observability

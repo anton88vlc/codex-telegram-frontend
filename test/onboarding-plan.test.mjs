@@ -314,7 +314,7 @@ test("onboard doctor calls out malformed Telegram API credentials", () => {
 
   assert.notEqual(result.status, 0);
   assert.match(result.stdout, /API_ID must be a positive number/);
-  assert.match(result.stdout, /fresh numeric Telegram API_ID/);
+  assert.match(result.stdout, /fresh numeric api_id/);
 });
 
 test("onboard doctor detects stale Telegram user sessions", () => {

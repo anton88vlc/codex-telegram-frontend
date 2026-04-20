@@ -31,6 +31,8 @@ Run the onboarding doctor, prepare local config from examples, guide me through 
 
 Do not ask me to paste bot tokens, Telegram API hashes, login codes or 2FA passwords into Codex chat. Use local terminal prompts, Keychain, ignored config files, browser/Telegram UI and phone/code login instead. QR login is only a fallback.
 
+Keep interactive setup in one clear local terminal/input surface. Do not open extra Terminal windows via AppleScript just to collect prompts. If you cannot run an interactive command cleanly, stop and ask me to run the exact command from the repo root.
+
 Create or reuse the Telegram folder `codex`, scan my pinned Codex threads first and then my latest active Codex project threads and Codex Chats, create one group per detected Codex project, create one topic per selected Codex project thread, map Codex Chats into private topics inside the bot direct chat, import about 10 clean messages into each topic, start the bridge, run a real Telegram smoke test, and leave the repo in a clean documented state.
 
 Default to about 10 active threads total, with pinned Codex threads treated as the user's keep list. Do not ask me to choose projects unless the quickstart preview looks wrong. Keep Telegram as a clean remote Codex working set, not a landfill.
@@ -39,8 +41,8 @@ Default to about 10 active threads total, with pinned Codex threads treated as t
 What still needs a human:
 
 1. Create or reuse a Telegram bot through [@BotFather](https://t.me/BotFather).
-2. Create or reuse Telegram app credentials at [my.telegram.org](https://my.telegram.org/) if the admin helper asks.
-3. Authorize one local Telegram user session so the helper can create folders, groups and topics.
+2. Create or reuse Telegram app credentials at [my.telegram.org/apps](https://my.telegram.org/apps) if the admin helper asks. These are `api_id` / `api_hash` for the user-side helper, not the bot token.
+3. Authorize one local Telegram user session so the helper can create folders, groups and topics. Phone/code login is the normal path.
 4. Keep `Codex.app` available. Best path:
 
 ```bash
@@ -49,7 +51,7 @@ What still needs a human:
 
 If you are already inside this repo, `npm run codex:launch` is the same launch wrapped in a safer helper. From anywhere else, use the direct command above or `cd` into the repo first.
 
-Codex should handle local config, Keychain/env wiring, bootstrap, backfill and smoke. The human should click/scan/type into local Telegram or terminal prompts, not dump secrets into the conversation transcript. If setup gets weird, use [docs/ONBOARDING.md](docs/ONBOARDING.md).
+Codex should handle local config, Keychain/env wiring, bootstrap, backfill and smoke. The human should click/type into local Telegram or one clearly explained terminal prompt, not dump secrets into the conversation transcript. If setup gets weird, use [docs/ONBOARDING.md](docs/ONBOARDING.md).
 
 Optional polish after install: set Codex Personality to `Friendly` and use the ready Custom Instructions preset in [docs/ONBOARDING.md](docs/ONBOARDING.md). It is the OpenClaw-style "make the agent feel like a real teammate, not corporate fog" bit, and it changes the phone experience more than it has any right to.
 
