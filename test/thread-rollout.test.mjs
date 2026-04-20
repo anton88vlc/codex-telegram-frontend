@@ -146,6 +146,27 @@ MEMORY.md:1-2|note=[internal]
   assert.equal(cleaned, "Ответ для Telegram.");
 });
 
+test("cleanupMirrorAssistantText strips raw heartbeat blocks after readable text", () => {
+  const cleaned = cleanupMirrorAssistantText(`Новый кейс в WhatsApp: Nacho записался, health зелёный.
+
+<heartbeat>
+  <automation_id>betran-pilot-watch</automation_id>
+  <decision>NOTIFY</decision>
+  <message>Новый WhatsApp-кейс Nacho: запись корректная.</message>
+</heartbeat>`);
+
+  assert.equal(cleaned, "Новый кейс в WhatsApp: Nacho записался, health зелёный.");
+});
+
+test("cleanupMirrorAssistantText uses heartbeat message when it is the only readable payload", () => {
+  const cleaned = cleanupMirrorAssistantText(`<heartbeat>
+  <decision>NOTIFY</decision>
+  <message>Новый WhatsApp-кейс Nacho: запись корректная &amp; health зелёный.</message>
+</heartbeat>`);
+
+  assert.equal(cleaned, "Новый WhatsApp-кейс Nacho: запись корректная & health зелёный.");
+});
+
 test("parseThreadMirrorChunk keeps user mirrors and assistant final answers in order", () => {
   const chunk = [
     JSON.stringify({
