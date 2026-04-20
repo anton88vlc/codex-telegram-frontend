@@ -2,7 +2,16 @@
   "name": "codex-telegram-frontend",
   "version": "0.1.0",
   "description": "Telegram remote frontend for Codex Desktop projects and threads.",
+  "license": "MIT",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/anton88vlc/codex-telegram-frontend.git"
+  },
+  "bugs": {
+    "url": "https://github.com/anton88vlc/codex-telegram-frontend/issues"
+  },
+  "homepage": "https://github.com/anton88vlc/codex-telegram-frontend#readme",
   "type": "module",
   "scripts": {
     "start": "node bridge.mjs",

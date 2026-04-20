@@ -226,3 +226,7 @@ Keep Telegram close to Codex Desktop:
 - no infinite historical dump
 
 That is the v1. Everything else is how a useful tool slowly turns into a swamp.
+
+## License
+
+MIT. Use it, fork it, make it better. Just keep the license notice.
