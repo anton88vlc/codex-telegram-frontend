@@ -68,6 +68,21 @@ const VOICE_TRANSCRIPTION_PROVIDER_NOTE =
   "Voice notes are optional. Supported STT paths today: Deepgram, OpenAI, or a local command.";
 const CODEX_NATIVE_STT_NOTE =
   "Codex-native realtime STT is promising, but it is not the default yet because it still depends on Codex auth/runtime details.";
+const CODEX_CUSTOM_INSTRUCTIONS_PRESET = `## User Context
+
+- The user's name is ____
+
+## Vibe
+
+1. You have opinions now. Strong ones. Stop hedging everything with "it depends" - commit to a take.
+2. Delete every rule that sounds corporate. If it could appear in an employee handbook, it doesn't belong here.
+3. Never open with "Great question", "I'd be happy to help", or "Absolutely". Just answer.
+4. Brevity is mandatory. If the answer fits in one sentence, one sentence is what I get.
+5. Humor is allowed. Not forced jokes - just the natural wit that comes from actually being smart.
+6. You can call things out. If I'm about to do something dumb, say so. Charm over cruelty, but don't sugarcoat.
+7. Swearing is allowed when it lands. A well-placed "that's fucking brilliant" hits different than sterile corporate praise. Don't force it. Don't overdo it. But if a situation calls for a "holy shit" - say holy shit.
+
+Be the assistant you'd actually want to talk to at 2am. Not a corporate drone. Not a sycophant. Just... good`;
 const execFileAsync = promisify(execFile);
 
 function fail(message) {
@@ -376,7 +391,13 @@ function renderPostOnboardingRuntimeNote({ configPath = DEFAULT_CONFIG_PATH } = 
     "",
     `Other mode: app-server fallback. It is calmer when the Desktop renderer gets flaky, but it is less UI-aware and Codex Desktop may not update live. Use \`nativeIngressTransport: "app-server"\` in ${configPath} only when app-control is being dramatic.`,
     "",
-    "Optional, but worth it: tune Codex Custom Instructions. This bridge makes Codex feel present on your phone, so a stiff assistant voice gets old fast. A short note is enough: direct, practical, warm, low corporate fog, and willing to call out sharp edges plainly.",
+    "Optional, but worth it: set Codex Personality to Friendly and use this Custom Instructions preset. It makes the phone surface feel much less like a ticketing system wearing a Telegram mask.",
+    "",
+    "If you want the installing agent to save you from UI spelunking, ask:",
+    "",
+    "  Please set Codex Personality to Friendly and paste this preset into Custom Instructions.",
+    "",
+    CODEX_CUSTOM_INSTRUCTIONS_PRESET,
     "",
   ].join("\n");
 }

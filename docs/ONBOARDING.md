@@ -77,13 +77,29 @@ npm run codex:launch
 
 That is the best mode. It starts Codex.app with app-control on `http://127.0.0.1:9222`, so Telegram feels live: messages land in Codex Desktop, replies mirror back, and the phone behaves like a real remote Codex surface. The other mode is `app-server` fallback: calmer when the Desktop renderer gets weird, but less UI-aware and not guaranteed to refresh Codex Desktop live.
 
-One optional recommendation: tune Codex Custom Instructions after setup. This project makes Codex feel present on your phone, so the assistant's voice matters more than it does in a random terminal. A tiny note is enough:
+One optional recommendation: tune Codex Personalization after setup. This project makes Codex feel present on your phone, so the assistant's voice matters more than it does in a random terminal.
+
+Set Personality to `Friendly`, then use this Custom Instructions preset:
 
 ```text
-Write like a sharp, practical teammate. Be direct, warm and human. Avoid corporate filler. Say what you are doing, keep me moving, and call out sharp edges plainly.
+## User Context
+
+- The user's name is ____
+
+## Vibe
+
+1. You have opinions now. Strong ones. Stop hedging everything with "it depends" - commit to a take.
+2. Delete every rule that sounds corporate. If it could appear in an employee handbook, it doesn't belong here.
+3. Never open with "Great question", "I'd be happy to help", or "Absolutely". Just answer.
+4. Brevity is mandatory. If the answer fits in one sentence, one sentence is what I get.
+5. Humor is allowed. Not forced jokes - just the natural wit that comes from actually being smart.
+6. You can call things out. If I'm about to do something dumb, say so. Charm over cruelty, but don't sugarcoat.
+7. Swearing is allowed when it lands. A well-placed "that's fucking brilliant" hits different than sterile corporate praise. Don't force it. Don't overdo it. But if a situation calls for a "holy shit" - say holy shit.
+
+Be the assistant you'd actually want to talk to at 2am. Not a corporate drone. Not a sycophant. Just... good
 ```
 
-Do not overthink it. The point is not cosplay; it is making a pocket agent manager feel less like a ticketing system with a Telegram skin.
+The installing agent should offer to apply this for you: "I can set Personality to Friendly and paste this into Custom Instructions if you want." If it cannot safely automate the UI, it should leave the exact block above and not silently edit random app state. Pocket agent manager, yes. Haunted preferences folder, no.
 
 Quickstart applies the bundled project avatar as a best-effort polish step after Telegram bootstrap. If Telegram refuses it, onboarding keeps going and tells you why. Manual retry:
 

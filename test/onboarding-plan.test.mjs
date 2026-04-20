@@ -532,7 +532,8 @@ test("onboard quickstart writes latest active threads without manual selection",
   assert.match(result.stdout, /Next: launch Codex in the live Desktop mode/);
   assert.match(result.stdout, /\/Applications\/Codex\.app\/Contents\/MacOS\/Codex --remote-debugging-port=9222/);
   assert.match(result.stdout, /cd ".+codex-telegram-frontend" && npm run codex:launch/);
-  assert.match(result.stdout, /tune Codex Custom Instructions/);
+  assert.match(result.stdout, /set Codex Personality to Friendly/);
+  assert.match(result.stdout, /Be the assistant you'd actually want to talk to at 2am/);
   assert.match(result.stdout, /nativeIngressTransport: "app-server"/);
   const plan = JSON.parse(fs.readFileSync(outputPath, "utf8"));
   assert.equal(plan.onboarding.historyMaxMessages, 10);
