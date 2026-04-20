@@ -21,11 +21,17 @@ test("buildBotInstallPolishOperations creates a compact Bot API operation list",
     operations.map((operation) => operation.name),
     [
       "setMyCommands",
+      "setMyCommands",
+      "setMyCommands",
       "setChatMenuButton",
       "setMyShortDescription",
       "setMyDescription",
       "setMyDefaultAdministratorRights",
     ],
+  );
+  assert.deepEqual(
+    operations.filter((operation) => operation.name === "setMyCommands").map((operation) => operation.args.scope?.type || "default"),
+    ["default", "all_private_chats", "all_group_chats"],
   );
 });
 
@@ -39,7 +45,7 @@ test("applyBotInstallPolish dry-run does not call Telegram", async () => {
     },
   });
   assert.equal(result.applied, false);
-  assert.equal(result.operations.length, 5);
+  assert.equal(result.operations.length, 7);
 });
 
 test("applyBotInstallPolish applies through injected Telegram helpers", async () => {
@@ -63,12 +69,22 @@ test("applyBotInstallPolish applies through injected Telegram helpers", async ()
   assert.equal(result.applied, true);
   assert.deepEqual(
     calls.map((call) => call.name),
-    ["setMyCommands", "setChatMenuButton", "setMyDefaultAdministratorRights"],
+    [
+      "setMyCommands",
+      "setMyCommands",
+      "setMyCommands",
+      "setChatMenuButton",
+      "setMyDefaultAdministratorRights",
+    ],
+  );
+  assert.deepEqual(
+    calls.filter((call) => call.name === "setMyCommands").map((call) => call.args.scope?.type || "default"),
+    ["default", "all_private_chats", "all_group_chats"],
   );
 });
 
 test("formatBotInstallPolishPlan makes dry-run output readable", () => {
   const text = formatBotInstallPolishPlan(buildBotInstallPolishPlan({ includeProfile: false }));
-  assert.match(text, /commands: .*\/sync_project/);
+  assert.match(text, /commands \(group chats\): .*\/sync_project/);
   assert.match(text, /default admin rights:/);
 });
