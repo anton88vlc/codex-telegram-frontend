@@ -19,6 +19,7 @@
   "statusBarPin": true,
   "statusBarFastMode": null,
   "statusBarTailBytes": 524288,
+  "statusBarCodexConfigPollIntervalMs": 5000,
   "worktreeSummaryEnabled": true,
   "worktreeSummaryMaxFiles": 0,
   "attachmentsEnabled": true,

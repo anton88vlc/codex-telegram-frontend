@@ -83,6 +83,9 @@ test("buildStatusBarText stays compact and shows remaining rate limits", () => {
         },
       },
     },
+    codexConfig: {
+      service_tier: null,
+    },
     config: {
       outboundSyncEnabled: true,
       outboundPollIntervalMs: 2000,
@@ -136,6 +139,25 @@ test("buildStatusBarText can show fast mode when configured", () => {
     config: {
       statusBarFastMode: true,
     },
+  });
+
+  assert.match(text, /^gpt-5\.4 · xhigh · fast on/);
+});
+
+test("buildStatusBarText prefers live Codex config for model, reasoning and fast mode", () => {
+  const text = buildStatusBarText({
+    binding: { statusBarMessageId: 123 },
+    thread: {
+      model: "gpt-5.3",
+      reasoning_effort: "high",
+    },
+    runtime: null,
+    codexConfig: {
+      model: "gpt-5.4",
+      model_reasoning_effort: "xhigh",
+      service_tier: "fast",
+    },
+    config: {},
   });
 
   assert.match(text, /^gpt-5\.4 · xhigh · fast on/);

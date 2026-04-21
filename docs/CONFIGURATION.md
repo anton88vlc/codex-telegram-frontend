@@ -29,8 +29,9 @@ Use this for things that should survive restarts and should not be changed from 
 | `codexUserDisplayName` | `Codex Desktop user` | Label for bot-side surrogate user messages mirrored from Codex Desktop. |
 | `statusBarEnabled` | `true` | Enables compact pinned topic status bar. |
 | `statusBarPin` | `true` | Pins the status bar message when Telegram allows it. |
-| `statusBarFastMode` | `null` | Optional override for the pinned status line: `true` shows `fast on`, `false` shows `fast off`. Leave `null` unless Codex exposes this cleanly on your machine. |
+| `statusBarFastMode` | `null` | Manual override for the pinned status line: `true` shows `fast on`, `false` shows `fast off`. Leave `null` for the normal path: the bridge reads Codex config live. |
 | `statusBarTailBytes` | `524288` | How much rollout tail is sampled for status data. |
+| `statusBarCodexConfigPollIntervalMs` | `5000` | How often the status bar samples live Codex config via app-server control for model, reasoning and fast tier. Set `0` to disable and fall back to thread history plus manual overrides. |
 | `worktreeSummaryEnabled` | `true` | Adds a `Changed files` block to live progress bubbles when this turn changes the thread git worktree. Pre-existing dirty files are treated as baseline, not fresh work. |
 | `worktreeSummaryMaxFiles` | `0` | Maximum changed files shown in the Telegram progress bubble. `0` means show the full list. |
 | `attachmentsEnabled` | `true` | Allows Telegram photos and documents to be downloaded locally and forwarded to Codex as local file paths in the prompt. |

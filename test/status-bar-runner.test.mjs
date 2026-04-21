@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   isMissingStatusBarMessageError,
   refreshStatusBars,
+  resetStatusBarCodexConfigCacheForTest,
   reserveStatusBarMessage,
 } from "../lib/status-bar-runner.mjs";
 
@@ -86,6 +87,7 @@ test("reserveStatusBarMessage sends, pins and records the message id", async () 
 });
 
 test("refreshStatusBars reserves a missing status bar", async () => {
+  resetStatusBarCodexConfigCacheForTest();
   const state = makeState();
   const deps = makeDeps();
   const result = await refreshStatusBars({ config, state, ...deps });
@@ -97,6 +99,7 @@ test("refreshStatusBars reserves a missing status bar", async () => {
 });
 
 test("refreshStatusBars skips unchanged status bars", async () => {
+  resetStatusBarCodexConfigCacheForTest();
   const message = { text: "status 10", entities: [] };
   const state = makeState({
     statusBarMessageId: 77,
@@ -108,6 +111,7 @@ test("refreshStatusBars skips unchanged status bars", async () => {
 });
 
 test("refreshStatusBars recreates a missing edited message", async () => {
+  resetStatusBarCodexConfigCacheForTest();
   const state = makeState({ statusBarMessageId: 66, statusBarTextHash: "old" });
   const deps = makeDeps({
     editMessageTextFn: async () => {
@@ -122,6 +126,7 @@ test("refreshStatusBars recreates a missing edited message", async () => {
 });
 
 test("refreshStatusBars logs runtime read errors and still updates with empty runtime", async () => {
+  resetStatusBarCodexConfigCacheForTest();
   const state = makeState();
   const deps = makeDeps({
     readRolloutRuntimeStatusFn: async () => {
@@ -133,4 +138,35 @@ test("refreshStatusBars logs runtime read errors and still updates with empty ru
   assert.deepEqual(result, { changed: true, updated: 1 });
   assert.equal(deps.calls.find((call) => call[0] === "event")?.[1], "status_bar_runtime_error");
   assert.equal(deps.calls.find((call) => call[0] === "reserve")?.[3], "status none");
+});
+
+test("refreshStatusBars passes live Codex config to status bar rendering", async () => {
+  resetStatusBarCodexConfigCacheForTest();
+  const state = makeState();
+  const deps = makeDeps({
+    readCodexControlStateFn: async () => ({
+      config: {
+        model: "gpt-5.4",
+        model_reasoning_effort: "xhigh",
+        service_tier: "fast",
+      },
+    }),
+    buildStatusBarMessageFn: ({ runtime, codexConfig }) => ({
+      text: `status ${runtime?.lastTokenUsage?.total_tokens ?? "none"} ${codexConfig?.service_tier ?? "missing"}`,
+      entities: [],
+    }),
+  });
+  const result = await refreshStatusBars({
+    config: {
+      ...config,
+      appServerUrl: "ws://127.0.0.1:27890",
+      statusBarCodexConfigPollIntervalMs: 5000,
+    },
+    state,
+    nowMsFn: () => 1000,
+    ...deps,
+  });
+
+  assert.deepEqual(result, { changed: true, updated: 1 });
+  assert.equal(deps.calls.find((call) => call[0] === "reserve")?.[3], "status 10 fast");
 });
