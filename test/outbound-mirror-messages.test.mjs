@@ -18,7 +18,11 @@ test("makePromptPreview keeps compact one-line text", () => {
 test("formatOutboundUserMirrorText labels Codex Desktop-originated prompts", () => {
   assert.equal(
     formatOutboundUserMirrorText("Run checks", { codexUserDisplayName: "Anton" }),
-    "**Anton via Codex Desktop**\n\nRun checks",
+    "**Anton via Codex**\n\nRun checks",
+  );
+  assert.equal(
+    formatOutboundUserMirrorText("Run checks", { codexUserDisplayName: "Codex Desktop user" }),
+    "**Codex Desktop**\n\nRun checks",
   );
   assert.equal(formatOutboundUserMirrorText(""), "");
 });

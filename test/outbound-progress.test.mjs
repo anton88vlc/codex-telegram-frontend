@@ -109,7 +109,6 @@ test("formatOutboundProgressMirrorText preserves updates when completed", () => 
     completed: true,
   });
 
-  assert.match(text, /Done\. Final answer below\./);
   assert.match(text, /^> Committed docs/);
-  assert.match(text, /\n\n\*\*Working\.\.\.\*\*\nDone\. Final answer below\.$/);
+  assert.match(text, /\n\n\*\*Done\*\*$/);
 });

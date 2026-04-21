@@ -111,7 +111,7 @@ test("syncOutboundMirrors delivers user and final assistant mirrors", async () =
 
   assert.deepEqual(result, { delivered: 2, suppressed: 0, changed: true });
   assert.equal(calls.filter((call) => call[0] === "send").length, 2);
-  assert.match(calls.find((call) => call[0] === "send")?.[3], /Anton via Codex Desktop/);
+  assert.match(calls.find((call) => call[0] === "send")?.[3], /Anton via Codex/);
   assert.equal(state.bindings[bindingKey].currentTurn, null);
   assert.equal(state.bindings[bindingKey].lastMirroredRole, "assistant");
   assert.deepEqual(state.bindings[bindingKey].lastOutboundMessageIds, [12]);

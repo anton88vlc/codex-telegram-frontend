@@ -117,7 +117,18 @@ test("cleanupMirrorUserText strips file/image wrapper noise", () => {
 <image name=[Image #1]>
 </image>`);
 
-  assert.equal(cleaned, "[files]\n- image.png\n\n[attached images omitted: 1]\n\nНужен ответ");
+  assert.equal(cleaned, "[files]\n- image.png\n\n_1 image attached._\n\nНужен ответ");
+});
+
+test("cleanupMirrorUserText strips Codex environment wrapper", () => {
+  const cleaned = cleanupMirrorUserText(`<environment_context>
+<cwd>/Users/anton/code/project</cwd>
+<shell>zsh</shell>
+</environment_context>
+
+Нужен нормальный ответ`);
+
+  assert.equal(cleaned, "Нужен нормальный ответ");
 });
 
 test("cleanupMirrorAssistantText strips Codex app directives", () => {

@@ -62,14 +62,14 @@ test("formatUnboundGroupFallbackBubble quotes prompt and mentions moved media", 
       voiceRefs: [{}, {}],
     }),
     [
-      "**Anton via General**",
+      "**Anton from General**",
       "",
       "> проверь",
       "> статус",
       "",
-      "_1 attachment moved._",
+      "_1 attachment attached._",
       "",
-      "_2 voices moved._",
+      "_2 voice notes attached._",
     ].join("\n"),
   );
 });

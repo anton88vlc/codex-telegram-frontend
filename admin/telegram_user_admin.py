@@ -1001,6 +1001,10 @@ def cleanup_user_text(text: str, include_heartbeats: bool = False):
     if normalized.startswith("<turn_aborted>"):
         return None
 
+    normalized = re.sub(r"<environment_context>[\s\S]*?(?:</environment_context>|$)", "", normalized).strip()
+    if not normalized:
+        return None
+
     if normalized.startswith("<heartbeat>"):
         if not include_heartbeats:
             return None
@@ -1035,7 +1039,8 @@ def cleanup_user_text(text: str, include_heartbeats: bool = False):
         if files:
             prefix.append("[files]\n" + "\n".join(f"- {name}" for name in files))
         if image_count:
-            prefix.append(f"[attached images omitted: {image_count}]")
+            suffix = "" if image_count == 1 else "s"
+            prefix.append(f"_{image_count} image{suffix} attached._")
         if body:
             prefix.append(body)
         return "\n\n".join(part for part in prefix if part).strip() or None

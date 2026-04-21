@@ -92,12 +92,7 @@ test("buildStatusBarText stays compact and shows remaining rate limits", () => {
 
   assert.equal(
     text,
-    [
-      "gpt-5.4 | xhigh | fast off",
-      "ctx: 179k / 258k (69%)",
-      "5h: 88% left, reset 23:58 (2h 58m); week: 82% left, reset 18:55 (6d 21h)",
-      "status: pinned, running 21:00, mirror on",
-    ].join("\n"),
+    "gpt-5.4 · xhigh · fast off · ctx 179k/258k (69%) · 5h 88% reset 23:58 (2h 58m) · week 82% reset 18:55 (6d 21h) · running 21:00",
   );
   assert.equal(makeStatusBarHash(text).length, 40);
 });
@@ -127,7 +122,7 @@ test("buildStatusBarText shows latest progress activity time", () => {
     },
   });
 
-  assert.match(text, /status: pinned, running 21:07, mirror on/);
+  assert.match(text, /running 21:07$/);
 });
 
 test("buildStatusBarText can show fast mode when configured", () => {
@@ -143,7 +138,7 @@ test("buildStatusBarText can show fast mode when configured", () => {
     },
   });
 
-  assert.match(text, /^gpt-5\.4 \| xhigh \| fast on/);
+  assert.match(text, /^gpt-5\.4 · xhigh · fast on/);
 });
 
 test("buildStatusBarText includes queued prompt count", () => {
@@ -165,7 +160,7 @@ test("buildStatusBarText includes queued prompt count", () => {
     config: {},
   });
 
-  assert.match(text, /status: pinned, running 21:00, queue 2, mirror on/);
+  assert.match(text, /running 21:00, queue 2$/);
 });
 
 test("buildStatusBarMessage marks reset times as Telegram date_time entities", () => {

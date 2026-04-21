@@ -92,7 +92,7 @@ test("completeOutboundProgressMessage edits progress into final state", async ()
   assert.deepEqual(sent, [{ message_id: 99 }]);
   assert.equal(binding.currentTurn.changedFilesText, undefined);
   assert.equal(calls[0][2], 99);
-  assert.match(calls[0][3], /Done\. Final answer below\./);
+  assert.match(calls[0][3], /\*\*Done\*\*/);
   assert.match(calls[0][3], /> Committed changes/);
 });
 
