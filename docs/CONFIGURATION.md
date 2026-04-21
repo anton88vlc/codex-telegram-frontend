@@ -68,6 +68,9 @@ Use this for things that should survive restarts and should not be changed from 
 | `appServerStreamConnectTimeoutMs` | `1200` | Short connect timeout for the optional app-server stream. It should not stall Telegram sends. |
 | `appServerStreamReconnectMs` | `5000` | Cooldown before trying the optional app-server stream again after it disconnects. |
 | `appServerStreamMaxEvents` | `500` | In-memory cap for queued app-server stream events before the bridge coalesces them into progress updates. |
+| `draftStreamingEnabled` | `true` | Sends Telegram-native draft updates while a private Codex Chat topic has an active turn. This is only for bot-private topics, not project groups. |
+| `draftStreamingMaxChars` | `1200` | Max text length for one draft update. Keep it short; the final answer still comes as the normal Telegram message. |
+| `draftStreamingErrorCooldownMs` | `600000` | Quiet cooldown after Telegram rejects a draft update. Drafts are nice-to-have, so failures go to the event log instead of bothering the user. |
 | `statePath` | `state/state.json` | Bridge runtime state file. |
 | `eventLogPath` | `logs/bridge.events.ndjson` | Structured bridge event/audit log used by `/health` for recent failures and delivery counters. |
 | `bridgeLogPath` | `logs/bridge.stderr.log` | launchd stderr log. Useful when the bridge crashes before it can write structured events. |

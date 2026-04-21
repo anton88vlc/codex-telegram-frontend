@@ -68,7 +68,7 @@ Telegram also shipped a few useful things recently:
 - `copyMessages` is worth keeping in the back pocket for richer history/backfill and album preservation.
 - Inline keyboards are still the cleanest way to keep ops actions out of working topics: preview, apply, cleanup, smoke, retry, open runbook.
 
-The first Bot API helper layer now covers `deleteMessages`, private-chat `sendMessageDraft`, inline-keyboard markup on messages, and bot profile/admin-rights calls. That is deliberately only plumbing; the product decision is still "use these where they keep the working surface clean."
+The first Bot API helper layer now covers `deleteMessages`, private-chat `sendMessageDraft`, inline-keyboard markup on messages, and bot profile/admin-rights calls. The live bridge uses `sendMessageDraft` only for bot-private Codex Chat topics, where Telegram actually supports the UX. Project groups stay on progress bubbles until Telegram gives bots the same clean draft surface there.
 
 The first install polish path now exposes those profile/admin-rights helpers through `npm run bot:polish`. It also uses underscore command aliases (`/sync_project`, `/project_status`) because Telegram's command menu is not fond of our nicer-looking hyphen commands. Tiny detail, real UX.
 
@@ -81,7 +81,7 @@ Next implementation step:
 - Build an app-server stream probe, not a full rewrite.
 - Feed the probe into the existing `outbound-progress`/`progress-bubble` shapes.
 - Keep app-control send-only as the current happy path until the probe proves app-server streaming is stable.
-- Try `sendMessageDraft` only in the bot direct chat/private-topic surface first.
+- Tune `sendMessageDraft` after live private-topic smokes; keep it as a nice-to-have layer, not the source of truth.
 - Add a managed-bot onboarding spike soon, because that could remove one of the ugliest install steps.
 - Move avatar polish to official Bot API `setMyProfilePhoto`.
 - Validate private bot topics end-to-end before making Codex Desktop `Chats` part of the public install promise.

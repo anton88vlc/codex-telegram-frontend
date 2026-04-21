@@ -17,6 +17,7 @@ import { isAuthorized } from "./lib/bridge-bindings.mjs";
 import { syncAutoCodexChatTopics } from "./lib/codex-chat-sync-runner.mjs";
 import { handlePlainText } from "./lib/inbound-turn-runner.mjs";
 import { normalizeInboundPrompt, parseCommand } from "./lib/message-routing.mjs";
+import { syncDraftStreams } from "./lib/draft-streaming-runner.mjs";
 import { rememberOutbound } from "./lib/outbound-memory.mjs";
 import { syncOutboundMirrors } from "./lib/outbound-mirror-runner.mjs";
 import { syncAutoProjectTopics } from "./lib/project-sync-runner.mjs";
@@ -407,6 +408,15 @@ async function main() {
       });
     }
 
+    let draftStreamResult = { changed: false };
+    try {
+      draftStreamResult = await syncDraftStreams({ config, state });
+    } catch (error) {
+      logBridgeEvent("draft_stream_sync_error", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
     try {
       syncTypingHeartbeats({ config, state, heartbeats: typingHeartbeats });
     } catch (error) {
@@ -421,7 +431,8 @@ async function main() {
       appServerStreamResult.changed ||
       syncResult.changed ||
       queueResult.changed ||
-      statusBarResult.changed
+      statusBarResult.changed ||
+      draftStreamResult.changed
     ) {
       await saveState(config.statePath, state);
     }

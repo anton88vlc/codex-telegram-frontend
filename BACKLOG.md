@@ -15,7 +15,7 @@ These are the useful Telegram platform leads found during the April 2026 API pas
 
 1. ~~Private bot topics for existing Codex Desktop `Chats`.~~ Base onboarding support exists, the live bot has Threaded Mode enabled, `bot:topics` can smoke create/delete private topics, bootstrap creates the bot-direct `Codex - Chats` surface, clean backfill works there and self-check surfaces the status. Keep two rough edges visible: user-side Telethon automation cannot reliably send/read inside bot-private topics yet, and brand-new Desktop `Chats` are not safely creatable from Telegram until we find a true Desktop/app-control create path.
 2. True Telegram -> Codex Desktop `New chat` creation for the `Chats` surface. Do not fake this with app-server `thread/start`: it creates a backend thread, but not reliably the same visible Desktop Chat item. Find a renderer/debug action or a safe UI-control path, then re-enable auto-create.
-3. `sendMessageDraft` for native "assistant is writing" UX. It streams animated drafts in private chats and private bot topics, so it is perfect for Codex `Chats`; it should not replace project-group progress bubbles unless Telegram opens drafts for supergroups.
+3. ~~`sendMessageDraft` for native "assistant is writing" UX in private Codex `Chats`.~~ Base runtime support exists for bot-private topics only. Project groups still use progress bubbles unless Telegram opens drafts for supergroups.
 4. Managed bots and `t.me/newbot/...` links. This is the big onboarding simplifier: fewer BotFather gymnastics, cleaner token handoff, maybe a future manager-bot flow. Keep it local/user-owned; do not turn the project into a weird SaaS control plane.
 5. Official bot avatar API. Bot API now has `setMyProfilePhoto`, so replace the MTProto avatar workaround with the official path when practical.
 6. Native Telegram checklists for Codex Todo. Tempting, but `sendChecklist`/`editMessageChecklist` are business-account-shaped right now. Spike before committing; text Todo is still the sane default.
@@ -48,7 +48,7 @@ These are the useful Telegram platform leads found during the April 2026 API pas
 2. ~~Structured event/audit log at `logs/bridge.events.ndjson`, sampled by `/health`.~~
 3. Event log retention and nicer operator views once the structured log gets real usage.
 4. Codex Hooks spike: evaluate experimental `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse` and `Stop` hooks for lifecycle logging, completion checks and local guardrails. Do not treat hooks as the main streaming transport yet: current tool hooks mostly see Bash and do not cover MCP, WebSearch or other non-shell tools.
-5. Telegram native streaming/draft spike: wire `sendMessageDraft` into private bot topics first, then decide whether it is good enough for Codex `Chats` before touching project groups.
+5. ~~Telegram native streaming/draft spike: wire `sendMessageDraft` into private bot topics first.~~ Keep tuning with live smokes; do not touch project groups until Telegram supports the same UX there.
 6. ~~Telegram cleanup helper base: Bot API `deleteMessages` batching for bot-deletable cleanup where possible.~~ Keep Telethon/user-session cleanup for older or non-bot-owned history.
 7. ~~Wire app-server stream probe results into the live bridge once the probe has stable evidence from real turns.~~ Keep tuning event coverage with live smokes; raw token-by-token Telegram streaming is intentionally not the goal yet.
 
@@ -133,3 +133,4 @@ These are the useful Telegram platform leads found during the April 2026 API pas
 54. Onboarding wrap-up now recommends Codex Personality `Friendly` plus the OpenClaw-style Custom Instructions preset, and tells the installing agent to offer applying it through the UI instead of pretending random app-state surgery is a good idea.
 55. Telegram Codex controls: `/model`, `/think`/`/reasoning`, `/fast` and `/compact` now use local app-server control methods, while the visible bot menu stops advertising noisy ops-first commands.
 56. Codex Desktop `Chats` live sync: after onboarding, the bridge can auto-create or rename bot-private topics for fresh existing Codex Chats, without using the fake app-server `thread/start` creation path.
+57. Draft streaming for private Codex Chats: active bot-private topics now get Telegram-native `sendMessageDraft` updates while Codex is working, with a quiet fallback if Telegram rejects drafts. Project groups deliberately stay on progress bubbles.
