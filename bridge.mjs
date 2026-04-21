@@ -387,22 +387,6 @@ async function main() {
       }
     }
 
-    let appServerStreamResult = { changed: false };
-    try {
-      await syncAppServerStreamSubscriptions({ config, state, stream: appServerStream });
-      appServerStreamResult = await syncAppServerStreamProgress({
-        config,
-        state,
-        stream: appServerStream,
-        loadChangedFilesTextForThreadFn: loadChangedFilesTextForThread,
-        rememberOutboundFn: rememberOutbound,
-      });
-    } catch (error) {
-      logBridgeEvent("app_server_stream_error", {
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-
     let syncResult = { changed: false };
     try {
       syncResult = await syncOutboundMirrors({
@@ -414,6 +398,25 @@ async function main() {
       });
     } catch (error) {
       logBridgeEvent("outbound_mirror_error", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    let appServerStreamResult = { changed: false };
+    try {
+      appServerStreamResult = await syncAppServerStreamProgress({
+        config,
+        state,
+        stream: appServerStream,
+        loadChangedFilesTextForThreadFn: loadChangedFilesTextForThread,
+        rememberOutboundFn: rememberOutbound,
+      });
+      // App-server stream is a nice live-progress layer, not the source of truth.
+      // Keep subscription retries after rollout mirroring so flaky thread/resume
+      // calls cannot hold back final answers in Telegram.
+      await syncAppServerStreamSubscriptions({ config, state, stream: appServerStream });
+    } catch (error) {
+      logBridgeEvent("app_server_stream_error", {
         error: error instanceof Error ? error.message : String(error),
       });
     }

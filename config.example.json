@@ -56,6 +56,7 @@
   "appServerStreamConnectTimeoutMs": 1200,
   "appServerStreamReconnectMs": 5000,
   "appServerStreamMaxEvents": 500,
+  "appServerStreamSubscribeMaxAttemptsPerPoll": 3,
   "draftStreamingEnabled": true,
   "draftStreamingMaxChars": 1200,
   "draftStreamingErrorCooldownMs": 600000,

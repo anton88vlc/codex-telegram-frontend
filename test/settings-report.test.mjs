@@ -30,6 +30,7 @@ test("buildSettingsReport shows safe runtime settings without secrets", () => {
       appServerStreamEnabled: true,
       appServerStreamConnectTimeoutMs: 1200,
       appServerStreamReconnectMs: 5000,
+      appServerStreamSubscribeMaxAttemptsPerPoll: 3,
       outboundSyncEnabled: true,
       outboundMirrorPhases: ["commentary", "final_answer"],
       outboundProgressMode: "updates",
@@ -87,7 +88,7 @@ test("buildSettingsReport shows safe runtime settings without secrets", () => {
   assert.match(text, /transport: native; ingress app-server; app-control `http:\/\/127\.0\.0\.1:9222`; fallback `ws:\/\/127\.0\.0\.1:27890`/);
   assert.match(text, /wait reply off; native poll 1s; app-control cooldown 5m/);
   assert.match(text, /app-control: show thread on/);
-  assert.match(text, /app-server stream: on; connect 1200ms; reconnect 5s/);
+  assert.match(text, /app-server stream: on; connect 1200ms; reconnect 5s; resume attempts 3\/poll/);
   assert.match(text, /mirror: on; phases commentary, final_answer; progress updates; poll 2s/);
   assert.match(text, /worktree: changed files on; max all/);
   assert.match(text, /attachments: on; max 10; size 20mb; dir `state\/attachments`/);

@@ -77,6 +77,34 @@ test("syncAppServerStreamSubscriptions subscribes eligible bindings before turns
   assert.deepEqual(subscribed, ["thread-1", "thread-2"]);
 });
 
+test("syncAppServerStreamSubscriptions caps resume attempts and skips active or cooling threads", async () => {
+  const subscribed = [];
+  const state = {
+    bindings: {
+      active: { threadId: "thread-active", chatId: "-1001" },
+      cooling: { threadId: "thread-cooling", chatId: "-1001" },
+      one: { threadId: "thread-1", chatId: "-1001" },
+      two: { threadId: "thread-2", chatId: "-1001" },
+      three: { threadId: "thread-3", chatId: "-1001" },
+    },
+  };
+  const result = await syncAppServerStreamSubscriptions({
+    config: { appServerStreamSubscribeMaxAttemptsPerPoll: 2 },
+    state,
+    stream: {
+      isSubscribed: (threadId) => threadId === "thread-active",
+      isSubscribeCoolingDown: (threadId) => threadId === "thread-cooling",
+    },
+    subscribeAppServerStreamFn: async ({ binding }) => {
+      subscribed.push(binding.threadId);
+      return true;
+    },
+  });
+
+  assert.deepEqual(result, { subscribed: 3 });
+  assert.deepEqual(subscribed, ["thread-1", "thread-2"]);
+});
+
 test("app-server patch helpers keep deterministic buckets", () => {
   const patches = new Map();
   const patch = getAppServerPatch(patches, "binding-1");

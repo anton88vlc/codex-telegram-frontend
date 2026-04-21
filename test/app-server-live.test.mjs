@@ -56,6 +56,24 @@ class FakeWebSocket {
   }
 }
 
+class FailFirstResumeWebSocket extends FakeWebSocket {
+  send(raw) {
+    const message = JSON.parse(raw);
+    this.sent.push(message);
+    if (message.id && message.method === "initialize") {
+      this.serverMessage({ id: message.id, result: {} });
+    }
+    if (message.id && message.method === "thread/resume") {
+      this.resumeAttempts = (this.resumeAttempts || 0) + 1;
+      if (this.resumeAttempts === 1) {
+        this.serverMessage({ id: message.id, error: { code: -32603, message: "temporary resume failure" } });
+        return;
+      }
+      this.serverMessage({ id: message.id, result: { thread: { id: message.params.threadId } } });
+    }
+  }
+}
+
 test("AppServerLiveStream subscribes and queues normalized notifications", async () => {
   const statuses = [];
   const stream = new AppServerLiveStream({
@@ -85,8 +103,33 @@ test("AppServerLiveStream subscribes and queues normalized notifications", async
   assert.equal(events[0].category, "reasoning");
   assert.equal(events[0].threadId, "thread-1");
   assert.equal(events[0].textPreview, "checking stream");
-  assert.equal(statuses.at(-1).status, "connected");
+  assert.equal(statuses.some((status) => status.status === "connected"), true);
+  assert.equal(statuses.at(-1).status, "subscribed");
   assert.equal(FakeWebSocket.last.sent.filter((message) => message.method === "thread/resume").length, 1);
+
+  await stream.close();
+});
+
+test("AppServerLiveStream retries failed thread resume instead of poisoning the subscription", async () => {
+  const stream = new AppServerLiveStream({
+    url: "ws://app-server.test",
+    WebSocketImpl: FailFirstResumeWebSocket,
+    connectTimeoutMs: 100,
+    reconnectMs: 5,
+  });
+
+  await assert.rejects(stream.subscribe("thread-1"), /temporary resume failure/);
+  assert.equal(FailFirstResumeWebSocket.last.resumeAttempts, 1);
+  assert.equal(stream.subscribedThreadIds.has("thread-1"), false);
+
+  assert.equal(await stream.subscribe("thread-1"), false);
+  assert.equal(FailFirstResumeWebSocket.last.resumeAttempts, 1);
+
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  await stream.subscribe("thread-1");
+
+  assert.equal(FailFirstResumeWebSocket.last.resumeAttempts, 2);
+  assert.equal(stream.subscribedThreadIds.has("thread-1"), true);
 
   await stream.close();
 });
