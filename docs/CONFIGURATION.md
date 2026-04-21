@@ -24,8 +24,11 @@ Use this for things that should survive restarts and should not be changed from 
 | `unboundGroupFallbackMaxAgeMs` | `2592000000` | Max age for the "last active topic" rescue target. Default is 30 days; `0` disables the age cutoff. |
 | `outboundSyncEnabled` | `true` | Mirrors Codex Desktop-originated turns back into Telegram. |
 | `outboundPollIntervalMs` | `2000` | Poll interval for outbound Codex thread mirror. |
+| `outboundMirrorMaxBindingsPerPoll` | `25` | Max bound topics scanned in one mirror pass. Hot topics are kept first; the rest rotate across polls so big Telegram surfaces do not become one heavy loop. Set `0` for no cap. |
 | `outboundMirrorPhases` | `["commentary", "final_answer"]` | Which assistant phases are mirrored live. |
 | `outboundProgressMode` | `updates` | `updates` keeps recent progress in one bubble; `generic` hides details; `verbatim` mirrors raw commentary. |
+| `bindingHotMaxAgeMs` | `1800000` | A topic is hot while it has active work or recent activity inside this window. Hot topics get first-class live treatment. |
+| `bindingWarmMaxAgeMs` | `86400000` | A topic is warm while it has activity inside this wider window. Warm/cold topics still mirror through rollout, but they do not get noisy live stream retries by default. |
 | `codexUserDisplayName` | `Codex Desktop user` | Label for bot-side surrogate user messages mirrored from Codex Desktop. |
 | `statusBarEnabled` | `true` | Enables compact pinned topic status bar. |
 | `statusBarPin` | `true` | Pins the status bar message when Telegram allows it. |
@@ -69,6 +72,7 @@ Use this for things that should survive restarts and should not be changed from 
 | `appServerStreamReconnectMs` | `5000` | Cooldown before trying the optional app-server stream again after it disconnects. |
 | `appServerStreamMaxEvents` | `500` | In-memory cap for queued app-server stream events before the bridge coalesces them into progress updates. |
 | `appServerStreamSubscribeMaxAttemptsPerPoll` | `3` | Caps `thread/resume` attempts per bridge poll. This keeps a grumpy app-server stream from blocking the normal rollout mirror. |
+| `appServerStreamSubscribeHotOnly` | `true` | Subscribe the optional app-server stream only for hot topics. Keep this on unless you are debugging stream behavior across the whole Telegram surface. |
 | `draftStreamingEnabled` | `true` | Sends Telegram-native draft updates while a private Codex Chat topic has an active turn. This is only for bot-private topics, not project groups. |
 | `draftStreamingMaxChars` | `1200` | Max text length for one draft update. Keep it short; the final answer still comes as the normal Telegram message. |
 | `draftStreamingErrorCooldownMs` | `600000` | Quiet cooldown after Telegram rejects a draft update. Drafts are nice-to-have, so failures go to the event log instead of bothering the user. |

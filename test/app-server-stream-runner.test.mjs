@@ -56,14 +56,16 @@ test("subscribeAppServerStream reports subscribe failures without throwing", asy
   assert.equal(events[0].payload.threadId, "thread-1");
 });
 
-test("syncAppServerStreamSubscriptions subscribes eligible bindings before turns start", async () => {
+test("syncAppServerStreamSubscriptions subscribes hot eligible bindings", async () => {
   const subscribed = [];
   const result = await syncAppServerStreamSubscriptions({
-    config: {},
+    config: { bindingHotMaxAgeMs: 30 * 60 * 1000 },
+    nowMs: Date.parse("2026-04-21T10:30:00.000Z"),
     state: {
       bindings: {
-        one: { threadId: "thread-1", chatId: "-1001", currentTurn: {} },
-        two: { threadId: "thread-2", chatId: "-1001" },
+        one: { threadId: "thread-1", chatId: "-1001", currentTurn: { startedAt: "2026-04-21T10:20:00.000Z" } },
+        two: { threadId: "thread-2", chatId: "-1001", lastMirroredAt: "2026-04-21T10:20:00.000Z" },
+        stale: { threadId: "thread-stale", chatId: "-1001", lastMirroredAt: "2026-04-19T10:20:00.000Z" },
       },
     },
     stream: {},
@@ -89,7 +91,7 @@ test("syncAppServerStreamSubscriptions caps resume attempts and skips active or 
     },
   };
   const result = await syncAppServerStreamSubscriptions({
-    config: { appServerStreamSubscribeMaxAttemptsPerPoll: 2 },
+    config: { appServerStreamSubscribeMaxAttemptsPerPoll: 2, appServerStreamSubscribeHotOnly: false },
     state,
     stream: {
       isSubscribed: (threadId) => threadId === "thread-active",

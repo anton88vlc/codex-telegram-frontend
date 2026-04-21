@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { syncOutboundMirrors } from "../lib/outbound-mirror-runner.mjs";
+import {
+  selectOutboundMirrorBindingEntries,
+  syncOutboundMirrors,
+} from "../lib/outbound-mirror-runner.mjs";
 
 const bindingKey = "group:-1001:topic:42";
 
@@ -55,6 +58,31 @@ test("syncOutboundMirrors is a no-op when outbound sync is disabled", async () =
 
   assert.deepEqual(result, { delivered: 0, suppressed: 0, changed: false });
   assert.equal(touched, false);
+});
+
+test("selectOutboundMirrorBindingEntries keeps hot topics and rotates the rest", () => {
+  const nowMs = Date.parse("2026-04-21T10:30:00.000Z");
+  const state = {};
+  const entries = [
+    ["hot", makeBinding({ threadId: "hot", currentTurn: { startedAt: "2026-04-21T10:20:00.000Z" } })],
+    ["cold-1", makeBinding({ threadId: "cold-1", lastMirroredAt: "2026-04-19T10:00:00.000Z" })],
+    ["cold-2", makeBinding({ threadId: "cold-2", lastMirroredAt: "2026-04-19T10:00:00.000Z" })],
+    ["cold-3", makeBinding({ threadId: "cold-3", lastMirroredAt: "2026-04-19T10:00:00.000Z" })],
+  ];
+  const config = {
+    outboundMirrorMaxBindingsPerPoll: 2,
+    bindingHotMaxAgeMs: 30 * 60 * 1000,
+    bindingWarmMaxAgeMs: 24 * 60 * 60 * 1000,
+  };
+
+  assert.deepEqual(
+    selectOutboundMirrorBindingEntries({ state, entries, config, nowMs }).map(([key]) => key),
+    ["hot", "cold-1"],
+  );
+  assert.deepEqual(
+    selectOutboundMirrorBindingEntries({ state, entries, config, nowMs }).map(([key]) => key),
+    ["hot", "cold-2"],
+  );
 });
 
 test("syncOutboundMirrors delivers user and final assistant mirrors", async () => {

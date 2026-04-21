@@ -6,13 +6,15 @@ import {
   syncTypingHeartbeats,
 } from "../lib/typing-heartbeat-runner.mjs";
 
+const NOW_MS = Date.parse("2026-04-21T10:30:00.000Z");
+
 function makeBinding(overrides = {}) {
   return {
     threadId: "thread-1",
     chatId: "-1001",
     messageThreadId: 42,
     transport: "native",
-    currentTurn: { startedAt: "2026-04-19T10:00:00.000Z" },
+    currentTurn: { startedAt: "2026-04-21T10:20:00.000Z" },
     ...overrides,
   };
 }
@@ -22,12 +24,22 @@ function makeState(bindings = {}) {
 }
 
 test("isTypingHeartbeatBindingEligible requires typing, mirror eligibility and an active turn", () => {
-  assert.equal(isTypingHeartbeatBindingEligible({}, makeBinding()), true);
-  assert.equal(isTypingHeartbeatBindingEligible({ sendTyping: false }, makeBinding()), false);
-  assert.equal(isTypingHeartbeatBindingEligible({ typingHeartbeatEnabled: false }, makeBinding()), false);
-  assert.equal(isTypingHeartbeatBindingEligible({}, makeBinding({ currentTurn: null })), false);
-  assert.equal(isTypingHeartbeatBindingEligible({}, makeBinding({ threadId: "" })), false);
-  assert.equal(isTypingHeartbeatBindingEligible({}, makeBinding({ transport: "app-server" })), false);
+  assert.equal(isTypingHeartbeatBindingEligible({}, makeBinding(), { nowMs: NOW_MS }), true);
+  assert.equal(isTypingHeartbeatBindingEligible({ sendTyping: false }, makeBinding(), { nowMs: NOW_MS }), false);
+  assert.equal(isTypingHeartbeatBindingEligible({ typingHeartbeatEnabled: false }, makeBinding(), { nowMs: NOW_MS }), false);
+  assert.equal(isTypingHeartbeatBindingEligible({}, makeBinding({ currentTurn: null }), { nowMs: NOW_MS }), false);
+  assert.equal(isTypingHeartbeatBindingEligible({}, makeBinding({ threadId: "" }), { nowMs: NOW_MS }), false);
+  assert.equal(isTypingHeartbeatBindingEligible({}, makeBinding({ transport: "app-server" }), { nowMs: NOW_MS }), false);
+  assert.equal(
+    isTypingHeartbeatBindingEligible(
+      {},
+      makeBinding({
+        currentTurn: { startedAt: "2026-04-21T08:20:00.000Z" },
+      }),
+      { nowMs: NOW_MS },
+    ),
+    false,
+  );
 });
 
 test("syncTypingHeartbeats starts a heartbeat for eligible active bindings", () => {
@@ -37,6 +49,7 @@ test("syncTypingHeartbeats starts a heartbeat for eligible active bindings", () 
     config: { botToken: "token", typingHeartbeatIntervalMs: 4000 },
     state: makeState({ "group:-1001:topic:42": makeBinding() }),
     heartbeats,
+    nowMs: NOW_MS,
     startTypingHeartbeatFn: (options) => {
       calls.push(["start", options]);
       return { active: true, stop() {} };
@@ -57,6 +70,7 @@ test("syncTypingHeartbeats does not duplicate an already running heartbeat", () 
     config: {},
     state: makeState({ "group:-1001:topic:42": makeBinding() }),
     heartbeats,
+    nowMs: NOW_MS,
     startTypingHeartbeatFn: () => {
       throw new Error("should not start twice");
     },
@@ -127,6 +141,7 @@ test("syncTypingHeartbeats stops stale heartbeats that no longer have an active 
       active: makeBinding({ threadId: "thread-2", chatId: "-1002", messageThreadId: 43 }),
     }),
     heartbeats,
+    nowMs: NOW_MS,
     logEventFn: (...args) => events.push(args),
   });
 
@@ -142,6 +157,7 @@ test("syncTypingHeartbeats reports send errors through bridge events", () => {
     config: {},
     state: makeState({ active: makeBinding() }),
     heartbeats: new Map(),
+    nowMs: NOW_MS,
     startTypingHeartbeatFn: ({ onError }) => {
       onError(new Error("telegram down"));
       return { active: false, stop() {} };

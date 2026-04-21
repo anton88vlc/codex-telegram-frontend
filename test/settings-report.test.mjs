@@ -31,10 +31,14 @@ test("buildSettingsReport shows safe runtime settings without secrets", () => {
       appServerStreamConnectTimeoutMs: 1200,
       appServerStreamReconnectMs: 5000,
       appServerStreamSubscribeMaxAttemptsPerPoll: 3,
+      appServerStreamSubscribeHotOnly: true,
       outboundSyncEnabled: true,
       outboundMirrorPhases: ["commentary", "final_answer"],
       outboundProgressMode: "updates",
       outboundPollIntervalMs: 2000,
+      outboundMirrorMaxBindingsPerPoll: 25,
+      bindingHotMaxAgeMs: 30 * 60 * 1000,
+      bindingWarmMaxAgeMs: 24 * 60 * 60 * 1000,
       worktreeSummaryEnabled: true,
       worktreeSummaryMaxFiles: 0,
       attachmentsEnabled: true,
@@ -88,8 +92,9 @@ test("buildSettingsReport shows safe runtime settings without secrets", () => {
   assert.match(text, /transport: native; ingress app-server; app-control `http:\/\/127\.0\.0\.1:9222`; fallback `ws:\/\/127\.0\.0\.1:27890`/);
   assert.match(text, /wait reply off; native poll 1s; app-control cooldown 5m/);
   assert.match(text, /app-control: show thread on/);
-  assert.match(text, /app-server stream: on; connect 1200ms; reconnect 5s; resume attempts 3\/poll/);
-  assert.match(text, /mirror: on; phases commentary, final_answer; progress updates; poll 2s/);
+  assert.match(text, /app-server stream: on; hot only on; connect 1200ms; reconnect 5s; resume attempts 3\/poll/);
+  assert.match(text, /mirror: on; phases commentary, final_answer; progress updates; poll 2s; max 25\/poll/);
+  assert.match(text, /working set: hot 30m; warm 1d/);
   assert.match(text, /worktree: changed files on; max all/);
   assert.match(text, /attachments: on; max 10; size 20mb; dir `state\/attachments`/);
   assert.match(text, /voice: on; provider auto; model auto; language multi; max 25mb; keys deepgram env DEEPGRAM_API_KEY, openai missing/);
