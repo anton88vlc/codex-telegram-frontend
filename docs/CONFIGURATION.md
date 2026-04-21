@@ -62,6 +62,7 @@ Use this for things that should survive restarts and should not be changed from 
 | `appControlShowThread` | `false` | Experimental: after app-control accepts a turn, ask Codex Desktop to show the thread. Useful for Desktop-first UX, but keep it off if renderer stability is shaky. |
 | `nativeDebugBaseUrl` | `http://127.0.0.1:9222` | Preferred Codex Desktop app-control endpoint. |
 | `appServerUrl` | `ws://127.0.0.1:27890` | Degraded fallback endpoint. Useful, not the happy path. |
+| `appServerControlTimeoutMs` | `3000` | Timeout for short app-server control commands like `/model`, `/think`, `/fast` and `/compact`. Keep it short; Telegram should not hang while Codex thinks about life. |
 | `appServerStreamEnabled` | `true` | Listens to app-server v2 events for live progress while app-control remains the send path. If it misbehaves, turn it off; rollout mirror still works. |
 | `appServerStreamConnectTimeoutMs` | `1200` | Short connect timeout for the optional app-server stream. It should not stall Telegram sends. |
 | `appServerStreamReconnectMs` | `5000` | Cooldown before trying the optional app-server stream again after it disconnects. |
@@ -111,6 +112,10 @@ Bot commands are for operational state, not full config editing.
 Working commands today:
 
 - `/help` or `/start` - shows help in the chat/topic where it was asked.
+- `/model [model-id]` - shows or changes the default Codex model through local app-server config.
+- `/think [low|medium|high|xhigh]` or `/reasoning ...` - shows or changes default reasoning for new turns.
+- `/fast [on|off]` - toggles the fast tier for new turns.
+- `/compact` - starts compaction for the bound Codex thread.
 - `/attach <thread-id>` - binds the current chat/topic to a Codex thread.
 - `/attach-latest` - binds this forum topic to the newest unbound thread for the mapped project.
 - `/detach` - removes the current binding.
@@ -132,6 +137,8 @@ Telegram's command menu prefers underscores, so the bridge also accepts `/attach
 
 What commands mutate:
 
+- Codex local config for model, reasoning and fast tier
+- current bound Codex thread compaction state
 - bindings in `state/state.json`
 - project/topic sync state
 - topic queue state

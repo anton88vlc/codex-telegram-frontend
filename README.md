@@ -74,6 +74,7 @@ Voice notes are optional. The supported STT paths today are Deepgram, OpenAI, or
 
 - Telegram Bot API long polling for direct chats and forum topics.
 - Bindings: `/attach`, `/attach-latest`, `/detach`, `/status`.
+- Codex controls from Telegram: `/model`, `/think` or `/reasoning`, `/fast`, `/compact`.
 - Ops: `/health`, `/settings`, `/project-status`, `/sync-project`, `/mode native`.
 - Topic queues: normal messages wait behind a running turn; `/queue`, `/pause`, `/resume`, `/cancel-queue` and `/steer <text>` handle the cockpit bits.
 - Telegram-menu-safe aliases: `/attach_latest`, `/project_status`, `/sync_project`, `/mode_native`, `/cancel_queue`.

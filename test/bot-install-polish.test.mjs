@@ -10,8 +10,13 @@ import {
 
 test("buildBotInstallPolishPlan uses Telegram-menu-safe command names", () => {
   const plan = buildBotInstallPolishPlan();
-  assert(plan.commands.some((command) => command.command === "project_status"));
-  assert(plan.commands.some((command) => command.command === "sync_project"));
+  assert(plan.commands.some((command) => command.command === "model"));
+  assert(plan.commands.some((command) => command.command === "think"));
+  assert(plan.commands.some((command) => command.command === "reasoning"));
+  assert(plan.commands.some((command) => command.command === "fast"));
+  assert(plan.commands.some((command) => command.command === "compact"));
+  assert(!plan.commands.some((command) => command.command === "project_status"));
+  assert(!plan.commands.some((command) => command.command === "sync_project"));
   assert(!plan.commands.some((command) => command.command.includes("-")));
 });
 
@@ -85,6 +90,9 @@ test("applyBotInstallPolish applies through injected Telegram helpers", async ()
 
 test("formatBotInstallPolishPlan makes dry-run output readable", () => {
   const text = formatBotInstallPolishPlan(buildBotInstallPolishPlan({ includeProfile: false }));
-  assert.match(text, /commands \(group chats\): .*\/sync_project/);
+  assert.match(text, /commands \(group chats\): .*\/model/);
+  assert.match(text, /commands \(group chats\): .*\/think/);
+  assert.match(text, /commands \(group chats\): .*\/fast/);
+  assert.match(text, /commands \(group chats\): .*\/compact/);
   assert.match(text, /default admin rights:/);
 });

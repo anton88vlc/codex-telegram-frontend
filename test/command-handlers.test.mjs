@@ -27,6 +27,9 @@ test("renderHelp includes the bot mention hint when privacy mode blocks plain te
   const text = renderHelp(config);
 
   assert.match(text, /\/attach <thread-id>/);
+  assert.match(text, /\/model \[model-id\]/);
+  assert.match(text, /\/think \[low\|medium\|high\|xhigh\]/);
+  assert.match(text, /\/compact/);
   assert.match(text, /\/queue/);
   assert.match(text, /\/steer <text>/);
   assert.match(text, /@codexbot your request/);
@@ -260,4 +263,140 @@ test("handleCommand steers an active turn through app-control only", async () =>
   assert.equal(binding.currentTurn.steerCount, 1);
   assert.equal(suppressions[0][2], "focus tests");
   assert.equal(replies[0], "Steered into the current turn.");
+});
+
+test("handleCommand shows and changes Codex model through app-server controls", async () => {
+  const responses = [];
+  const replies = [];
+  const writes = [];
+  const controlState = {
+    config: { model: "gpt-5.4", model_reasoning_effort: "high", service_tier: "fast" },
+    models: [
+      {
+        id: "gpt-5.4",
+        displayName: "gpt-5.4",
+        supportedReasoningEfforts: [{ reasoningEffort: "high" }, { reasoningEffort: "xhigh" }],
+      },
+      { id: "gpt-5.4-mini", displayName: "GPT-5.4-Mini" },
+    ],
+  };
+
+  await handleCommand({
+    config,
+    state: {},
+    message: makeMessage(),
+    bindingKey: "group:-1001:topic:3",
+    binding: null,
+    parsed: { command: "/model", args: [] },
+    readCodexControlStateFn: async () => controlState,
+    sendCommandResponseFn: async ({ text }) => {
+      responses.push(text);
+      return [{ message_id: 85 }];
+    },
+  });
+
+  await handleCommand({
+    config,
+    state: {},
+    message: makeMessage(),
+    bindingKey: "group:-1001:topic:3",
+    binding: null,
+    parsed: { command: "/model", args: ["gpt-5.4-mini"] },
+    readCodexControlStateFn: async () => controlState,
+    setCodexModelFn: async (_config, modelId) => {
+      writes.push(modelId);
+      return {};
+    },
+    replyFn: async (token, message, text) => {
+      replies.push(text);
+      return [{ message_id: 86 }];
+    },
+  });
+
+  assert.match(responses[0], /model: `gpt-5.4`/);
+  assert.deepEqual(writes, ["gpt-5.4-mini"]);
+  assert.match(replies[0], /Model set to `gpt-5.4-mini`/);
+});
+
+test("handleCommand validates reasoning and toggles fast mode", async () => {
+  const replies = [];
+  const writes = [];
+  const controlState = {
+    config: { model: "gpt-5.4", model_reasoning_effort: "high", service_tier: "fast" },
+    models: [
+      {
+        id: "gpt-5.4",
+        supportedReasoningEfforts: [{ reasoningEffort: "high" }, { reasoningEffort: "xhigh" }],
+      },
+    ],
+  };
+
+  await handleCommand({
+    config,
+    state: {},
+    message: makeMessage(),
+    bindingKey: "group:-1001:topic:3",
+    binding: null,
+    parsed: { command: "/think", args: ["extra", "high"] },
+    readCodexControlStateFn: async () => controlState,
+    setCodexReasoningFn: async (_config, reasoning) => {
+      writes.push(["reasoning", reasoning]);
+      return {};
+    },
+    replyFn: async (token, message, text) => {
+      replies.push(text);
+      return [{ message_id: 87 }];
+    },
+  });
+
+  await handleCommand({
+    config,
+    state: {},
+    message: makeMessage(),
+    bindingKey: "group:-1001:topic:3",
+    binding: null,
+    parsed: { command: "/fast", args: [] },
+    readCodexControlStateFn: async () => controlState,
+    setCodexFastModeFn: async (_config, enabled) => {
+      writes.push(["fast", enabled]);
+      return {};
+    },
+    replyFn: async (token, message, text) => {
+      replies.push(text);
+      return [{ message_id: 88 }];
+    },
+  });
+
+  assert.deepEqual(writes, [
+    ["reasoning", "xhigh"],
+    ["fast", false],
+  ]);
+  assert.match(replies[0], /Reasoning set to `xhigh`/);
+  assert.match(replies[1], /Fast mode off/);
+});
+
+test("handleCommand starts compaction for the bound thread", async () => {
+  const replies = [];
+  const compacted = [];
+  const binding = { threadId: "thread-1" };
+
+  await handleCommand({
+    config,
+    state: {},
+    message: makeMessage(),
+    bindingKey: "group:-1001:topic:3",
+    binding,
+    parsed: { command: "/compact", args: [] },
+    startCodexThreadCompactFn: async (_config, threadId) => {
+      compacted.push(threadId);
+      return {};
+    },
+    replyFn: async (token, message, text) => {
+      replies.push(text);
+      return [{ message_id: 89 }];
+    },
+  });
+
+  assert.deepEqual(compacted, ["thread-1"]);
+  assert.equal(replies[0], "Compaction started for this Codex thread.");
 });

@@ -287,14 +287,23 @@ npm run bot:avatar
 
 This currently calls `photos.uploadProfilePhoto(bot=...)` through MTProto, so the logged-in Telegram user must own the bot. Telegram now has official Bot API profile-photo support, but this repo has not wired that path yet. Until then, the MTProto helper is the practical route and `bot:avatar` stays best-effort polish, not a setup blocker.
 
-## Telegram Ops Commands
+## Telegram Commands
+
+The visible bot menu is intentionally small and work-facing now. The sharp ops tools still exist, but they do not need to be the first thing a phone user sees.
+
+Codex controls:
+
+- `/model [model-id]` - show or change the default Codex model for new turns
+- `/think [low|medium|high|xhigh]` or `/reasoning ...` - show or change default reasoning
+- `/fast [on|off]` - toggle the fast tier
+- `/compact` - compact the bound Codex thread
 
 - `/health` - quick health for the current chat/topic: binding, project mapping, transport endpoints, delivery clues and recent failures
 - `/settings` or `/config` - safe read-only runtime settings, answered where you ask
 - `/project-status [count]` - desired thread column, active topics, parked sync topics and sync preview
 - `/sync-project [count] dry-run` - safe preview before rename/reopen/create/park
 
-Full config map lives in [CONFIGURATION.md](CONFIGURATION.md). Short version: persistent app config is `config.local.json`/env/Keychain; Telegram commands mostly mutate bindings and topic sync state, not global settings.
+Full config map lives in [CONFIGURATION.md](CONFIGURATION.md). Short version: persistent bridge config is `config.local.json`/env/Keychain; Telegram commands can change safe Codex turn controls, bindings and topic sync state, but they still do not edit every bridge knob.
 
 Optional auto-sync:
 
