@@ -788,6 +788,41 @@ def dialog_filter_title(dialog_filter) -> str:
     return str(getattr(title, "text", title) or "")
 
 
+def is_default_codex_folder_alias(requested_title: str, existing_title: str) -> bool:
+    requested = str(requested_title or "").strip().casefold()
+    existing = str(existing_title or "").strip().casefold()
+    if requested != DEFAULT_FOLDER_TITLE:
+        return False
+    if existing == requested:
+        return False
+    # Users often rename the folder to something like "codex 🔥". Reuse that,
+    # but do not accidentally capture rehearsal folders such as "codex-lab".
+    return existing.startswith(f"{requested} ")
+
+
+def select_existing_dialog_folder(filters, normalized_title: str):
+    dialog_filters = [
+        item
+        for item in filters
+        if item.__class__.__name__ == "DialogFilter"
+    ]
+    decorated = [
+        item
+        for item in dialog_filters
+        if is_default_codex_folder_alias(normalized_title, dialog_filter_title(item))
+    ]
+    if len(decorated) == 1:
+        return decorated[0]
+    return next(
+        (
+            item
+            for item in dialog_filters
+            if dialog_filter_title(item) == normalized_title
+        ),
+        None,
+    )
+
+
 def input_peer_key(peer):
     for attr in ("channel_id", "chat_id", "user_id"):
         value = getattr(peer, attr, None)
@@ -832,19 +867,12 @@ async def ensure_dialog_folder(client: TelegramClient, title: str, peers):
 
     response = await client(functions.messages.GetDialogFiltersRequest())
     filters = list(getattr(response, "filters", []) or [])
-    existing = next(
-        (
-            item
-            for item in filters
-            if item.__class__.__name__ == "DialogFilter"
-            and dialog_filter_title(item) == normalized_title
-        ),
-        None,
-    )
+    existing = select_existing_dialog_folder(filters, normalized_title)
     input_peers = [await client.get_input_entity(peer) for peer in peers]
     input_by_key = {input_peer_key(peer): peer for peer in input_peers}
 
     if existing:
+        existing_title = dialog_filter_title(existing)
         current_peers = list(getattr(existing, "include_peers", None) or [])
         current_keys = {input_peer_key(peer) for peer in current_peers}
         added_peers = [peer for key, peer in input_by_key.items() if key not in current_keys]
@@ -852,7 +880,8 @@ async def ensure_dialog_folder(client: TelegramClient, title: str, peers):
             next_filter = clone_dialog_filter_with_peers(existing, current_peers + added_peers)
             await client(functions.messages.UpdateDialogFilterRequest(id=existing.id, filter=next_filter))
         return {
-            "title": normalized_title,
+            "title": existing_title or normalized_title,
+            "requestedTitle": normalized_title,
             "id": existing.id,
             "created": False,
             "addedPeers": len(added_peers),
