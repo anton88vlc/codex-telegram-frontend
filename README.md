@@ -89,6 +89,7 @@ Voice notes are optional. The supported STT paths today are Deepgram, OpenAI, or
 - Voice/audio: Telegram voice is transcribed first, shown as an italic quoted transcript, then sent to Codex as text.
 - Clean bounded history backfill: user prompts plus assistant final answers by default.
 - Quickstart onboarding: pinned Codex threads are included first, latest active Codex project threads become Telegram groups/topics, and existing Codex Chats become private topics inside the bot direct chat when the bot has Threaded Mode enabled.
+- After onboarding, fresh existing Codex Desktop `Chats` can auto-sync into bot-private topics without rerunning the whole bootstrap.
 - New private bot topics are not auto-created as Desktop `Chats` by default. The app-server `thread/start` path is useful, but it does not yet behave exactly like pressing `New chat` in Codex Desktop, so the safe default is explicit `/attach` instead of fake magic.
 - Private bot topic preflight for Codex Desktop `Chats`: `npm run bot:topics`.
 - Bootstrap can create/reuse Telegram folder, project groups, topics, bot folder entry, generated project group avatars and status bars.

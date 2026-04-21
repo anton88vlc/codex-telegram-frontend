@@ -81,6 +81,11 @@ Use this for things that should survive restarts and should not be changed from 
 | `topicAutoSyncPollIntervalMs` | `60000` | How often auto-sync scans the local Codex DB. |
 | `topicAutoSyncMaxThreadAgeMs` | `604800000` | Freshness window for auto-created topics. Default is 7 days; `0` disables the age cutoff. |
 | `topicAutoSyncMaxActionsPerTick` | `8` | Safety cap for one auto-sync pass. If a project needs more, run `/sync-project` manually and look at the preview. |
+| `privateTopicAutoSyncEnabled` | `true` | Auto-sync existing Codex Desktop `Chats` into bot-private topics when the bot has private threaded mode enabled. This only follows real local Codex Chats; it does not fake-create new Desktop Chats. |
+| `privateTopicAutoSyncLimit` | `5` | Max fresh Codex Chats tracked in the bot direct chat. Keep this small, because private chat topics should feel like a working set, not an archive dump. |
+| `privateTopicAutoSyncPollIntervalMs` | `60000` | How often the bridge scans the local Codex DB for new Codex Chats. |
+| `privateTopicAutoSyncMaxThreadAgeMs` | `604800000` | Freshness window for auto-created private topics. Default is 7 days; `0` disables the age cutoff. |
+| `privateTopicAutoSyncMaxActionsPerTick` | `3` | Safety cap for one private-topic sync pass. Extra creates/renames are deferred to later ticks instead of flooding Telegram. |
 
 Hard take: keep this file boring. If a setting can make the bridge unusable, do not expose it casually in Telegram until there is validation and rollback.
 
@@ -131,7 +136,9 @@ Working commands today:
 - `/sync-project [count]` - applies that working-set sync.
 - `/mode native` - pins the binding transport to native. It is the only supported v1 mode.
 
-Auto-sync uses the same sync plan as `/project-status` and `/sync-project`, but only when `topicAutoSyncEnabled` is explicitly true. It creates/reopens/renames/parks sync-managed topics inside the configured working-set limit. It does not delete topics and does not mutate manual bindings.
+Project auto-sync uses the same sync plan as `/project-status` and `/sync-project`, but only when `topicAutoSyncEnabled` is explicitly true. It creates/reopens/renames/parks sync-managed topics inside the configured working-set limit. It does not delete topics and does not mutate manual bindings.
+
+Private Codex Chat auto-sync is separate. When `privateTopicAutoSyncEnabled` is on, the bridge periodically looks for fresh projectless Codex Desktop `Chats` and creates or renames matching private topics inside the bot direct chat. It never deletes topics, never parks old private topics, and deliberately does not use the experimental app-server `thread/start` path.
 
 Telegram's command menu prefers underscores, so the bridge also accepts `/attach_latest`, `/project_status`, `/sync_project`, `/mode_native` and `/cancel_queue`. The old hyphen commands still work; the menu-safe aliases are just less annoying in real Telegram clients.
 

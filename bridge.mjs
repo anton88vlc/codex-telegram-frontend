@@ -14,6 +14,7 @@ import {
   logBridgeEvent,
 } from "./lib/bridge-events.mjs";
 import { isAuthorized } from "./lib/bridge-bindings.mjs";
+import { syncAutoCodexChatTopics } from "./lib/codex-chat-sync-runner.mjs";
 import { handlePlainText } from "./lib/inbound-turn-runner.mjs";
 import { normalizeInboundPrompt, parseCommand } from "./lib/message-routing.mjs";
 import { rememberOutbound } from "./lib/outbound-memory.mjs";
@@ -273,6 +274,7 @@ async function main() {
 
   let consecutivePollErrors = 0;
   let lastTopicAutoSyncAt = 0;
+  let lastPrivateTopicAutoSyncAt = 0;
   while (true) {
     let updates = [];
     try {
@@ -327,6 +329,25 @@ async function main() {
         topicAutoSyncResult = await syncAutoProjectTopics({ config, state, nowMs: lastTopicAutoSyncAt });
       } catch (error) {
         logBridgeEvent("topic_auto_sync_error", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    let privateTopicAutoSyncResult = { changed: false };
+    if (
+      config.privateTopicAutoSyncEnabled !== false &&
+      Date.now() - lastPrivateTopicAutoSyncAt >= config.privateTopicAutoSyncPollIntervalMs
+    ) {
+      lastPrivateTopicAutoSyncAt = Date.now();
+      try {
+        privateTopicAutoSyncResult = await syncAutoCodexChatTopics({
+          config,
+          state,
+          nowMs: lastPrivateTopicAutoSyncAt,
+        });
+      } catch (error) {
+        logBridgeEvent("codex_chat_auto_sync_error", {
           error: error instanceof Error ? error.message : String(error),
         });
       }
@@ -396,6 +417,7 @@ async function main() {
 
     if (
       topicAutoSyncResult.changed ||
+      privateTopicAutoSyncResult.changed ||
       appServerStreamResult.changed ||
       syncResult.changed ||
       queueResult.changed ||

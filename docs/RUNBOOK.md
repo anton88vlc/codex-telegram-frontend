@@ -271,13 +271,15 @@ If the check reports private topics as off, open @BotFather, select the bot, ena
 
 Once private topics are enabled, onboarding can map existing Codex Desktop `Chats` into bot-private topics. Creating a brand-new Desktop `Chat` from a brand-new Telegram topic is still not first-class: the app-server `thread/start` path creates a usable backend thread, but it does not behave exactly like the Desktop `New chat` button. Keep `privateTopicAutoCreateChats` off unless you are deliberately testing that rough edge.
 
+After bootstrap, the live bridge also watches for fresh Codex Desktop `Chats` and creates/renames matching bot-private topics automatically. This is intentionally narrower than project topic auto-sync: it only follows existing Codex Chats, keeps a small fresh working set, and does not delete or park anything in the bot direct chat.
+
 When a new Codex Desktop `Chats` item appears after onboarding, sync only that surface instead of rerunning the whole project quickstart:
 
 ```bash
 npm run onboard:quickstart -- --chats-only
 ```
 
-This is the safe repair path. It creates or reuses bot-private topics, merges them into the existing bootstrap index, and skips history backfill for old private topics so Telegram does not get duplicate transcripts.
+This is the safe repair path if the automatic watcher was off, stale, or blocked by Telegram. It creates or reuses bot-private topics, merges them into the existing bootstrap index, and skips history backfill for old private topics so Telegram does not get duplicate transcripts.
 
 Apply the bundled bot avatar after the user-side Telegram session is authorized:
 
@@ -310,11 +312,13 @@ Optional auto-sync:
 ```json
 {
   "topicAutoSyncEnabled": true,
-  "topicAutoSyncLimit": 3
+  "topicAutoSyncLimit": 3,
+  "privateTopicAutoSyncEnabled": true,
+  "privateTopicAutoSyncLimit": 5
 }
 ```
 
-It uses the same plan as `/sync-project`, only for already bootstrapped project groups. It creates/reopens/renames/parks sync-managed topics inside the limit, ignores manual topics and never deletes Telegram history. If the preview looks weird, keep it off. Being automatic is not a virtue by itself.
+Project auto-sync uses the same plan as `/sync-project`, only for already bootstrapped project groups. It creates/reopens/renames/parks sync-managed topics inside the limit, ignores manual topics and never deletes Telegram history. Private Chat auto-sync is softer: it only creates/renames bot-private topics for real Codex Desktop `Chats`. If the preview looks weird, keep project auto-sync off. Being automatic is not a virtue by itself.
 
 ## History Backfill
 
