@@ -9,6 +9,7 @@ import {
   syncAppServerStreamProgress,
   syncAppServerStreamSubscriptions,
 } from "./lib/app-server-stream-runner.mjs";
+import { handleApprovalCallbackQuery } from "./lib/app-server-approvals.mjs";
 import {
   configureBridgeEventLog,
   logBridgeEvent,
@@ -50,7 +51,7 @@ import {
 } from "./lib/telegram-attachments.mjs";
 import { drainTurnQueues } from "./lib/turn-queue-runner.mjs";
 import { captureWorktreeBaseline, loadChangedFilesTextForThread } from "./lib/worktree-summary.mjs";
-import { getMe, getUpdates } from "./lib/telegram.mjs";
+import { answerCallbackQuery, getMe, getUpdates } from "./lib/telegram.mjs";
 
 const TELEGRAM_SERVICE_MESSAGE_KEYS = [
   "forum_topic_created",
@@ -219,6 +220,30 @@ async function processMessage({ config, state, message, appServerStream = null, 
   }
 }
 
+async function processCallbackQuery({ config, state, callbackQuery, appServerStream = null }) {
+  if (!callbackQuery?.id) {
+    return false;
+  }
+  const pseudoMessage = {
+    chat: callbackQuery.message?.chat,
+    from: callbackQuery.from,
+  };
+  if (!isAuthorized(config, pseudoMessage)) {
+    await answerCallbackQuery(config.botToken, {
+      callbackQueryId: callbackQuery.id,
+      text: "Not authorized.",
+      showAlert: true,
+    });
+    return true;
+  }
+  return handleApprovalCallbackQuery({
+    config,
+    state,
+    callbackQuery,
+    appServerStream,
+  });
+}
+
 async function checkpointMessage(statePath, state, update) {
   const updateId = Number.isInteger(update?.update_id) ? update.update_id : state.lastUpdateId;
   const messageKey = makeMessageKey(update.message);
@@ -315,6 +340,14 @@ async function main() {
         await saveState(config.statePath, state);
       } else {
         const update = item.updates[0];
+        if (update?.callback_query) {
+          await processCallbackQuery({
+            config,
+            state,
+            callbackQuery: update.callback_query,
+            appServerStream,
+          });
+        }
         state.lastUpdateId = Number.isInteger(update.update_id) ? update.update_id : state.lastUpdateId;
         await saveState(config.statePath, state);
       }

@@ -56,7 +56,7 @@ test("subscribeAppServerStream reports subscribe failures without throwing", asy
   assert.equal(events[0].payload.threadId, "thread-1");
 });
 
-test("syncAppServerStreamSubscriptions subscribes active bindings with current turns", async () => {
+test("syncAppServerStreamSubscriptions subscribes eligible bindings before turns start", async () => {
   const subscribed = [];
   const result = await syncAppServerStreamSubscriptions({
     config: {},
@@ -73,8 +73,8 @@ test("syncAppServerStreamSubscriptions subscribes active bindings with current t
     },
   });
 
-  assert.deepEqual(result, { subscribed: 1 });
-  assert.deepEqual(subscribed, ["thread-1"]);
+  assert.deepEqual(result, { subscribed: 2 });
+  assert.deepEqual(subscribed, ["thread-1", "thread-2"]);
 });
 
 test("app-server patch helpers keep deterministic buckets", () => {
@@ -150,6 +150,58 @@ test("syncAppServerStreamProgress converts stream events into progress updates",
   assert.match(upsert[3].text, /Thinking: Checking repo/);
   assert.match(upsert[4], /Changed files/);
   assert.equal(calls.find((call) => call[0] === "event")?.[1], "app_server_stream_progress");
+});
+
+test("syncAppServerStreamProgress sends approval requests to Telegram topics", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url: String(url), body: JSON.parse(options.body) });
+    return new Response(JSON.stringify({ ok: true, result: { message_id: 321 } }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  };
+  try {
+    const state = {
+      bindings: {
+        "binding-1": {
+          threadId: "thread-1",
+          chatId: "-1001",
+          messageThreadId: 42,
+          lastMirroredUserMessageId: 7,
+        },
+      },
+    };
+    const result = await syncAppServerStreamProgress({
+      config: { botToken: "token" },
+      state,
+      stream: {
+        drainEvents: () => [
+          {
+            type: "app_server_request",
+            category: "approval",
+            requestId: "77",
+            requestKind: "command",
+            method: "item/commandExecution/requestApproval",
+            threadId: "thread-1",
+            commandText: "ps -ax",
+            proposedExecpolicyAmendment: ["ps"],
+            ts: "2026-04-21T18:47:30.000Z",
+          },
+        ],
+      },
+      logEventFn: (type, payload) => calls.push({ type, payload }),
+    });
+
+    assert.deepEqual(result, { changed: true, applied: 1, events: 1 });
+    assert.equal(calls.find((call) => call.url)?.url, "https://api.telegram.org/bottoken/sendMessage");
+    assert.equal(calls.find((call) => call.url)?.body.reply_to_message_id, 7);
+    assert.equal(state.bindings["binding-1"].currentTurn.pendingApprovals["77"].telegramMessageId, 321);
+    assert.equal(calls.find((call) => call.type === "app_server_approval_request_sent").payload.requestId, "77");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("syncAppServerStreamProgress ignores empty streams", async () => {

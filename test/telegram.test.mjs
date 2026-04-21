@@ -2,10 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  answerCallbackQuery,
   deleteForumTopic,
   deleteMessages,
   downloadTelegramFile,
   getFile,
+  getUpdates,
   sendMessage,
   sendMessageDraft,
   setChatMenuButton,
@@ -88,6 +90,28 @@ test("sendMessage sends explicit entities instead of parse mode", async () => {
     assert.deepEqual(calls[0].body.entities, [
       { type: "date_time", offset: 6, length: 5, unix_time: 1776549480, date_time_format: "t" },
     ]);
+  });
+});
+
+test("getUpdates subscribes to callback queries for inline approval buttons", async () => {
+  await withMockTelegramFetch(async (calls) => {
+    await getUpdates("token", { offset: 10, timeoutSeconds: 1, limit: 2 });
+
+    assert.equal(calls[0].url, "https://api.telegram.org/bottoken/getUpdates");
+    assert.deepEqual(calls[0].body.allowed_updates, ["message", "callback_query"]);
+  });
+});
+
+test("answerCallbackQuery acknowledges inline button taps", async () => {
+  await withMockTelegramFetch(async (calls) => {
+    await answerCallbackQuery("token", {
+      callbackQueryId: "callback-1",
+      text: "Approved.",
+    });
+
+    assert.equal(calls[0].url, "https://api.telegram.org/bottoken/answerCallbackQuery");
+    assert.equal(calls[0].body.callback_query_id, "callback-1");
+    assert.equal(calls[0].body.text, "Approved.");
   });
 });
 

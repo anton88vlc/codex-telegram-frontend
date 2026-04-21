@@ -6,6 +6,7 @@ import {
   categorizeAppServerMethod,
   formatAppServerStreamProgressLine,
   normalizeAppServerNotification,
+  normalizeAppServerRequest,
   shouldKeepAppServerStreamEvent,
   summarizeAppServerStreamEvents,
 } from "../lib/app-server-stream.mjs";
@@ -42,6 +43,32 @@ test("normalizeAppServerNotification extracts stable event fields", () => {
   assert.equal(event.deltaText, "hello");
   assert.equal(event.deltaChars, 5);
   assert.equal(event.textPreview, "hello");
+});
+
+test("normalizeAppServerRequest extracts command approval requests", () => {
+  const event = normalizeAppServerRequest(
+    {
+      id: 77,
+      method: "item/commandExecution/requestApproval",
+      params: {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        itemId: "cmd-1",
+        approvalReason: "Need to inspect local processes.",
+        commandActions: [{ cmd: "ps -ax -o pid,start,etime,command | rg Codex" }],
+        proposedExecpolicyAmendment: ["ps"],
+      },
+    },
+    { ts: "2026-04-21T18:47:30.000Z" },
+  );
+
+  assert.equal(event.type, "app_server_request");
+  assert.equal(event.category, "approval");
+  assert.equal(event.requestKind, "command");
+  assert.equal(event.requestId, "77");
+  assert.equal(event.threadId, "thread-1");
+  assert.equal(event.commandText, "ps -ax -o pid,start,etime,command | rg Codex");
+  assert.deepEqual(event.proposedExecpolicyAmendment, ["ps"]);
 });
 
 test("normalizeAppServerNotification formats plan updates for Telegram progress", () => {

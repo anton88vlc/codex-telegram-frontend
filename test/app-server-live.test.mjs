@@ -90,3 +90,43 @@ test("AppServerLiveStream subscribes and queues normalized notifications", async
 
   await stream.close();
 });
+
+test("AppServerLiveStream holds approval requests and sends Telegram decisions back", async () => {
+  const stream = new AppServerLiveStream({
+    url: "ws://app-server.test",
+    WebSocketImpl: FakeWebSocket,
+    connectTimeoutMs: 100,
+  });
+
+  await stream.subscribe("thread-1");
+  FakeWebSocket.last.serverMessage({
+    id: 77,
+    method: "item/commandExecution/requestApproval",
+    params: {
+      threadId: "thread-1",
+      turnId: "turn-1",
+      itemId: "cmd-1",
+      commandActions: [{ cmd: "ps -ax" }],
+      proposedExecpolicyAmendment: ["ps"],
+    },
+  });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+
+  const events = stream.drainEvents();
+  assert.equal(events.length, 1);
+  assert.equal(events[0].type, "app_server_request");
+  assert.equal(events[0].requestKind, "command");
+  assert.equal(events[0].requestId, "77");
+  assert.equal(stream.hasServerRequest("77"), true);
+
+  const ok = stream.respondToServerRequest("77", { decision: "accept" });
+
+  assert.equal(ok, true);
+  assert.equal(stream.hasServerRequest("77"), false);
+  assert.deepEqual(FakeWebSocket.last.sent.at(-1), {
+    id: 77,
+    result: { decision: "accept" },
+  });
+
+  await stream.close();
+});
