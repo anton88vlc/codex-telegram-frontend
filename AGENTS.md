@@ -50,6 +50,7 @@ These are local/runtime artifacts. Do not commit them unless the user explicitly
 - Do not revert unrelated user changes. There may be intentional dirty work in progress.
 - Use dry-run paths before destructive Telegram actions. Topic cleanup and backfill are especially easy to make ugly.
 - Keep commits small and meaningful. The project history should read like a sequence of sane product slices.
+- Track meaningful product/architecture work in Linear so jumps between topics do not lose important threads. Do not create Linear noise for every tiny fix; use it for real backlog items, decisions, and follow-up slices that should survive context switches.
 - If you touch docs, keep the tone human and direct.
 
 ## Checks
