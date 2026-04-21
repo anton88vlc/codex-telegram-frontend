@@ -87,6 +87,8 @@ Use this for things that should survive restarts and should not be changed from 
 | `privateTopicAutoSyncPollIntervalMs` | `60000` | How often the bridge scans the local Codex DB for new Codex Chats. |
 | `privateTopicAutoSyncMaxThreadAgeMs` | `604800000` | Freshness window for auto-created private topics. Default is 7 days; `0` disables the age cutoff. |
 | `privateTopicAutoSyncMaxActionsPerTick` | `3` | Safety cap for one private-topic sync pass. Extra creates/renames are deferred to later ticks instead of flooding Telegram. |
+| `privateTopicAutoBackfillEnabled` | `true` | When a fresh Codex Chat private topic is created by the live watcher, import a small clean history tail right away. Existing private topics are not replayed. |
+| `privateTopicAutoBackfillMaxMessages` | `10` | Clean history tail size for newly auto-created private Codex Chat topics. User prompts plus final answers only, unless `historyAssistantPhases` says otherwise. |
 
 Hard take: keep this file boring. If a setting can make the bridge unusable, do not expose it casually in Telegram until there is validation and rollback.
 
@@ -139,7 +141,7 @@ Working commands today:
 
 Project auto-sync uses the same sync plan as `/project-status` and `/sync-project`, but only when `topicAutoSyncEnabled` is explicitly true. It creates/reopens/renames/parks sync-managed topics inside the configured working-set limit. It does not delete topics and does not mutate manual bindings.
 
-Private Codex Chat auto-sync is separate. When `privateTopicAutoSyncEnabled` is on, the bridge periodically looks for fresh projectless Codex Desktop `Chats` and creates or renames matching private topics inside the bot direct chat. It never deletes topics, never parks old private topics, and deliberately does not use the experimental app-server `thread/start` path.
+Private Codex Chat auto-sync is separate. When `privateTopicAutoSyncEnabled` is on, the bridge periodically looks for fresh projectless Codex Desktop `Chats` and creates or renames matching private topics inside the bot direct chat. Newly created private topics also get a small clean history tail so they are usable immediately. Existing private topics are not replayed, because duplicate transcripts are worse than an empty old topic. It never deletes topics, never parks old private topics, and deliberately does not use the experimental app-server `thread/start` path.
 
 Telegram's command menu prefers underscores, so the bridge also accepts `/attach_latest`, `/project_status`, `/sync_project`, `/mode_native` and `/cancel_queue`. The old hyphen commands still work; the menu-safe aliases are just less annoying in real Telegram clients.
 

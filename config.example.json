@@ -68,5 +68,7 @@
   "privateTopicAutoSyncLimit": 5,
   "privateTopicAutoSyncPollIntervalMs": 60000,
   "privateTopicAutoSyncMaxThreadAgeMs": 604800000,
-  "privateTopicAutoSyncMaxActionsPerTick": 3
+  "privateTopicAutoSyncMaxActionsPerTick": 3,
+  "privateTopicAutoBackfillEnabled": true,
+  "privateTopicAutoBackfillMaxMessages": 10
 }

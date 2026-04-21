@@ -271,7 +271,7 @@ If the check reports private topics as off, open @BotFather, select the bot, ena
 
 Once private topics are enabled, onboarding can map existing Codex Desktop `Chats` into bot-private topics. Creating a brand-new Desktop `Chat` from a brand-new Telegram topic is still not first-class: the app-server `thread/start` path creates a usable backend thread, but it does not behave exactly like the Desktop `New chat` button. Keep `privateTopicAutoCreateChats` off unless you are deliberately testing that rough edge.
 
-After bootstrap, the live bridge also watches for fresh Codex Desktop `Chats` and creates/renames matching bot-private topics automatically. This is intentionally narrower than project topic auto-sync: it only follows existing Codex Chats, keeps a small fresh working set, and does not delete or park anything in the bot direct chat.
+After bootstrap, the live bridge also watches for fresh Codex Desktop `Chats` and creates/renames matching bot-private topics automatically. New private topics get a short clean history tail right away, so you do not open an empty tab with only a status bar staring back at you. This is intentionally narrower than project topic auto-sync: it only follows existing Codex Chats, keeps a small fresh working set, and does not delete or park anything in the bot direct chat.
 
 When a new Codex Desktop `Chats` item appears after onboarding, sync only that surface instead of rerunning the whole project quickstart:
 
@@ -279,7 +279,7 @@ When a new Codex Desktop `Chats` item appears after onboarding, sync only that s
 npm run onboard:quickstart -- --chats-only
 ```
 
-This is the safe repair path if the automatic watcher was off, stale, or blocked by Telegram. It creates or reuses bot-private topics, merges them into the existing bootstrap index, and skips history backfill for old private topics so Telegram does not get duplicate transcripts.
+This is the safe repair path if the automatic watcher was off, stale, or blocked by Telegram. It creates or reuses bot-private topics, merges them into the existing bootstrap index, backfills newly created topics, and skips replaying old private topics so Telegram does not get duplicate transcripts.
 
 Apply the bundled bot avatar after the user-side Telegram session is authorized:
 
@@ -318,7 +318,7 @@ Optional auto-sync:
 }
 ```
 
-Project auto-sync uses the same plan as `/sync-project`, only for already bootstrapped project groups. It creates/reopens/renames/parks sync-managed topics inside the limit, ignores manual topics and never deletes Telegram history. Private Chat auto-sync is softer: it only creates/renames bot-private topics for real Codex Desktop `Chats`. If the preview looks weird, keep project auto-sync off. Being automatic is not a virtue by itself.
+Project auto-sync uses the same plan as `/sync-project`, only for already bootstrapped project groups. It creates/reopens/renames/parks sync-managed topics inside the limit, ignores manual topics and never deletes Telegram history. Private Chat auto-sync is softer: it only creates/renames bot-private topics for real Codex Desktop `Chats`, then backfills the clean tail only for topics it just created. If the preview looks weird, keep project auto-sync off. Being automatic is not a virtue by itself.
 
 ## History Backfill
 
@@ -342,7 +342,7 @@ Notes:
 - default backfill imports only the configured clean tail: user prompts plus configured assistant phases, `final_answer` by default
 - commentary, heartbeat/system-like entries, Codex app directives and memory citations are skipped by default
 - topic root, pinned status bar and recent live mirror ids from `state/state.json` are protected
-- bot-private Codex `Chats` topics can be backfilled, but the helper skips the existing-history scan there because Telethon does not reliably read those topic replies yet. `send-topic-message`, `wait-topic-text` and cleanup intentionally refuse that surface for now. Do not rerun private-topic backfill casually unless duplicates are acceptable or you are doing a clean rebuild.
+- bot-private Codex `Chats` topics can be backfilled. The live watcher does it automatically for freshly created private topics. The helper skips the existing-history scan there because Telethon does not reliably read those topic replies yet, so `send-topic-message`, `wait-topic-text` and cleanup intentionally refuse that surface for now. Do not rerun private-topic backfill casually unless duplicates are acceptable or you are doing a clean rebuild.
 - Telegram `retry_after` is respected, so a partial 429 can usually be resumed by rerunning the command
 
 If a status bar message exists but Telegram Desktop does not surface the pinned banner, re-pin it via MTProto:

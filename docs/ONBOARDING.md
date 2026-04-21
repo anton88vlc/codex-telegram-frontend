@@ -141,7 +141,7 @@ If Codex Desktop gets a new `Chats` item after onboarding, do not rerun a broad 
 npm run onboard:quickstart -- --chats-only
 ```
 
-That updates only the bot-private `Codex - Chats` surface. It skips project groups and avoids replaying history into already existing private topics, because Telegram does not give us a clean history scan there yet.
+That updates only the bot-private `Codex - Chats` surface. It skips project groups, backfills newly created private topics, and avoids replaying history into already existing private topics, because Telegram does not give us a clean history scan there yet.
 
 If private bot topics are not enabled yet, quickstart should keep project onboarding alive and report the Chats surface warning plainly. Rough beta edges are fine; silent fake project groups are not.
 

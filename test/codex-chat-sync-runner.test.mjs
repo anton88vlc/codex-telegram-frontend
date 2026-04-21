@@ -221,6 +221,63 @@ test("syncAutoCodexChatTopics reads private surfaces from the bootstrap index sh
   assert.equal(applied[0].plan.summary.createCount, 1);
 });
 
+test("syncAutoCodexChatTopics backfills newly created private Codex Chat topics", async () => {
+  const state = { bindings: {} };
+  const backfillCalls = [];
+  const result = await syncAutoCodexChatTopics({
+    config: {
+      botToken: "token",
+      threadsDbPath: "/tmp/threads.sqlite",
+      projectIndexPath: "/tmp/bootstrap-result.json",
+      privateTopicAutoSyncEnabled: true,
+      privateTopicAutoSyncLimit: 5,
+      privateTopicAutoSyncMaxActionsPerTick: 3,
+      privateTopicAutoBackfillEnabled: true,
+      privateTopicAutoBackfillMaxMessages: 7,
+      historyMaxUserPrompts: 2,
+      historyAssistantPhases: ["final_answer"],
+    },
+    state,
+    loadProjectIndexFn: async () => [
+      {
+        surface: "private-chat-topics",
+        groupTitle: "Codex - Chats",
+        botApiChatId: "607",
+      },
+    ],
+    listQuickstartWorkItemsFn: async () => ({
+      threads: [{ id: "chat-1", title: "Chronicle question", cwd: "", rollout_path: "/tmp/rollout.jsonl" }],
+    }),
+    applyCodexChatSyncPlanFn: async () => {
+      state.bindings["group:607:topic:22"] = {
+        chatId: "607",
+        messageThreadId: 22,
+        threadId: "chat-1",
+      };
+      return { changed: true, actionCount: 1, created: [{ threadId: "chat-1", topicId: 22 }], renamed: [] };
+    },
+    sendHistoryBackfillFn: async (args) => {
+      backfillCalls.push(args);
+      return { status: "ok", messages: 3, sent: 4 };
+    },
+    logEventFn: () => {},
+  });
+
+  assert.equal(result.changed, true);
+  assert.equal(result.backfill.length, 1);
+  assert.equal(result.backfill[0].status, "ok");
+  assert.equal(backfillCalls.length, 1);
+  assert.equal(backfillCalls[0].chatId, "607");
+  assert.equal(backfillCalls[0].messageThreadId, 22);
+  assert.equal(backfillCalls[0].thread.rollout_path, "/tmp/rollout.jsonl");
+  assert.equal(backfillCalls[0].maxHistoryMessages, 7);
+  assert.equal(backfillCalls[0].maxUserPrompts, 2);
+  assert.deepEqual(backfillCalls[0].assistantPhases, ["final_answer"]);
+  assert.equal(state.bindings["group:607:topic:22"].historyBackfillStatus, "ok");
+  assert.equal(state.bindings["group:607:topic:22"].historyImportedCount, 3);
+  assert.equal(state.bindings["group:607:topic:22"].historyTelegramMessagesSent, 4);
+});
+
 test("syncAutoCodexChatTopics applies oversized plans in small batches", async () => {
   const logs = [];
   const applied = [];
