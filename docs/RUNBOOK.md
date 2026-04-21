@@ -271,6 +271,14 @@ If the check reports private topics as off, open @BotFather, select the bot, ena
 
 Once private topics are enabled, onboarding can map existing Codex Desktop `Chats` into bot-private topics. Creating a brand-new Desktop `Chat` from a brand-new Telegram topic is still not first-class: the app-server `thread/start` path creates a usable backend thread, but it does not behave exactly like the Desktop `New chat` button. Keep `privateTopicAutoCreateChats` off unless you are deliberately testing that rough edge.
 
+When a new Codex Desktop `Chats` item appears after onboarding, sync only that surface instead of rerunning the whole project quickstart:
+
+```bash
+npm run onboard:quickstart -- --chats-only
+```
+
+This is the safe repair path. It creates or reuses bot-private topics, merges them into the existing bootstrap index, and skips history backfill for old private topics so Telegram does not get duplicate transcripts.
+
 Apply the bundled bot avatar after the user-side Telegram session is authorized:
 
 ```bash

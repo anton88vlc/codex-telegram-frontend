@@ -101,6 +101,7 @@ function parseArgs(argv) {
     threadLimit: DEFAULT_QUICKSTART_THREAD_LIMIT,
     threadsPerProject: 3,
     includeChats: true,
+    chatsOnly: false,
     privateChatUserId: null,
     chatsSurfaceTitle: DEFAULT_CHATS_SURFACE_TITLE,
     historyMaxMessages: DEFAULT_HISTORY_MAX_MESSAGES,
@@ -152,6 +153,7 @@ function parseArgs(argv) {
     _historyAssistantPhasesExplicit: false,
     _historyIncludeHeartbeatsExplicit: false,
     _outputPathExplicit: false,
+    _smokeExplicit: false,
   };
   if (command === "--help" || command === "-h") {
     args.command = null;
@@ -179,6 +181,10 @@ function parseArgs(argv) {
         break;
       case "--no-chats":
         args.includeChats = false;
+        break;
+      case "--chats-only":
+        args.chatsOnly = true;
+        args.includeChats = true;
         break;
       case "--private-chat-user-id":
         args.privateChatUserId = rest[++index];
@@ -266,6 +272,7 @@ function parseArgs(argv) {
         break;
       case "--smoke":
         args.smoke = true;
+        args._smokeExplicit = true;
         break;
       case "--smoke-text":
         args.smokeText = rest[++index];
@@ -356,6 +363,9 @@ function parseArgs(argv) {
       args.smoke = true;
       args.yes = true;
     }
+    if (args.chatsOnly && !args._smokeExplicit) {
+      args.smoke = false;
+    }
   }
 
   return args;
@@ -367,7 +377,7 @@ function renderHelp() {
     "  node scripts/onboard.mjs prepare [--skip-admin-deps] [--login-phone|--login-qr] [--phone +34600111222] [--login-code 12345]",
     "  node scripts/onboard.mjs doctor [--json]",
     "  node scripts/onboard.mjs scan [--project-limit 8] [--threads-per-project 3] [--json]",
-    "  node scripts/onboard.mjs quickstart [--thread-limit 10] [--history-max-messages 10] [--preview] [--no-chats] [--skip-bot-avatar]",
+    "  node scripts/onboard.mjs quickstart [--thread-limit 10] [--history-max-messages 10] [--preview] [--no-chats|--chats-only] [--skip-bot-avatar]",
     "  node scripts/onboard.mjs plan --project /path/to/repo [--project /path/to/other] [--threads-per-project 3] [--history-max-messages 40] [--history-assistant-phase final_answer] [--group-prefix 'Codex - '] [--folder-title codex] [--topic-display tabs|list] [--write]",
     "  node scripts/onboard.mjs plan --rehearsal --project /path/to/repo [--write]",
     "  node scripts/onboard.mjs wizard [--rehearsal] [--write] [--apply] [--cleanup-dry-run|--cleanup] [--backfill-dry-run|--backfill] [--smoke]",
@@ -383,6 +393,7 @@ function renderHelp() {
     `  ${VOICE_TRANSCRIPTION_PROVIDER_NOTE}`,
     "  scan is read-only and shows candidate Codex projects/threads.",
     "  quickstart is automatic: pinned Codex threads first, then latest active threads and Chats, bounded clean history, bootstrap, best-effort bot avatar, backfill and smoke.",
+    "  --chats-only is the safe repair path for Codex Desktop Chats: it updates only bot-private topics and skips project groups.",
     "  plan is a preview by default; add --write to update admin/bootstrap-plan.json.",
     "  wizard is the manual escape hatch and can write/apply/backfill/smoke with explicit confirmation or flags.",
     "  history import defaults come from config.local.json unless a history flag overrides them.",
@@ -1814,6 +1825,20 @@ async function runBackfillForSummary(args, python, bootstrapSummary, { dryRun = 
   const results = [];
   for (const group of bootstrapSummary?.groups ?? []) {
     for (const topic of group.topics ?? []) {
+      if ((group.privateChat || group.surface === PRIVATE_CHAT_TOPICS_SURFACE) && topic.createdTopic === false) {
+        const skipped = {
+          status: "skipped",
+          reason: "existing bot-private topic history is not scanned; skipping to avoid duplicate backfill",
+          threadId: topic.threadId,
+          chatId: String(group.botApiChatId),
+          topicId: String(topic.topicId),
+        };
+        process.stdout.write(
+          `Skipping history backfill for existing private topic ${topic.title || topic.threadId}: private topic history scan is unavailable, so replay would duplicate old messages.\n`,
+        );
+        results.push(skipped);
+        continue;
+      }
       const commandArgs = [
         ...adminBaseArgs(args),
         "backfill-thread",
@@ -1988,6 +2013,9 @@ async function loadQuickstartProjectsWithThreads(args) {
   for (const thread of threads) {
     if (args.includeChats && isLikelyCodexChatThread(thread)) {
       chatThreads.push(thread);
+      continue;
+    }
+    if (args.chatsOnly) {
       continue;
     }
     const projectRoot = String(thread.cwd ?? "").trim();

@@ -108,6 +108,7 @@ test("onboard CLI supports top-level help", () => {
   assert.match(result.stdout, /--cleanup-dry-run/);
   assert.match(result.stdout, /prepare/);
   assert.match(result.stdout, /--login-phone/);
+  assert.match(result.stdout, /--chats-only/);
 });
 
 test("onboard prepare creates local config and admin env from safe templates", () => {
@@ -631,6 +632,73 @@ test("onboard quickstart maps Codex Chats to private bot topics", () => {
   );
   assert.deepEqual(
     plan.projects[1].topics.map((topic) => topic.threadId),
+    ["c1", "c2"],
+  );
+});
+
+test("onboard quickstart can sync only Codex Chats without project groups", () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codex-onboard-quickstart-chats-only-"));
+  const dbPath = path.join(tmpDir, "state.sqlite");
+  const outputPath = path.join(tmpDir, "bootstrap-plan.json");
+  const homeDir = os.homedir().replaceAll("'", "''");
+  const sql = `
+    create table threads (
+      id text,
+      title text,
+      cwd text,
+      archived integer,
+      updated_at integer,
+      updated_at_ms integer,
+      source text,
+      rollout_path text,
+      model_provider text,
+      model text,
+      reasoning_effort text,
+      tokens_used integer,
+      agent_nickname text,
+      agent_role text
+    );
+    insert into threads values ('c1', 'Mail triage', '${homeDir}', 0, 40, 40000, 'local', '/tmp/chat-a.jsonl', '', 'gpt-5.4', 'xhigh', 40, '', '');
+    insert into threads values ('p1', 'Project thread', '/tmp/project-a', 0, 30, 30000, 'local', '/tmp/rollout-a.jsonl', '', 'gpt-5.4', 'high', 20, '', '');
+    insert into threads values ('c2', 'Scratch chat', '${homeDir}', 0, 20, 20000, 'local', '/tmp/chat-b.jsonl', '', 'gpt-5.4', 'high', 30, '', '');
+  `;
+  const sqlite = spawnSync("sqlite3", [dbPath, sql], {
+    cwd: PROJECT_ROOT,
+    encoding: "utf8",
+  });
+  assert.equal(sqlite.status, 0, sqlite.stderr);
+
+  const result = spawnSync(
+    process.execPath,
+    [
+      "scripts/onboard.mjs",
+      "quickstart",
+      "--preview",
+      "--write",
+      "--chats-only",
+      "--thread-limit",
+      "3",
+      "--private-chat-user-id",
+      "123",
+      "--no-input",
+      "--threads-db",
+      dbPath,
+      "--output",
+      outputPath,
+    ],
+    {
+      cwd: PROJECT_ROOT,
+      encoding: "utf8",
+    },
+  );
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /selected 0 project thread\(s\) and 2 Codex Chat\(s\)/);
+  const plan = JSON.parse(fs.readFileSync(outputPath, "utf8"));
+  assert.equal(plan.projects.length, 1);
+  assert.equal(plan.projects[0].surface, "private-chat-topics");
+  assert.deepEqual(
+    plan.projects[0].topics.map((topic) => topic.threadId),
     ["c1", "c2"],
   );
 });
