@@ -65,7 +65,7 @@ These are the useful Telegram platform leads found during the April 2026 API pas
 9. ~~Add the bot direct chat to the `codex` Telegram folder during bootstrap when possible.~~
 10. ~~Bot avatar polish: bundled default avatar plus `bot:avatar` command using Telegram MTProto `photos.uploadProfilePhoto(bot=...)`.~~ Replace with official Bot API `setMyProfilePhoto` once the helper is wired.
 11. ~~Private-topic enablement guide/check: detect `has_topics_enabled` from `getMe`, explain the BotFather Mini App switch plainly and retry Codex `Chats` topic bootstrap after it is enabled.~~ Live bot enablement and create/delete smoke are green.
-12. ~~Generated project group avatars.~~ Bootstrap now gives project groups a compact branded photo when they do not already have one, with `--refresh-group-avatars` for forced refresh and `--skip-group-avatars` for plain Telegram initials.
+12. ~~Generated project group avatars.~~ Bootstrap now gives project groups a compact themed photo when they do not already have one, with `--refresh-group-avatars` for forced refresh and `--skip-group-avatars` for plain Telegram initials. Existing groups can be repainted from the bootstrap index with `npm run group:avatars`.
 13. Backfill/media polish: evaluate `copyMessages` for preserving Telegram albums/history shape where it beats rebuilding messages from scratch.
 14. Codex-native STT retry watch. Tested against Codex CLI `0.121.0` on 2026-04-20: `thread/realtime/*` exists, but WebSocket realtime requires API-key auth and WebRTC via ChatGPT auth currently returns `404` from `chatgpt.com/backend-api/codex/realtime/calls`. Do not make this the default voice path yet. Revisit when upstream removes the API-key requirement or exposes a stable ChatGPT-auth transcription endpoint.
 

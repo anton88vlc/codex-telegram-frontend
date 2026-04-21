@@ -92,7 +92,7 @@ Voice notes are optional. The supported STT paths today are Deepgram, OpenAI, or
 - After onboarding, fresh existing Codex Desktop `Chats` can auto-sync into bot-private topics without rerunning the whole bootstrap.
 - New private bot topics are not auto-created as Desktop `Chats` by default. The app-server `thread/start` path is useful, but it does not yet behave exactly like pressing `New chat` in Codex Desktop, so the safe default is explicit `/attach` instead of fake magic.
 - Private bot topic preflight for Codex Desktop `Chats`: `npm run bot:topics`.
-- Bootstrap can create/reuse Telegram folder, project groups, topics, bot folder entry, generated project group avatars and status bars.
+- Bootstrap can create/reuse Telegram folder, project groups, topics, bot folder entry, themed generated project group avatars and status bars.
 - Optional curated topic auto-sync for fresh Codex threads in already bootstrapped project groups.
 - Bot polish: generated group avatars, command menu, profile text, suggested admin rights and bundled bot avatar. Quickstart applies the bot avatar best-effort through the current MTProto helper; `npm run bot:avatar` is the manual retry.
 - Structured event log at `logs/bridge.events.ndjson`; `/health` samples it.
@@ -146,6 +146,12 @@ npm run bot:polish
 npm run bot:polish -- --apply
 npm run bot:topics
 npm run bot:avatar
+```
+
+Refresh existing project group avatars from the current bootstrap index:
+
+```bash
+npm run group:avatars
 ```
 
 Low-level app-server probe for creating a Codex Chat without touching Telegram:

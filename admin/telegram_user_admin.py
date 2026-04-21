@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import inspect
 import json
+import math
 import os
 import getpass
 import re
@@ -672,6 +673,13 @@ def chat_has_custom_photo(channel) -> bool:
 
 def project_avatar_label(title: str) -> str:
     cleaned = re.sub(r"^codex(?:\s+lab)?\s*[-–—]\s*", "", title, flags=re.IGNORECASE).strip()
+    known_labels = {
+        "openclaw": "OC",
+        ".codex": "CX",
+    }
+    known = known_labels.get(cleaned.lower())
+    if known:
+        return known
     words = [word for word in re.split(r"[^A-Za-z0-9]+", cleaned) if word]
     if not words:
         return "C"
@@ -683,16 +691,148 @@ def project_avatar_label(title: str) -> str:
 
 
 def project_avatar_colors(title: str):
-    palette = (
-        ((37, 99, 235), (6, 182, 212), (240, 249, 255)),
-        ((20, 184, 166), (132, 204, 22), (236, 253, 245)),
-        ((245, 158, 11), (239, 68, 68), (255, 251, 235)),
-        ((99, 102, 241), (168, 85, 247), (245, 243, 255)),
-        ((14, 165, 233), (45, 212, 191), (240, 253, 250)),
-        ((100, 116, 139), (15, 23, 42), (248, 250, 252)),
-    )
-    index = sum(title.encode("utf8")) % len(palette)
-    return palette[index]
+    theme = project_avatar_theme(title)
+    return theme["start"], theme["end"], theme["text"]
+
+
+def project_avatar_slug(title: str) -> str:
+    cleaned = re.sub(r"^codex(?:\s+lab)?\s*[-–—]\s*", "", title, flags=re.IGNORECASE).strip()
+    return cleaned.lower()
+
+
+def project_avatar_theme(title: str):
+    slug = project_avatar_slug(title)
+    themes = {
+        "telegram": {
+            "name": "telegram",
+            "start": (21, 94, 187),
+            "end": (124, 58, 237),
+            "accent": (125, 211, 252),
+            "text": (240, 249, 255),
+            "symbol": "telegram",
+        },
+        "voice": {
+            "name": "voice",
+            "start": (13, 71, 78),
+            "end": (20, 184, 166),
+            "accent": (190, 242, 100),
+            "text": (236, 253, 245),
+            "symbol": "voice",
+        },
+        "portal": {
+            "name": "portal",
+            "start": (15, 23, 42),
+            "end": (37, 99, 235),
+            "accent": (103, 232, 249),
+            "text": (239, 246, 255),
+            "symbol": "portal",
+        },
+        "claw": {
+            "name": "claw",
+            "start": (31, 41, 55),
+            "end": (220, 38, 38),
+            "accent": (251, 146, 60),
+            "text": (255, 247, 237),
+            "symbol": "claw",
+        },
+        "code": {
+            "name": "code",
+            "start": (2, 6, 23),
+            "end": (22, 163, 74),
+            "accent": (74, 222, 128),
+            "text": (240, 253, 244),
+            "symbol": "terminal",
+        },
+        "default": {
+            "name": "default",
+            "start": (30, 41, 59),
+            "end": (79, 70, 229),
+            "accent": (216, 180, 254),
+            "text": (248, 250, 252),
+            "symbol": "orbit",
+        },
+    }
+    if any(token in slug for token in ("telegram", "tg", "bot", "bridge", "frontend")):
+        return themes["telegram"]
+    if any(token in slug for token in ("livekit", "voice", "audio", "via", "estilo", "call")):
+        return themes["voice"]
+    if any(token in slug for token in ("client", "portal", "web", "app", "dashboard")):
+        return themes["portal"]
+    if any(token in slug for token in ("openclaw", "claw")):
+        return themes["claw"]
+    if slug in {"code", ".codex", "codex"} or any(token in slug for token in ("repo", "dev", "agent", "api")):
+        return themes["code"]
+    return themes["default"]
+
+
+def interpolate_color(start, end, blend: float):
+    return tuple(int(start[i] * (1 - blend) + end[i] * blend) for i in range(3))
+
+
+def draw_project_avatar_symbol(draw, theme: dict, size: int):
+    accent = (*theme["accent"], 210)
+    soft = (*theme["text"], 42)
+    symbol = theme["symbol"]
+    center = size / 2
+    width = max(7, int(size * 0.035))
+
+    if symbol == "telegram":
+        points = [
+            (size * 0.25, size * 0.48),
+            (size * 0.75, size * 0.28),
+            (size * 0.58, size * 0.72),
+            (size * 0.49, size * 0.56),
+            (size * 0.39, size * 0.66),
+        ]
+        draw.polygon(points, fill=accent)
+        draw.line((size * 0.49, size * 0.56, size * 0.75, size * 0.28), fill=(*theme["text"], 180), width=max(3, width // 2))
+    elif symbol == "voice":
+        bar_count = 7
+        for index in range(bar_count):
+            x = size * (0.28 + index * 0.075)
+            wave = 0.5 + 0.5 * math.sin(index * 1.35)
+            height = size * (0.16 + wave * 0.24)
+            draw.rounded_rectangle(
+                (x, center - height / 2, x + size * 0.035, center + height / 2),
+                radius=int(size * 0.02),
+                fill=accent if index % 2 else (*theme["text"], 160),
+            )
+        draw.arc((size * 0.18, size * 0.20, size * 0.82, size * 0.80), 205, 335, fill=soft, width=width)
+    elif symbol == "portal":
+        rect = (size * 0.24, size * 0.28, size * 0.76, size * 0.68)
+        draw.rounded_rectangle(rect, radius=int(size * 0.06), outline=accent, width=width)
+        draw.line((rect[0], size * 0.40, rect[2], size * 0.40), fill=soft, width=max(3, width // 2))
+        for index in range(3):
+            x = size * (0.31 + index * 0.08)
+            draw.ellipse((x, size * 0.335, x + size * 0.03, size * 0.365), fill=soft)
+        draw.line((size * 0.39, size * 0.52, size * 0.61, size * 0.52), fill=accent, width=width)
+    elif symbol == "claw":
+        for offset in (-0.11, 0, 0.11):
+            draw.line(
+                (
+                    size * (0.37 + offset),
+                    size * 0.28,
+                    size * (0.28 + offset),
+                    size * 0.68,
+                ),
+                fill=accent,
+                width=width,
+            )
+        draw.arc((size * 0.33, size * 0.28, size * 0.82, size * 0.78), 135, 230, fill=soft, width=max(4, width // 2))
+    elif symbol == "terminal":
+        draw.rounded_rectangle(
+            (size * 0.22, size * 0.30, size * 0.78, size * 0.68),
+            radius=int(size * 0.05),
+            outline=accent,
+            width=width,
+        )
+        draw.line((size * 0.32, size * 0.44, size * 0.41, size * 0.50, size * 0.32, size * 0.56), fill=(*theme["text"], 190), width=width)
+        draw.line((size * 0.47, size * 0.57, size * 0.64, size * 0.57), fill=accent, width=width)
+    else:
+        for scale, alpha in ((0.54, 75), (0.38, 120)):
+            inset = size * (1 - scale) / 2
+            draw.ellipse((inset, inset, size - inset, size - inset), outline=(*theme["accent"], alpha), width=max(3, width // 2))
+        draw.ellipse((center - size * 0.06, center - size * 0.06, center + size * 0.06, center + size * 0.06), fill=accent)
 
 
 def find_avatar_font(size: int):
@@ -714,7 +854,8 @@ def find_avatar_font(size: int):
 def render_project_avatar(title: str, output_path: Path, size: int = DEFAULT_GROUP_AVATAR_SIZE):
     from PIL import Image, ImageDraw
 
-    start, end, text_color = project_avatar_colors(title)
+    theme = project_avatar_theme(title)
+    start, end, text_color = theme["start"], theme["end"], theme["text"]
     label = project_avatar_label(title)
     image = Image.new("RGB", (size, size), start)
     pixels = image.load()
@@ -722,28 +863,48 @@ def render_project_avatar(title: str, output_path: Path, size: int = DEFAULT_GRO
         blend_y = y / max(size - 1, 1)
         for x in range(size):
             blend_x = x / max(size - 1, 1)
-            blend = (blend_x + blend_y) / 2
-            pixels[x, y] = tuple(int(start[i] * (1 - blend) + end[i] * blend) for i in range(3))
+            radial = math.sqrt((blend_x - 0.18) ** 2 + (blend_y - 0.12) ** 2)
+            blend = min(1, (blend_x * 0.55) + (blend_y * 0.35) + (radial * 0.22))
+            pixels[x, y] = interpolate_color(start, end, blend)
 
     draw = ImageDraw.Draw(image, "RGBA")
+    draw.ellipse(
+        (-int(size * 0.12), -int(size * 0.16), int(size * 0.68), int(size * 0.54)),
+        fill=(*theme["accent"], 34),
+    )
+    draw.ellipse(
+        (int(size * 0.55), int(size * 0.58), int(size * 1.18), int(size * 1.14)),
+        fill=(*text_color, 24),
+    )
     inset = int(size * 0.09)
     draw.rounded_rectangle(
         (inset, inset, size - inset, size - inset),
         radius=int(size * 0.18),
-        outline=(255, 255, 255, 64),
+        outline=(255, 255, 255, 72),
         width=max(2, int(size * 0.012)),
     )
     for offset in range(-size, size, int(size * 0.18)):
-        draw.line((offset, size, offset + size, 0), fill=(255, 255, 255, 18), width=max(1, int(size * 0.006)))
+        draw.line((offset, size, offset + size, 0), fill=(255, 255, 255, 12), width=max(1, int(size * 0.006)))
 
-    font = find_avatar_font(int(size * (0.34 if len(label) >= 3 else 0.42)))
+    draw_project_avatar_symbol(draw, theme, size)
+
+    label_box = (
+        int(size * 0.28),
+        int(size * 0.72),
+        int(size * 0.72),
+        int(size * 0.85),
+    )
+    draw.rounded_rectangle(label_box, radius=int(size * 0.045), fill=(0, 0, 0, 64), outline=(255, 255, 255, 44), width=max(1, int(size * 0.006)))
+
+    font = find_avatar_font(int(size * (0.135 if len(label) >= 3 else 0.155)))
     bbox = draw.textbbox((0, 0), label, font=font)
     text_width = bbox[2] - bbox[0]
     text_height = bbox[3] - bbox[1]
-    position = ((size - text_width) / 2, (size - text_height) / 2 - int(size * 0.025))
-    draw.text((position[0] + 3, position[1] + 5), label, font=font, fill=(0, 0, 0, 70))
+    position = ((size - text_width) / 2, label_box[1] + (label_box[3] - label_box[1] - text_height) / 2 - int(size * 0.006))
+    draw.text((position[0] + 2, position[1] + 3), label, font=font, fill=(0, 0, 0, 95))
     draw.text(position, label, font=font, fill=text_color)
     image.save(output_path, "PNG")
+    return {"label": label, "theme": theme["name"]}
 
 
 async def ensure_group_avatar(client: TelegramClient, channel, title: str, force: bool = False):
@@ -751,7 +912,7 @@ async def ensure_group_avatar(client: TelegramClient, channel, title: str, force
         return {"status": "skipped", "reason": "existing-photo"}
     with tempfile.TemporaryDirectory(prefix="codex-group-avatar-") as tmpdir:
         image_path = Path(tmpdir) / "group-avatar.png"
-        render_project_avatar(title, image_path)
+        avatar = render_project_avatar(title, image_path)
         uploaded = await client.upload_file(str(image_path))
         await client(
             functions.channels.EditPhotoRequest(
@@ -759,7 +920,7 @@ async def ensure_group_avatar(client: TelegramClient, channel, title: str, force
                 photo=types.InputChatUploadedPhoto(file=uploaded),
             )
         )
-    return {"status": "ok", "label": project_avatar_label(title)}
+    return {"status": "ok", **avatar}
 
 
 async def ensure_bot_member_and_admin(client: TelegramClient, channel, bot_username: str):
@@ -1830,6 +1991,94 @@ async def command_set_bot_avatar(args):
     )
 
 
+async def command_refresh_group_avatars(args):
+    result = load_json(args.result_path, {})
+    groups = result.get("groups", []) if isinstance(result, dict) else []
+    only = str(args.only or "").strip().lower()
+    selected = []
+    for group in groups:
+        if not isinstance(group, dict):
+            continue
+        if group.get("surface") == PRIVATE_CHAT_TOPICS_SURFACE or group.get("privateChat"):
+            continue
+        title = group.get("groupTitle") or group.get("title") or ""
+        project_root = group.get("projectRoot") or ""
+        if only and only not in f"{title}\n{project_root}".lower():
+            continue
+        chat_ref = group.get("botApiChatId") or group.get("groupId")
+        if not title or not chat_ref:
+            continue
+        selected.append({"title": title, "projectRoot": project_root, "chatRef": chat_ref})
+
+    planned = [
+        {
+            "title": item["title"],
+            "chatRef": item["chatRef"],
+            "label": project_avatar_label(item["title"]),
+            "theme": project_avatar_theme(item["title"])["name"],
+        }
+        for item in selected
+    ]
+    if args.dry_run:
+        print(
+            json.dumps(
+                {
+                    "status": "dry-run",
+                    "resultPath": str(args.result_path),
+                    "force": args.force,
+                    "groups": planned,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return
+
+    env = load_env(args.env_file)
+    client = make_client(args.session, env)
+    refreshed = []
+    warnings = []
+    await client.connect()
+    try:
+        if not await client.is_user_authorized():
+            raise SystemExit("Session is not authorized. Run login-phone first.")
+        for item in selected:
+            try:
+                channel = await client.get_entity(int(item["chatRef"]))
+                avatar = await ensure_group_avatar(client, channel, item["title"], force=args.force)
+                refreshed.append(
+                    {
+                        "title": item["title"],
+                        "chatRef": item["chatRef"],
+                        "avatar": avatar,
+                    }
+                )
+            except Exception as exc:
+                warning = {
+                    "title": item["title"],
+                    "chatRef": item["chatRef"],
+                    "error": str(exc),
+                }
+                refreshed.append({**warning, "avatar": {"status": "skipped", "reason": str(exc)}})
+                warnings.append(warning)
+    finally:
+        await client.disconnect()
+
+    print(
+        json.dumps(
+            {
+                "status": "ok" if not warnings else "partial",
+                "resultPath": str(args.result_path),
+                "force": args.force,
+                "groups": refreshed,
+                "warnings": warnings,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
+
 async def command_wait_topic_text(args):
     require_user_side_forum_topic(args.chat_id, "wait-topic-text")
     env = load_env(args.env_file)
@@ -1974,6 +2223,13 @@ def build_parser():
     set_bot_avatar.add_argument("--bot-username", default=None)
     set_bot_avatar.add_argument("--image", type=Path, default=DEFAULT_BOT_AVATAR_PATH)
     set_bot_avatar.set_defaults(handler=command_set_bot_avatar)
+
+    refresh_group_avatars = subparsers.add_parser("refresh-group-avatars")
+    refresh_group_avatars.add_argument("--result-path", type=Path, default=DEFAULT_RESULT_PATH)
+    refresh_group_avatars.add_argument("--only", default=None, help="Refresh only groups whose title/root contains this text.")
+    refresh_group_avatars.add_argument("--force", action="store_true", help="Overwrite existing group photos.")
+    refresh_group_avatars.add_argument("--dry-run", action="store_true")
+    refresh_group_avatars.set_defaults(handler=command_refresh_group_avatars)
 
     wait_topic_text = subparsers.add_parser("wait-topic-text")
     wait_topic_text.add_argument("--chat-id", type=int, required=True)
