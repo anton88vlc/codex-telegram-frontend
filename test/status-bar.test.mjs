@@ -68,6 +68,7 @@ test("buildStatusBarText stays compact and shows remaining rate limits", () => {
     },
     runtime: {
       timestamp: "2026-04-18T19:01:00.000Z",
+      fastMode: false,
       lastTokenUsage: { total_tokens: 179315 },
       modelContextWindow: 258400,
       rateLimits: {
@@ -144,7 +145,7 @@ test("buildStatusBarText can show fast mode when configured", () => {
   assert.match(text, /^gpt-5\.4 · xhigh · fast on/);
 });
 
-test("buildStatusBarText prefers live Codex config for model, reasoning and fast mode", () => {
+test("buildStatusBarText prefers thread model and reasoning over global Codex config", () => {
   const text = buildStatusBarText({
     binding: { statusBarMessageId: 123 },
     thread: {
@@ -160,7 +161,23 @@ test("buildStatusBarText prefers live Codex config for model, reasoning and fast
     config: {},
   });
 
-  assert.match(text, /^gpt-5\.4 · xhigh · fast on/);
+  assert.match(text, /^gpt-5\.3 · high · fast \?/);
+});
+
+test("buildStatusBarText falls back to live Codex config when thread metadata is missing", () => {
+  const text = buildStatusBarText({
+    binding: { statusBarMessageId: 123 },
+    thread: {},
+    runtime: null,
+    codexConfig: {
+      model: "gpt-5.4",
+      model_reasoning_effort: "xhigh",
+      service_tier: "fast",
+    },
+    config: {},
+  });
+
+  assert.match(text, /^gpt-5\.4 · xhigh · fast \?/);
 });
 
 test("buildStatusBarText includes queued prompt count", () => {
