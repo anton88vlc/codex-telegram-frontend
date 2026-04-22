@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 
 import {
   answerCallbackQuery,
@@ -10,6 +13,7 @@ import {
   getUpdates,
   sendMessage,
   sendMessageDraft,
+  sendPhoto,
   setChatMenuButton,
   setMyDefaultAdministratorRights,
   setMyShortDescription,
@@ -91,6 +95,42 @@ test("sendMessage sends explicit entities instead of parse mode", async () => {
       { type: "date_time", offset: 6, length: 5, unix_time: 1776549480, date_time_format: "t" },
     ]);
   });
+});
+
+test("sendPhoto uploads a local generated image with reply metadata", async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-telegram-photo-"));
+  const photoPath = path.join(tempDir, "generated.png");
+  await fs.writeFile(photoPath, Buffer.from("png-bytes"));
+
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url: String(url), body: options.body });
+    return new Response(JSON.stringify({ ok: true, result: { message_id: 44 } }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  };
+  try {
+    const sent = await sendPhoto("token", {
+      chatId: -100,
+      messageThreadId: 7,
+      photoPath,
+      replyToMessageId: 42,
+    });
+
+    assert.equal(sent.message_id, 44);
+    assert.equal(calls[0].url, "https://api.telegram.org/bottoken/sendPhoto");
+    assert.equal(calls[0].body instanceof FormData, true);
+    const fields = Object.fromEntries(calls[0].body.entries());
+    assert.equal(fields.chat_id, "-100");
+    assert.equal(fields.message_thread_id, "7");
+    assert.equal(fields.reply_to_message_id, "42");
+    assert.equal(JSON.parse(fields.reply_parameters).message_id, 42);
+    assert.equal(fields.photo.name, "generated.png");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("getUpdates subscribes to callback queries for inline approval buttons", async () => {

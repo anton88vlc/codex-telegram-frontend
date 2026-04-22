@@ -13,7 +13,7 @@
   "outboundSyncEnabled": true,
   "outboundPollIntervalMs": 2000,
   "outboundMirrorMaxBindingsPerPoll": 25,
-  "outboundMirrorPhases": ["commentary", "final_answer"],
+  "outboundMirrorPhases": ["commentary", "final_answer", "image_generation"],
   "outboundProgressMode": "updates",
   "bindingHotMaxAgeMs": 1800000,
   "bindingWarmMaxAgeMs": 86400000,

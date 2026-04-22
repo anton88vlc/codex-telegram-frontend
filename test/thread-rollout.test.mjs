@@ -7,6 +7,7 @@ import path from "node:path";
 import {
   cleanupMirrorAssistantText,
   cleanupMirrorUserText,
+  getGeneratedImagePath,
   makeOutboundMirrorSignature,
   parseAssistantMirrorChunk,
   parseThreadMirrorChunk,
@@ -49,6 +50,19 @@ function makePlanLine({
         ],
       }),
       call_id: "call-plan",
+    },
+  });
+}
+
+function makeGeneratedImageLine({ id = "ig_test", timestamp = "2026-04-18T20:00:02.000Z" } = {}) {
+  return JSON.stringify({
+    timestamp,
+    type: "response_item",
+    payload: {
+      type: "image_generation_call",
+      id,
+      status: "completed",
+      result: "base64-png",
     },
   });
 }
@@ -96,6 +110,37 @@ test("parseThreadMirrorChunk can include update_plan as compact todo progress", 
   assert.match(parsed.messages[0].text, /1\. \[x\] Inspect current state/);
   assert.match(parsed.messages[0].text, /2\. \[>\] Patch the mirror/);
   assert.match(parsed.messages[0].text, /3\. \[ \] Run smoke checks/);
+});
+
+test("parseThreadMirrorChunk can include generated images as Telegram media", () => {
+  const parsed = parseThreadMirrorChunk(`${makeGeneratedImageLine({ id: "ig_123" })}\n`, {
+    phases: ["commentary", "final_answer", "image_generation"],
+    threadId: "thread-1",
+  });
+
+  assert.equal(parsed.messages.length, 1);
+  assert.equal(parsed.messages[0].role, "assistant");
+  assert.equal(parsed.messages[0].phase, "image_generation");
+  assert.equal(parsed.messages[0].text, "Generated image");
+  assert.deepEqual(parsed.messages[0].media, [
+    {
+      type: "photo",
+      source: "codex_image_generation",
+      imageId: "ig_123",
+      path: getGeneratedImagePath({ threadId: "thread-1", imageId: "ig_123" }),
+      mimeType: "image/png",
+    },
+  ]);
+  assert.equal(parsed.messages[0].signature, makeOutboundMirrorSignature(parsed.messages[0]));
+});
+
+test("parseThreadMirrorChunk skips generated images when the phase is disabled", () => {
+  const parsed = parseThreadMirrorChunk(`${makeGeneratedImageLine({ id: "ig_123" })}\n`, {
+    phases: ["commentary", "final_answer"],
+    threadId: "thread-1",
+  });
+
+  assert.deepEqual(parsed.messages, []);
 });
 
 test("parseThreadMirrorChunk skips update_plan when commentary mirror is disabled", () => {

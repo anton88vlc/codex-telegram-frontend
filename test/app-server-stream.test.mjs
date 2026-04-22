@@ -108,6 +108,20 @@ test("appendAppServerStreamBuffer coalesces tiny reasoning deltas", () => {
   assert.equal(formatAppServerStreamProgressLine(second, { bufferText: buffer }), "Thinking: Checking the bridge");
 });
 
+test("formatAppServerStreamProgressLine keeps bare status ticks out of chat", () => {
+  const threadStatus = normalizeAppServerNotification({
+    method: "thread/status/changed",
+    params: { threadId: "thread-1" },
+  });
+  const modelRoute = normalizeAppServerNotification({
+    method: "model/rerouted",
+    params: { threadId: "thread-1", message: "rate limit" },
+  });
+
+  assert.equal(formatAppServerStreamProgressLine(threadStatus), null);
+  assert.equal(formatAppServerStreamProgressLine(modelRoute), "Status: rate limit");
+});
+
 test("shouldKeepAppServerStreamEvent filters by thread and turn while keeping global rate limits", () => {
   const target = normalizeAppServerNotification({
     method: "turn/plan/updated",

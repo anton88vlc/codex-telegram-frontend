@@ -189,6 +189,66 @@ test("syncOutboundMirrors consumes suppressed messages without sending them", as
   assert.equal(state.outboundMirrors[bindingKey].replyTargetMessageId, 7);
 });
 
+test("syncOutboundMirrors sends generated images as Telegram photos", async () => {
+  const state = makeState(makeBinding({ currentTurn: { startedAt: "2026-04-21T19:51:15.000Z" } }), {
+    threadId: "thread-1",
+    rolloutPath: "/tmp/thread.jsonl",
+    replyTargetMessageId: 77,
+  });
+  const calls = [];
+  const message = {
+    role: "assistant",
+    phase: "image_generation",
+    text: "Generated image",
+    media: [
+      {
+        type: "photo",
+        source: "codex_image_generation",
+        imageId: "ig_1",
+        path: "/tmp/generated/ig_1.png",
+        mimeType: "image/png",
+      },
+    ],
+    signature: "img1",
+    timestamp: "2026-04-21T19:52:43.000Z",
+  };
+
+  const result = await syncOutboundMirrors({
+    config: makeConfig(),
+    state,
+    getThreadsByIdsFn: async () => [makeThread()],
+    readThreadMirrorDeltaFn: async () => ({
+      mirror: {
+        rolloutPath: "/tmp/thread.jsonl",
+        byteOffset: 103,
+        partialLine: "",
+        lastSignature: "img1",
+      },
+      messages: [message],
+    }),
+    sendPhotoFn: async (...args) => {
+      calls.push(["photo", ...args]);
+      return { message_id: 88 };
+    },
+    completeOutboundProgressMessageFn: async (...args) => {
+      calls.push(["complete", ...args]);
+      return [];
+    },
+    rememberOutboundFn: (binding, sent) => {
+      binding.lastOutboundMessageIds = sent.map((item) => item.message_id);
+    },
+  });
+
+  assert.deepEqual(result, { delivered: 1, suppressed: 0, changed: true });
+  assert.equal(calls[0][0], "photo");
+  assert.equal(calls[0][2].photoPath, "/tmp/generated/ig_1.png");
+  assert.equal(calls[0][2].replyToMessageId, 77);
+  assert.equal(calls[1][0], "complete");
+  assert.equal(state.bindings[bindingKey].currentTurn, null);
+  assert.equal(state.outboundMirrors[bindingKey].replyTargetMessageId, null);
+  assert.deepEqual(state.bindings[bindingKey].lastOutboundMessageIds, [88]);
+});
+
 test("syncOutboundMirrors keeps pending messages after a delivery error", async () => {
   const events = [];
   const state = makeState();
