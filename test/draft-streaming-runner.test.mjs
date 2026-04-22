@@ -24,7 +24,8 @@ function makeBinding(overrides = {}) {
 }
 
 test("draft streaming is limited to active private Codex Chat topics", () => {
-  assert.equal(isDraftStreamingBindingEligible({}, makeBinding()), true);
+  assert.equal(isDraftStreamingBindingEligible({}, makeBinding()), false);
+  assert.equal(isDraftStreamingBindingEligible({ draftStreamingEnabled: true }, makeBinding()), true);
   assert.equal(isDraftStreamingBindingEligible({ draftStreamingEnabled: false }, makeBinding()), false);
   assert.equal(isDraftStreamingBindingEligible({}, makeBinding({ surface: "project-topic" })), false);
   assert.equal(isDraftStreamingBindingEligible({}, makeBinding({ chatId: "-1001" })), false);
@@ -59,7 +60,7 @@ test("syncDraftStreams sends a draft and stores draft state", async () => {
   const events = [];
   const state = { bindings: { private: makeBinding() } };
   const result = await syncDraftStreams({
-    config: { botToken: "token" },
+    config: { botToken: "token", draftStreamingEnabled: true },
     state,
     nowMs: Date.parse("2026-04-21T10:01:00.000Z"),
     sendMessageDraftFn: async (token, payload) => calls.push({ token, payload }),
@@ -92,7 +93,7 @@ test("syncDraftStreams skips unchanged draft text", async () => {
     },
   };
   const result = await syncDraftStreams({
-    config: {},
+    config: { draftStreamingEnabled: true },
     state,
     sendMessageDraftFn: async () => {
       throw new Error("should not send");
@@ -108,6 +109,7 @@ test("syncDraftStreams is a quiet fallback on Telegram errors", async () => {
   const result = await syncDraftStreams({
     config: {
       botToken: "token",
+      draftStreamingEnabled: true,
       draftStreamingErrorCooldownMs: 1000,
     },
     state,

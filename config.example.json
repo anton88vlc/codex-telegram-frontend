@@ -61,7 +61,7 @@
   "appServerStreamMaxEvents": 500,
   "appServerStreamSubscribeMaxAttemptsPerPoll": 3,
   "appServerStreamSubscribeHotOnly": true,
-  "draftStreamingEnabled": true,
+  "draftStreamingEnabled": false,
   "draftStreamingMaxChars": 1200,
   "draftStreamingErrorCooldownMs": 600000,
   "eventLogPath": "logs/bridge.events.ndjson",

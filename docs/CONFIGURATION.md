@@ -73,7 +73,7 @@ Use this for things that should survive restarts and should not be changed from 
 | `appServerStreamMaxEvents` | `500` | In-memory cap for queued app-server stream events before the bridge coalesces them into progress updates. |
 | `appServerStreamSubscribeMaxAttemptsPerPoll` | `3` | Caps `thread/resume` attempts per bridge poll. This keeps a grumpy app-server stream from blocking the normal rollout mirror. |
 | `appServerStreamSubscribeHotOnly` | `true` | Subscribe the optional app-server stream only for hot topics. Keep this on unless you are debugging stream behavior across the whole Telegram surface. |
-| `draftStreamingEnabled` | `true` | Sends Telegram-native draft updates while a private Codex Chat topic has an active turn. This is only for bot-private topics, not project groups. |
+| `draftStreamingEnabled` | `false` | Experimental Telegram-native draft updates for private Codex Chat topics. Keep this off by default: Telegram currently has no clean Bot API clear call, so drafts can linger after the final answer. |
 | `draftStreamingMaxChars` | `1200` | Max text length for one draft update. Keep it short; the final answer still comes as the normal Telegram message. |
 | `draftStreamingErrorCooldownMs` | `600000` | Quiet cooldown after Telegram rejects a draft update. Drafts are nice-to-have, so failures go to the event log instead of bothering the user. |
 | `statePath` | `state/state.json` | Bridge runtime state file. |
