@@ -91,7 +91,10 @@ if [ "$DRY_RUN" -eq 1 ]; then
   exit 0
 fi
 
-launchctl unload "$PLIST_DST" >/dev/null 2>&1 || true
-launchctl load "$PLIST_DST"
-launchctl kickstart -k "gui/$(id -u)/$LABEL"
-launchctl print "gui/$(id -u)/$LABEL" | rg 'state =|pid =|last exit code'
+USER_DOMAIN="gui/$(id -u)"
+
+launchctl bootout "$USER_DOMAIN" "$PLIST_DST" >/dev/null 2>&1 || true
+launchctl enable "$USER_DOMAIN/$LABEL" >/dev/null 2>&1 || true
+launchctl bootstrap "$USER_DOMAIN" "$PLIST_DST"
+launchctl kickstart -k "$USER_DOMAIN/$LABEL"
+launchctl print "$USER_DOMAIN/$LABEL" | rg 'state =|pid =|last exit code'
