@@ -38,6 +38,32 @@ test("sendNativeTurn returns degraded result when app-control fails and fallback
   assert.match(result.primaryError, /fetch failed/);
 });
 
+test("sendNativeTurn falls back when app-control debug route does not mount", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-native-"));
+  const primary = await writeHelper(
+    dir,
+    "primary.js",
+    'console.log(JSON.stringify({ ok: false, error: "Error: debug route did not mount in time" })); process.exit(1);\n',
+  );
+  const fallback = await writeHelper(
+    dir,
+    "fallback.js",
+    'console.log(JSON.stringify({ ok: true, reply: { text: "Fallback reply" } }));\n',
+  );
+
+  const result = await sendNativeTurn({
+    helperPath: primary,
+    fallbackHelperPath: fallback,
+    threadId: "thread-1",
+    prompt: "hello",
+    timeoutMs: 1000,
+  });
+
+  assert.equal(result.transportPath, "app-server-fallback");
+  assert.equal(result.reply.text, "Fallback reply");
+  assert.match(result.primaryError, /debug route did not mount/);
+});
+
 test("sendNativeTurn throws classified error when app-control and fallback both fail", async () => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-native-"));
   const primary = await writeHelper(

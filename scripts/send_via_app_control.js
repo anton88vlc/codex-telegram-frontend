@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { pathToFileURL } from "node:url";
+
 const DEFAULT_DEBUG_BASE_URL = process.env.CODEX_REMOTE_DEBUG_URL || "http://127.0.0.1:9222";
 const DEFAULT_TIMEOUT_MS = 60_000;
 const DEFAULT_POLL_INTERVAL_MS = 1_000;
@@ -73,6 +75,25 @@ function normalizeDebugBaseUrl(value) {
     .replace(/\/+$/, "");
 }
 
+export function selectPageTarget(targets) {
+  const pageTargets = targets.filter((target) => target?.type === "page" && target?.webSocketDebuggerUrl);
+  if (pageTargets.length === 0) return null;
+
+  function score(target) {
+    const title = String(target.title || "");
+    const url = String(target.url || "");
+    let value = 0;
+    if (title.includes("Codex")) value += 10;
+    if (url.includes("codex") || url.includes("app://-/index.html")) value += 8;
+    if (url.includes("hostId=local")) value += 4;
+    if (!url.includes("initialRoute=")) value += 10;
+    if (url.includes("initialRoute=%2Fhotkey-window")) value -= 30;
+    return value;
+  }
+
+  return [...pageTargets].sort((a, b) => score(b) - score(a))[0];
+}
+
 async function getPageTarget(debugBaseUrl) {
   const baseUrl = normalizeDebugBaseUrl(debugBaseUrl);
   const response = await fetch(`${baseUrl}/json/list`);
@@ -84,15 +105,10 @@ async function getPageTarget(debugBaseUrl) {
     throw new Error(`unexpected response from ${baseUrl}/json/list`);
   }
 
-  const pageTargets = targets.filter((target) => target?.type === "page" && target?.webSocketDebuggerUrl);
-  if (pageTargets.length === 0) {
+  const codexPage = selectPageTarget(targets);
+  if (!codexPage) {
     throw new Error(`no page targets found at ${baseUrl}; launch Codex with --remote-debugging-port=9222`);
   }
-
-  const codexPage =
-    pageTargets.find((target) => String(target.title || "").includes("Codex")) ||
-    pageTargets.find((target) => String(target.url || "").includes("codex")) ||
-    pageTargets[0];
 
   return {
     baseUrl,
@@ -431,4 +447,6 @@ async function main() {
   }
 }
 
-main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main();
+}
