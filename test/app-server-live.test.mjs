@@ -77,7 +77,7 @@ class FailFirstResumeWebSocket extends FakeWebSocket {
 test("AppServerLiveStream subscribes and queues normalized notifications", async () => {
   const statuses = [];
   const stream = new AppServerLiveStream({
-    url: "ws://app-server.test",
+    url: "ws://127.0.0.1:9222",
     WebSocketImpl: FakeWebSocket,
     connectTimeoutMs: 100,
     onStatus(status) {
@@ -112,7 +112,7 @@ test("AppServerLiveStream subscribes and queues normalized notifications", async
 
 test("AppServerLiveStream retries failed thread resume instead of poisoning the subscription", async () => {
   const stream = new AppServerLiveStream({
-    url: "ws://app-server.test",
+    url: "ws://127.0.0.1:9222",
     WebSocketImpl: FailFirstResumeWebSocket,
     connectTimeoutMs: 100,
     reconnectMs: 5,
@@ -136,7 +136,7 @@ test("AppServerLiveStream retries failed thread resume instead of poisoning the 
 
 test("AppServerLiveStream holds approval requests and sends Telegram decisions back", async () => {
   const stream = new AppServerLiveStream({
-    url: "ws://app-server.test",
+    url: "ws://127.0.0.1:9222",
     WebSocketImpl: FakeWebSocket,
     connectTimeoutMs: 100,
   });
