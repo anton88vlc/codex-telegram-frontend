@@ -406,17 +406,19 @@ function renderHelp() {
 function renderPostOnboardingRuntimeNote({ configPath = DEFAULT_CONFIG_PATH } = {}) {
   return [
     "",
-    "Next: launch Codex in the live Desktop mode:",
+    "Next: keep Codex.app open. Normal Telegram sends use Codex app-server now:",
+    "",
+    `  ${DEFAULT_CODEX_APP_BINARY}`,
+    "",
+    "If you want the optional Desktop-aware app-control lane too, launch it like this:",
     "",
     `  ${CODEX_APP_CONTROL_DIRECT_COMMAND}`,
     "",
-    "If you are inside this repo, the helper is fine too:",
+    "If you are inside this repo, the helper wraps that debug launch:",
     "",
     `  ${CODEX_REPO_LAUNCH_COMMAND}`,
     "",
-    "This opens Codex.app with app-control on http://127.0.0.1:9222. It is the good mode: Telegram messages land in Codex Desktop, replies mirror back, and your phone feels like a real Codex surface.",
-    "",
-    `Other mode: app-server fallback. It is calmer when the Desktop renderer gets flaky, but it is less UI-aware and Codex Desktop may not update live. Use \`nativeIngressTransport: "app-server"\` in ${configPath} only when app-control is being dramatic.`,
+    `Default mode: app-server. It starts turns through Codex's backend protocol and avoids renderer drama. Use \`nativeIngressTransport: "app-control"\` in ${configPath} only when you deliberately want to test the older UI-aware lane.`,
     "",
     "Optional, but worth it: set Codex Personality to Friendly and use this Custom Instructions preset. It makes the phone surface feel much less like a ticketing system wearing a Telegram mask.",
     "",
@@ -1265,7 +1267,7 @@ async function buildOnboardingChecks(args) {
       appControlOk ? nativeDebugBaseUrl : `${nativeDebugBaseUrl}; launch Codex with --remote-debugging-port=9222`,
       {
         required: false,
-        action: `Run \`${CODEX_APP_CONTROL_DIRECT_COMMAND}\`, or run \`npm run codex:launch\` from this repo, for the best live Telegram <-> Codex Desktop UX.`,
+        action: `Run \`${CODEX_APP_CONTROL_DIRECT_COMMAND}\`, or run \`npm run codex:launch\` from this repo, if you want the optional Desktop-aware app-control lane.`,
       },
     ),
   ];

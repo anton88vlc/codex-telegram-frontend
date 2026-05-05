@@ -4,13 +4,131 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { NativeTransportError, createNativeChat, sendNativeTurn } from "../lib/codex-native.mjs";
+import {
+  NativeTransportError,
+  createNativeChat,
+  sendNativeTurn,
+  sendTurnViaAppServer,
+} from "../lib/codex-native.mjs";
 
 async function writeHelper(dir, name, source) {
   const filePath = path.join(dir, name);
   await fs.writeFile(filePath, source, "utf8");
   return filePath;
 }
+
+function makeFakeAppServerFactory({ fail = null, emitFinal = false } = {}) {
+  const calls = [];
+  const factory = (options) => ({
+    async connect() {
+      calls.push({ method: "connect", params: { url: options.url } });
+      if (fail === "connect") {
+        throw new Error("app-server down");
+      }
+    },
+    async request(method, params) {
+      calls.push({ method, params });
+      if (fail === method) {
+        throw new Error(`${method} rejected`);
+      }
+      if (method === "thread/resume") {
+        return {
+          thread: {
+            id: params.threadId,
+            status: "active",
+            name: "Thread",
+            cwd: "/tmp/project",
+          },
+        };
+      }
+      if (method === "turn/start") {
+        if (emitFinal) {
+          setTimeout(() => {
+            options.onNotification({
+              method: "turn/started",
+              params: {
+                threadId: params.threadId,
+                turn: { id: "turn-1" },
+              },
+            });
+            options.onNotification({
+              method: "item/completed",
+              params: {
+                threadId: params.threadId,
+                turnId: "turn-1",
+                item: {
+                  id: "item-1",
+                  type: "agentMessage",
+                  phase: "final_answer",
+                  text: "Final reply",
+                },
+              },
+            });
+            options.onNotification({
+              method: "turn/completed",
+              params: {
+                threadId: params.threadId,
+                turn: { id: "turn-1" },
+              },
+            });
+          }, 0);
+        }
+        return { turn: { id: "turn-1" } };
+      }
+      return {};
+    },
+    async close() {
+      calls.push({ method: "close", params: {} });
+    },
+  });
+  return { calls, factory };
+}
+
+test("sendTurnViaAppServer sends thread/resume and turn/start through the protocol client", async () => {
+  const appServer = makeFakeAppServerFactory();
+
+  const result = await sendTurnViaAppServer({
+    threadId: "thread-1",
+    prompt: "hello",
+    appServerUrl: "ws://127.0.0.1:27890",
+    timeoutMs: 1000,
+    clientFactory: appServer.factory,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.mode, "native-send-only");
+  assert.equal(result.transport, "app-server");
+  assert.equal(result.threadId, "thread-1");
+  assert.equal(result.thread.cwd, "/tmp/project");
+  assert.deepEqual(
+    appServer.calls.map((call) => call.method),
+    ["connect", "thread/resume", "turn/start", "close"],
+  );
+  assert.deepEqual(appServer.calls.find((call) => call.method === "turn/start").params.input, [
+    {
+      type: "text",
+      text: "hello",
+      text_elements: [],
+    },
+  ]);
+});
+
+test("sendTurnViaAppServer can wait for a final reply from app-server notifications", async () => {
+  const appServer = makeFakeAppServerFactory({ emitFinal: true });
+
+  const result = await sendTurnViaAppServer({
+    threadId: "thread-1",
+    prompt: "hello",
+    appServerUrl: "ws://127.0.0.1:27890",
+    timeoutMs: 1000,
+    waitForReply: true,
+    clientFactory: appServer.factory,
+  });
+
+  assert.equal(result.mode, "native-send-and-wait-for-reply");
+  assert.equal(result.reply.text, "Final reply");
+  assert.equal(result.turn.id, "turn-1");
+});
 
 test("sendNativeTurn returns degraded result when app-control fails and fallback succeeds", async () => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-native-"));
@@ -123,6 +241,33 @@ test("sendNativeTurn can skip app-control and use app-server first", async () =>
   assert.equal(result.primaryError, "configured app-server-first ingress");
 });
 
+test("sendNativeTurn uses the app-server protocol client when app-server is preferred", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-native-"));
+  const primary = await writeHelper(
+    dir,
+    "primary.js",
+    "throw new Error('primary helper should not run');\n",
+  );
+  const appServer = makeFakeAppServerFactory();
+
+  const result = await sendNativeTurn({
+    helperPath: primary,
+    fallbackHelperPath: null,
+    threadId: "thread-1",
+    prompt: "hello",
+    timeoutMs: 1000,
+    appServerUrl: "ws://127.0.0.1:27890",
+    preferAppServer: true,
+    appControlSkipReason: "configured app-server-first ingress",
+    appServerClientFactory: appServer.factory,
+  });
+
+  assert.equal(result.transportPath, "app-server");
+  assert.equal(result.helperPath, null);
+  assert.equal(result.primaryError, "configured app-server-first ingress");
+  assert.equal(appServer.calls.some((call) => call.method === "turn/start"), true);
+});
+
 test("sendNativeTurn can use app-control send-only without wait flag", async () => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-native-"));
   const argsPath = path.join(dir, "args.json");
@@ -208,6 +353,30 @@ test("sendNativeTurn reports app-server-first failure without app-control attemp
       return true;
     },
   );
+});
+
+test("sendNativeTurn can fall back to direct app-server protocol without the legacy helper", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-native-"));
+  const primary = await writeHelper(
+    dir,
+    "primary.js",
+    'console.log(JSON.stringify({ ok: false, error: "no page targets found" })); process.exit(1);\n',
+  );
+  const appServer = makeFakeAppServerFactory();
+
+  const result = await sendNativeTurn({
+    helperPath: primary,
+    fallbackHelperPath: null,
+    threadId: "thread-1",
+    prompt: "hello",
+    timeoutMs: 1000,
+    appServerUrl: "ws://127.0.0.1:27890",
+    appServerClientFactory: appServer.factory,
+  });
+
+  assert.equal(result.transportPath, "app-server-fallback");
+  assert.match(result.primaryError, /no page targets found/);
+  assert.equal(appServer.calls.some((call) => call.method === "turn/start"), true);
 });
 
 test("createNativeChat starts a Codex Chat from the user home cwd by default", async () => {

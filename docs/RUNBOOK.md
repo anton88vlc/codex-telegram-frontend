@@ -19,19 +19,25 @@ Commands below assume they are run from the repository root. Run them from somew
 
 The bridge is only the Telegram frontend. `Codex.app` remains the engine and source of truth.
 
-Keep `Codex.app` open for real work. Prefer `app-control` on `http://127.0.0.1:9222`; the app-server fallback is useful resilience, not the happy path.
+Keep `Codex.app` open for real work. Prefer the local Codex `app-server` path on `ws://127.0.0.1:27890`; app-control on `http://127.0.0.1:9222` is now the optional near-Desktop lane, not the thing Telegram has to poke for every phone message.
 
 Start the happy path with:
+
+```bash
+/Applications/Codex.app/Contents/MacOS/Codex
+```
+
+If you also want the optional app-control lane, launch with:
 
 ```bash
 /Applications/Codex.app/Contents/MacOS/Codex --remote-debugging-port=9222
 ```
 
-If you are inside the repo, `npm run codex:launch` is the same launch through the project helper. If you are in `~/code`, it is not: npm needs this repo's `package.json`.
+If you are inside the repo, `npm run codex:launch` is the same debug launch through the project helper. If you are in `~/code`, it is not: npm needs this repo's `package.json`.
 
 If Codex is already open without the debug port, close it first. The launcher does not kill active Codex windows. Good tools do not yoink the steering wheel.
 
-Mode rule: `app-control` is the shiny near-Mac lane; `app-server` is the seatbelt when you are away or the renderer is crashy.
+Mode rule: `app-server` is the calm phone lane; `app-control` is the shiny near-Mac lane when you explicitly want Desktop renderer behavior.
 
 ## Install Assumptions
 
@@ -147,11 +153,11 @@ If transcription fails, check `telegram_voice_transcription_error` in the same e
 
 ## Transport Fallback
 
-If a Telegram reply says fallback was used, the bridge is using `app-server` instead of the preferred `app-control` path. Some UI-aware behavior may be weaker, but the user should at least know what happened instead of staring at silence.
+If a Telegram reply says fallback was used, the bridge tried app-control and then moved the turn through app-server. That is no longer a scary degraded path, but the wording stays honest because app-control-specific UI behavior did not happen.
 
-If both paths fail, Telegram shows a short recovery hint: open `Codex.app`, preferably with `--remote-debugging-port=9222`, then retry. If phone-originated Telegram prompts crash the desktop renderer, set `nativeIngressTransport` to `app-server` in `config.local.json`.
+If both paths fail, Telegram shows a short recovery hint: open `Codex.app`, then retry. If you are deliberately testing app-control, launch with `--remote-debugging-port=9222`.
 
-For the Desktop-first happy path without the old heavy renderer polling, use:
+For the optional Desktop-first path without the old heavy renderer polling, use:
 
 ```json
 {
@@ -162,7 +168,7 @@ For the Desktop-first happy path without the old heavy renderer polling, use:
 ```
 
 This is now the expected app-control shape: a small `threads.send_message` action, then Telegram receives progress/final from the rollout mirror. If the renderer still crashes, turn `appControlShowThread` off first; if it still crashes, go back to `nativeIngressTransport: "app-server"`.
-That keeps Telegram ingress off the renderer while outbound mirroring can still read the Codex thread state.
+The normal default already keeps Telegram ingress off the renderer while outbound mirroring can still read the Codex thread state.
 
 If Codex Desktop archives a thread while switching worktrees or returning to the main branch, a Telegram topic can briefly point at a dead thread id. The bridge now tries a conservative rescue: same title, same `cwd`, exactly one active successor. If that match exists, it silently rebinds the topic and continues. If there are multiple plausible successors, it refuses to guess. That is annoying for one message, but much better than sending work into the wrong Codex thread.
 

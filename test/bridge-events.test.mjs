@@ -27,12 +27,14 @@ test("parseBridgeEventLogText reads old pretty events and new ndjson events", ()
 test("summarizeBridgeEvents keeps delivery counters and recent failures", () => {
   const summary = summarizeBridgeEvents([
     { type: "native_send_success", transportPath: "app-control" },
+    { type: "native_send_success", transportPath: "app-server" },
     { type: "native_send_success", transportPath: "app-server-fallback" },
     { type: "native_send_error", ts: "2026-04-18T22:31:00.000Z", error: "timeout" },
     { type: "ops_direct_chat_fallback", error: "bot blocked" },
   ]);
 
   assert.equal(summary.appControlSends, 1);
+  assert.equal(summary.appServerSends, 1);
   assert.equal(summary.appServerFallbackSends, 1);
   assert.equal(summary.nativeSendErrors, 1);
   assert.equal(summary.opsDmFallbacks, 1);

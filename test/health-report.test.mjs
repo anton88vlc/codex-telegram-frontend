@@ -86,6 +86,7 @@ test("renderHealth summarizes transport, state doctor, project and thread clues"
       },
       summarizeBridgeEventsFn: (events) => ({
         total: events.length,
+        appServerSends: 3,
         appControlSends: 2,
         appServerFallbackSends: 1,
         nativeSendErrors: 1,
@@ -123,7 +124,7 @@ test("renderHealth summarizes transport, state doctor, project and thread clues"
   );
 
   assert.match(text, /\*\*Bridge health\*\*/);
-  assert.match(text, /delivery: app-control 2, app-server fallback 1, native errors 1, ops dm fallbacks 1/);
+  assert.match(text, /delivery: app-server 3, app-control 2, app-server fallback 1, native errors 1, ops dm fallbacks 1/);
   assert.match(text, /state doctor: 1 findings, 1 safe repairs/);
   assert.match(text, /state repair hint/);
   assert.match(text, /project group: Codex - repo/);
@@ -148,6 +149,7 @@ test("renderHealth degrades when event log reading fails", async () => {
         assert.equal(events[0].type, "health_event_log_error");
         return {
           total: events.length,
+          appServerSends: 0,
           appControlSends: 0,
           appServerFallbackSends: 0,
           nativeSendErrors: 0,

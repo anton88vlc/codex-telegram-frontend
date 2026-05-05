@@ -6,9 +6,9 @@ This spike looked at the next serious path for making Telegram feel less like a 
 
 ## What Changed My Mind
 
-Current bridge behavior is good but still indirect:
+Original bridge behavior was good but still indirect:
 
-- Telegram sends a turn through app-control send-only when possible.
+- Telegram sent a turn through app-control send-only when possible.
 - Telegram progress/final mostly comes from the rollout mirror.
 - The progress bubble is honest, but not raw Codex event streaming.
 
@@ -40,7 +40,7 @@ For us, the next slice should be a small, boring probe:
 4. Log the exact notification sequence to `logs/bridge.events.ndjson`.
 5. Map events into the existing Telegram progress model without changing Telegram UX yet.
 
-If that works, the bridge can move from `app-control send + rollout mirror` to `app-server turn/start + app-server stream`, with rollout mirror kept as a fallback and reconciliation source.
+That is now the migration direction: move from `app-control send + rollout mirror` to `app-server turn/start + app-server stream`, with rollout mirror kept as a fallback and reconciliation source.
 
 ## Hooks Are Useful, Not The Main Pipe
 
@@ -76,11 +76,12 @@ Pinned status bars now send reset times as Telegram `date_time` entities. The vi
 
 ## Recommendation
 
-Next implementation step:
+Current implementation direction:
 
-- Build an app-server stream probe, not a full rewrite.
-- Feed the probe into the existing `outbound-progress`/`progress-bubble` shapes.
-- Keep app-control send-only as the current happy path until the probe proves app-server streaming is stable.
+- Keep app-server `turn/start` as the default phone ingress.
+- Feed app-server notifications into the existing `outbound-progress`/`progress-bubble` shapes.
+- Keep rollout mirror as reconciliation, not as the only source of truth.
+- Keep app-control send-only as an optional Desktop-aware lane, not the default phone ingress.
 - Tune `sendMessageDraft` only if Telegram exposes a reliable clear/finalize path. Until then, editable progress bubbles are the source of truth.
 - Add a managed-bot onboarding spike soon, because that could remove one of the ugliest install steps.
 - Move avatar polish to official Bot API `setMyProfilePhoto`.
@@ -92,7 +93,7 @@ The first probe now lives in:
 npm run app-server:probe -- --thread-id <codex-thread-id> --prompt "Reply exactly: STREAM_PROBE_OK" --out logs/app-server-stream-probe.ndjson
 ```
 
-It does not wire Telegram yet. It records what Codex app-server actually emits so the next transport slice can be boring instead of brave.
+The original probe records what Codex app-server actually emits. Keep it around as a diagnostic when Codex updates the protocol and Telegram starts acting haunted.
 
 ## Sources
 

@@ -15,7 +15,7 @@ Model:
 
 Use Codex as the installer. Open this repo in Codex and paste the install prompt from [README.md](../README.md#install-with-codex).
 
-Tiny reality check before you start: this is a local macOS bridge. It is happiest when `Codex.app` is open with the app-control debug port. If you want a hosted cloud service, this is not that. If you want your phone to feel like a remote surface for the Codex running on your Mac, you are in the right place.
+Tiny reality check before you start: this is a local macOS bridge. It is happiest when `Codex.app` is open and its local app-server is reachable. If you want a hosted cloud service, this is not that. If you want your phone to feel like a remote surface for the Codex running on your Mac, you are in the right place.
 
 Codex should do the boring parts:
 
@@ -83,7 +83,7 @@ If the agent is standing inside the repo, this helper is fine too:
 npm run codex:launch
 ```
 
-That is the best mode. It starts Codex.app with app-control on `http://127.0.0.1:9222`, so Telegram feels live: messages land in Codex Desktop, replies mirror back, and the phone behaves like a real remote Codex surface. The other mode is `app-server` fallback: calmer when the Desktop renderer gets weird, but less UI-aware and not guaranteed to refresh Codex Desktop live.
+That starts Codex.app with app-control on `http://127.0.0.1:9222`, which is useful when you want the optional Desktop-aware lane. Normal Telegram sends use app-server now, so the phone can start turns without leaning on the renderer for every message.
 
 One optional recommendation: tune Codex Personalization after setup. This project makes Codex feel present on your phone, so the assistant's voice matters more than it does in a random terminal.
 

@@ -54,9 +54,9 @@ Use this for things that should survive restarts and should not be changed from 
 | `historyAssistantPhases` | `["final_answer"]` | Assistant phases imported during clean history backfill. Keep commentary out by default. |
 | `historyIncludeHeartbeats` | `false` | Whether heartbeat/system-like user entries are allowed into imported history. Default false keeps setup noise out. |
 | `nativeTimeoutMs` | `120000` | Timeout for one native Codex send. |
-| `nativeWaitForReply` | `false` | Keep this off for the normal happy path. The transport returns as soon as Codex accepts the turn; Telegram gets progress/final through the outbound rollout mirror. Setting it to `true` uses the older renderer polling path and should be treated as a debugging fallback. |
+| `nativeWaitForReply` | `false` | Keep this off for the normal happy path. The transport returns as soon as Codex accepts the turn; Telegram gets progress/final through app-server events and the outbound rollout mirror. Waiting inline is a debugging fallback. |
 | `nativePollIntervalMs` | `1000` | Poll interval while waiting for native Codex reply. |
-| `nativeIngressTransport` | `app-control` | Telegram-originated send path: `app-control`, `app-server`, or `auto`. Use `app-server` if renderer app-control crashes the desktop app. |
+| `nativeIngressTransport` | `app-server` | Telegram-originated send path: `app-server`, `app-control`, or `auto`. `app-server` is the default because it starts turns through Codex's backend protocol instead of poking the renderer. |
 | `turnQueueEnabled` | `true` | When a topic already has an active Codex turn, new normal messages are queued instead of being shoved into the running turn. Use `/steer` for explicit intervention. |
 | `turnQueueMaxItems` | `10` | Max queued prompts per bound Telegram topic. This is a guardrail, not a productivity challenge. |
 | `privateTopicAutoCreateChats` | `false` | Experimental. If enabled, the first message in an unbound private bot topic starts an app-server thread and binds it. Keep this off for normal use: today it is not the same thing as creating a visible `New chat` in Codex Desktop. |
@@ -64,10 +64,10 @@ Use this for things that should survive restarts and should not be changed from 
 | `nativeChatStartCwd` | `$HOME` | Cwd for experimental auto-created app-server threads. Leave unset or `null` for the home default; set a real project path only if you intentionally want every private topic to become project-scoped. |
 | `appControlCooldownMs` | `300000` | How long to avoid app-control after an app-control send error before trying it again. |
 | `appControlShowThread` | `false` | Experimental: after app-control accepts a turn, ask Codex Desktop to show the thread. Useful for Desktop-first UX, but keep it off if renderer stability is shaky. |
-| `nativeDebugBaseUrl` | `http://127.0.0.1:9222` | Preferred Codex Desktop app-control endpoint. |
-| `appServerUrl` | `ws://127.0.0.1:27890` | Degraded fallback endpoint. Useful, not the happy path. |
+| `nativeDebugBaseUrl` | `http://127.0.0.1:9222` | Optional Codex Desktop app-control endpoint. |
+| `appServerUrl` | `ws://127.0.0.1:27890` | Normal local Codex app-server endpoint for send/control/stream work. |
 | `appServerControlTimeoutMs` | `3000` | Timeout for short app-server control commands like `/model`, `/think`, `/fast` and `/compact`. Keep it short; Telegram should not hang while Codex thinks about life. |
-| `appServerStreamEnabled` | `true` | Listens to app-server v2 events for live progress while app-control remains the send path. If it misbehaves, turn it off; rollout mirror still works. |
+| `appServerStreamEnabled` | `true` | Listens to app-server events for live progress. If it misbehaves, turn it off; rollout mirror still works. |
 | `appServerStreamConnectTimeoutMs` | `1200` | Short connect timeout for the optional app-server stream. It should not stall Telegram sends. |
 | `appServerStreamReconnectMs` | `5000` | Cooldown before trying the optional app-server stream again after it disconnects. |
 | `appServerStreamMaxEvents` | `500` | In-memory cap for queued app-server stream events before the bridge coalesces them into progress updates. |
@@ -80,7 +80,7 @@ Use this for things that should survive restarts and should not be changed from 
 | `eventLogPath` | `logs/bridge.events.ndjson` | Structured bridge event/audit log used by `/health` for recent failures and delivery counters. |
 | `bridgeLogPath` | `logs/bridge.stderr.log` | launchd stderr log. Useful when the bridge crashes before it can write structured events. |
 | `nativeHelperPath` | `scripts/send_via_app_control.js` | app-control helper path. |
-| `nativeFallbackHelperPath` | `scripts/send_via_app_server.js` | app-server fallback helper path. |
+| `nativeFallbackHelperPath` | `scripts/send_via_app_server.js` | Legacy app-server helper path. Normal sends use `lib/app-server-client.mjs` directly; keep this only as an escape hatch for older local setups. |
 | `nativeChatStartHelperPath` | `scripts/start_via_app_server.js` | Experimental app-server `thread/start` helper for private-topic auto-create. Not the normal Desktop `Chats` path. |
 | `projectIndexPath` | `state/bootstrap-result.json` | Project/group/topic index produced by bootstrap. |
 | `threadsDbPath` | `~/.codex/state_5.sqlite` | Local Codex Desktop threads DB. |

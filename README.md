@@ -16,7 +16,7 @@ The goal is a clean phone-sized working set, not a landfill mirror of every thre
 
 This is a working beta, not an official Codex or Telegram product.
 
-The current version is intentionally local-first: macOS, local `Codex.app`, local Telegram bot/user session, local state files. The best UX uses Codex Desktop's app-control debug port on `http://127.0.0.1:9222`. That is why it feels fast and native, and also why the docs are blunt about keeping `Codex.app` open and knowing the `app-server` fallback exists.
+The current version is intentionally local-first: macOS, local `Codex.app`, local Telegram bot/user session, local state files. The normal send path now uses Codex `app-server` on `ws://127.0.0.1:27890`, with app-control on `http://127.0.0.1:9222` kept as an optional near-Desktop lane. That is the less crashy shape: Telegram starts turns through the backend protocol, while progress and final replies mirror back into Telegram.
 
 ## Install With Codex
 
@@ -37,7 +37,7 @@ Create or reuse the Telegram folder `codex`, scan my pinned Codex threads first 
 
 Default to about 10 active threads total, with pinned Codex threads treated as the user's keep list. Do not ask me to choose projects unless the quickstart preview looks wrong. Keep Telegram as a clean remote Codex working set, not a landfill.
 
-In your final install summary, include the live status, the app-control launch command, any app-server fallback caveat, and the optional Codex Personalization offer from docs/ONBOARDING.md: Personality `Friendly` plus the Custom Instructions preset. Do not leave that buried in command output.
+In your final install summary, include the live status, the normal app-server status, the optional app-control launch command, and the optional Codex Personalization offer from docs/ONBOARDING.md: Personality `Friendly` plus the Custom Instructions preset. Do not leave that buried in command output.
 ```
 
 What still needs a human:
@@ -45,13 +45,13 @@ What still needs a human:
 1. Create or reuse a Telegram bot through [@BotFather](https://t.me/BotFather).
 2. Create or reuse Telegram app credentials at [my.telegram.org/apps](https://my.telegram.org/apps) if the admin helper asks. These are `api_id` / `api_hash` for the user-side helper, not the bot token.
 3. Authorize one local Telegram user session so the helper can create folders, groups and topics. Phone/code login is the normal path.
-4. Keep `Codex.app` available. Best path:
+4. Keep `Codex.app` available. Normal path:
 
 ```bash
-/Applications/Codex.app/Contents/MacOS/Codex --remote-debugging-port=9222
+/Applications/Codex.app/Contents/MacOS/Codex
 ```
 
-If you are already inside this repo, `npm run codex:launch` is the same launch wrapped in a safer helper. From anywhere else, use the direct command above or `cd` into the repo first.
+If you want the optional app-control lane too, launch with `--remote-debugging-port=9222` or run `npm run codex:launch` from this repo.
 
 Codex should handle local config, Keychain/env wiring, bootstrap, backfill and smoke. The human should click/type into local Telegram or one clearly explained terminal prompt, not dump secrets into the conversation transcript. If setup gets weird, use [docs/ONBOARDING.md](docs/ONBOARDING.md).
 
@@ -61,12 +61,12 @@ Optional polish after install: set Codex Personality to `Friendly` and use the r
 
 This project is a frontend. It does not replace Codex.
 
-- Preferred send path: `app-control` on `http://127.0.0.1:9222`.
-- Start it with `/Applications/Codex.app/Contents/MacOS/Codex --remote-debugging-port=9222`, or run `npm run codex:launch` from this repo.
-- `app-server` fallback is resilience, not the happy path.
+- Preferred send path: Codex `app-server` on `ws://127.0.0.1:27890`.
+- Optional Desktop-aware lane: `app-control` on `http://127.0.0.1:9222`, started with `/Applications/Codex.app/Contents/MacOS/Codex --remote-debugging-port=9222` or `npm run codex:launch`.
+- The old app-server helper script is legacy fallback; the bridge now uses the shared app-server protocol client directly for Telegram-originated turns.
 - If `Codex.app` is closed or crashed, the bridge should say that plainly in Telegram.
 
-Two modes matter: `app-control` is the live near-Mac mode with the best Desktop mirror, and `app-server` is the calmer remote mode when you just need Telegram to keep moving. Default to `app-control`; switch `nativeIngressTransport` to `app-server` if the Desktop renderer gets dramatic.
+Two modes matter: `app-server` is the normal calm lane for phone-originated turns; `app-control` is the live near-Mac lane when you specifically want Desktop renderer behavior. Default to `app-server`; switch `nativeIngressTransport` to `app-control` only if you are deliberately testing that UI path.
 
 Voice notes are optional. The supported STT paths today are Deepgram, OpenAI, or a local command. Deepgram is the friendliest default for Telegram voice notes; OpenAI is handy if that key is already your normal local setup; local command is for people who like owning the whole stack.
 
@@ -78,7 +78,7 @@ Voice notes are optional. The supported STT paths today are Deepgram, OpenAI, or
 - Ops: `/health`, `/settings`, `/project-status`, `/sync-project`, `/mode native`.
 - Topic queues: normal messages wait behind a running turn; `/queue`, `/pause`, `/resume`, `/cancel-queue` and `/steer <text>` handle the cockpit bits.
 - Telegram-menu-safe aliases: `/attach_latest`, `/project_status`, `/sync_project`, `/mode_native`, `/cancel_queue`.
-- App-control send-only by default: Codex accepts the turn, Telegram gets progress/final from the rollout mirror.
+- App-server send-only by default: Codex accepts the turn through `turn/start`, Telegram gets progress/final from app-server events plus the rollout mirror.
 - In-place progress bubble with live steps, Todo, changed files and final state.
 - Native Telegram typing heartbeat while Codex is working.
 - Reply-chain UX: final answers reply to the triggering user/surrogate message.
@@ -101,7 +101,7 @@ Voice notes are optional. The supported STT paths today are Deepgram, OpenAI, or
 ## Not Yet
 
 - Cross-platform runtime. v1 is macOS plus local Codex Desktop.
-- Official Codex integration. This uses local Desktop/app-control and app-server surfaces that can change.
+- Official Codex integration. This uses local Desktop app-server/app-control surfaces that can change.
 - Raw token-by-token Telegram streaming. Current progress is coalesced into readable bubbles on purpose.
 - Rich voice controls such as provider picker, live partial transcripts or confidence display.
 - Dedicated ops topic/router for noisy admin flows.

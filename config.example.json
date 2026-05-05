@@ -44,7 +44,7 @@
   "nativeTimeoutMs": 120000,
   "nativeWaitForReply": false,
   "nativePollIntervalMs": 1000,
-  "nativeIngressTransport": "app-control",
+  "nativeIngressTransport": "app-server",
   "turnQueueEnabled": true,
   "turnQueueMaxItems": 10,
   "privateTopicAutoCreateChats": false,

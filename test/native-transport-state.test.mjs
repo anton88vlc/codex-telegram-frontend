@@ -14,8 +14,12 @@ test("parseTimestampMs returns epoch ms for valid timestamps and zero otherwise"
   assert.equal(parseTimestampMs("not a date"), 0);
 });
 
-test("shouldPreferAppServer requires fallback and respects explicit transport mode", () => {
+test("shouldPreferAppServer requires an app-server path and respects explicit transport mode", () => {
   assert.equal(shouldPreferAppServer({}, { nativeIngressTransport: "app-server" }, 1000), false);
+  assert.equal(
+    shouldPreferAppServer({}, { appServerUrl: "ws://127.0.0.1:27890", nativeIngressTransport: "app-server" }, 1000),
+    true,
+  );
   assert.equal(
     shouldPreferAppServer({}, { nativeFallbackHelperPath: "/tmp/helper", nativeIngressTransport: "app-server" }, 1000),
     true,
@@ -24,7 +28,7 @@ test("shouldPreferAppServer requires fallback and respects explicit transport mo
 
 test("shouldPreferAppServer uses app-control cooldown while it is active", () => {
   const binding = { appControlCooldownUntil: "2026-04-19T10:00:10.000Z" };
-  const config = { nativeFallbackHelperPath: "/tmp/helper", nativeIngressTransport: "app-control" };
+  const config = { appServerUrl: "ws://127.0.0.1:27890", nativeIngressTransport: "app-control" };
   assert.equal(shouldPreferAppServer(binding, config, Date.parse("2026-04-19T10:00:00.000Z")), true);
   assert.equal(shouldPreferAppServer(binding, config, Date.parse("2026-04-19T10:00:11.000Z")), false);
   assert.equal(appControlCooldownUntilMs(binding), Date.parse("2026-04-19T10:00:10.000Z"));

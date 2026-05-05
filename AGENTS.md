@@ -22,13 +22,14 @@ This repo is the Telegram frontend for Codex Desktop. Treat it like a real produ
 
 - This is a frontend, not a standalone Codex runtime.
 - Current v1 assumes macOS with local `Codex.app`.
-- Preferred transport is `app-control` at `http://127.0.0.1:9222`, usually from:
+- Preferred Telegram ingress is Codex `app-server` at `ws://127.0.0.1:27890`.
+- Optional Desktop-aware app-control is available at `http://127.0.0.1:9222`, usually from:
 
 ```bash
 /Applications/Codex.app/Contents/MacOS/Codex --remote-debugging-port=9222
 ```
 
-- `app-server` fallback is useful resilience, not the happy path.
+- app-control is useful for near-Desktop behavior, but do not make phone-originated messages depend on the renderer unless a task explicitly targets that path.
 - If `Codex.app` is closed or crashed, say that plainly in Telegram UX instead of pretending the bridge can complete real Codex work.
 
 ## Local Files
