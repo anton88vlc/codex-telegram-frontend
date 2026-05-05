@@ -167,8 +167,8 @@ For the optional Desktop-first path without the old heavy renderer polling, use:
 }
 ```
 
-This is now the expected app-control shape: a small `threads.send_message` action, then Telegram receives progress/final from the rollout mirror. If the renderer still crashes, turn `appControlShowThread` off first; if it still crashes, go back to `nativeIngressTransport: "app-server"`.
-The normal default already keeps Telegram ingress off the renderer while outbound mirroring can still read the Codex thread state.
+This is now the expected app-control shape: a small `threads.send_message` action, then Telegram receives progress/final through app-server events when possible. The rollout mirror stays behind it as reconciliation and backfill. If the renderer still crashes, turn `appControlShowThread` off first; if it still crashes, go back to `nativeIngressTransport: "app-server"`.
+The normal default already keeps Telegram ingress off the renderer while the bridge can still reconcile from Codex thread state.
 
 If Codex Desktop archives a thread while switching worktrees or returning to the main branch, a Telegram topic can briefly point at a dead thread id. The bridge now tries a conservative rescue: same title, same `cwd`, exactly one active successor. If that match exists, it silently rebinds the topic and continues. If there are multiple plausible successors, it refuses to guess. That is annoying for one message, but much better than sending work into the wrong Codex thread.
 

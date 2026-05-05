@@ -90,6 +90,27 @@ test("normalizeAppServerNotification formats plan updates for Telegram progress"
   assert.match(event.planText, /2\. \[>\] Patch bridge/);
 });
 
+test("normalizeAppServerNotification keeps final agent text for direct delivery", () => {
+  const event = normalizeAppServerNotification({
+    method: "item/completed",
+    params: {
+      threadId: "thread-1",
+      turnId: "turn-1",
+      item: {
+        id: "item-final",
+        type: "agentMessage",
+        phase: "final_answer",
+        text: "This is the final answer, not just a tiny preview.",
+      },
+    },
+  });
+
+  assert.equal(event.category, "lifecycle");
+  assert.equal(event.itemType, "agentMessage");
+  assert.equal(event.phase, "final_answer");
+  assert.equal(event.itemText, "This is the final answer, not just a tiny preview.");
+});
+
 test("appendAppServerStreamBuffer coalesces tiny reasoning deltas", () => {
   const turn = {};
   const first = normalizeAppServerNotification({
@@ -120,6 +141,15 @@ test("formatAppServerStreamProgressLine keeps bare status ticks out of chat", ()
 
   assert.equal(formatAppServerStreamProgressLine(threadStatus), null);
   assert.equal(formatAppServerStreamProgressLine(modelRoute), "Status: rate limit");
+  assert.equal(
+    formatAppServerStreamProgressLine(
+      normalizeAppServerNotification({
+        method: "turn/completed",
+        params: { threadId: "thread-1", turn: { id: "turn-1" } },
+      }),
+    ),
+    null,
+  );
 });
 
 test("shouldKeepAppServerStreamEvent filters by thread and turn while keeping global rate limits", () => {

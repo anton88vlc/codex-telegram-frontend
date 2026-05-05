@@ -182,6 +182,69 @@ test("syncAppServerStreamProgress converts stream events into progress updates",
   assert.equal(calls.find((call) => call[0] === "event")?.[1], "app_server_stream_progress");
 });
 
+test("syncAppServerStreamProgress delivers final answers and suppresses rollout duplicates", async () => {
+  const state = {
+    bindings: {
+      "binding-1": {
+        threadId: "thread-1",
+        chatId: "-1001",
+        messageThreadId: 42,
+        currentTurn: {
+          appServerTurnId: "turn-1",
+          codexProgressMessageId: 99,
+          progressItems: [{ text: "Thinking: checking", timestamp: "2026-04-19T10:00:00.000Z" }],
+        },
+        lastInboundMessageId: 7,
+      },
+    },
+    outboundMirrors: {},
+  };
+  const calls = [];
+  const result = await syncAppServerStreamProgress({
+    config: { botToken: "token", threadsDbPath: "/tmp/threads.sqlite" },
+    state,
+    stream: {
+      drainEvents: () => [
+        {
+          threadId: "thread-1",
+          turnId: "turn-1",
+          category: "lifecycle",
+          method: "item/completed",
+          itemId: "item-final",
+          itemType: "agentMessage",
+          phase: "final_answer",
+          itemText: "Final from app-server.",
+          ts: "2026-04-19T10:00:03.000Z",
+        },
+      ],
+    },
+    getThreadsByIdsFn: async () => [{ id: "thread-1", rollout_path: "/tmp/rollout.jsonl" }],
+    loadChangedFilesTextForThreadFn: async () => "**Changed files**\n1 file changed +2 -0",
+    sendRichTextChunksFn: async (...args) => {
+      calls.push(["send", ...args]);
+      return [{ message_id: 123 }];
+    },
+    completeOutboundProgressMessageFn: async (...args) => {
+      calls.push(["complete", ...args]);
+      return [{ message_id: 99 }];
+    },
+    rememberOutboundFn: (binding, sent) => {
+      calls.push(["remember", sent.map((item) => item.message_id)]);
+    },
+    logEventFn: (type, payload) => calls.push(["event", type, payload]),
+  });
+
+  assert.deepEqual(result, { changed: true, applied: 1, events: 1 });
+  assert.equal(calls[0][0], "send");
+  assert.equal(calls[0][3], "Final from app-server.");
+  assert.equal(calls[0][4], 7);
+  assert.equal(calls.find((call) => call[0] === "complete")?.[1].changedFilesText, "**Changed files**\n1 file changed +2 -0");
+  assert.equal(state.bindings["binding-1"].currentTurn, null);
+  assert.equal(state.bindings["binding-1"].lastMirroredPhase, "final_answer");
+  assert.equal(state.outboundMirrors["binding-1"].suppressions.length, 1);
+  assert.equal(calls.find((call) => call[0] === "event")?.[1], "app_server_stream_final");
+});
+
 test("syncAppServerStreamProgress sends approval requests to Telegram topics", async () => {
   const originalFetch = globalThis.fetch;
   const calls = [];

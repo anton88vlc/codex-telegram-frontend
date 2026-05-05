@@ -189,6 +189,49 @@ test("syncOutboundMirrors consumes suppressed messages without sending them", as
   assert.equal(state.outboundMirrors[bindingKey].replyTargetMessageId, 7);
 });
 
+test("syncOutboundMirrors skips rollout progress when app-server already owns live progress", async () => {
+  const state = makeState(
+    makeBinding({
+      currentTurn: {
+        progressSource: "app-server",
+        progressItems: [{ text: "Thinking: from app-server", timestamp: "2026-04-19T10:00:00.000Z" }],
+      },
+    }),
+  );
+  const calls = [];
+  const commentary = {
+    role: "assistant",
+    phase: "commentary",
+    text: "Thinking: from rollout",
+    signature: "c1",
+    timestamp: "2026-04-19T10:00:01.000Z",
+  };
+
+  const result = await syncOutboundMirrors({
+    config: makeConfig({ appServerStreamEnabled: true }),
+    state,
+    getThreadsByIdsFn: async () => [makeThread()],
+    readThreadMirrorDeltaFn: async () => ({
+      mirror: {
+        rolloutPath: "/tmp/thread.jsonl",
+        byteOffset: 102,
+        partialLine: "",
+        lastSignature: "c1",
+      },
+      messages: [commentary],
+    }),
+    upsertOutboundProgressMessageFn: async (...args) => {
+      calls.push(args);
+      return [];
+    },
+  });
+
+  assert.deepEqual(result, { delivered: 0, suppressed: 1, changed: true });
+  assert.deepEqual(calls, []);
+  assert.equal(state.bindings[bindingKey].lastRolloutProgressSkippedAt, "2026-04-19T10:00:01.000Z");
+  assert.equal(state.outboundMirrors[bindingKey].lastSignature, "c1");
+});
+
 test("syncOutboundMirrors sends generated images as Telegram photos", async () => {
   const state = makeState(makeBinding({ currentTurn: { startedAt: "2026-04-21T19:51:15.000Z" } }), {
     threadId: "thread-1",

@@ -78,7 +78,7 @@ Voice notes are optional. The supported STT paths today are Deepgram, OpenAI, or
 - Ops: `/health`, `/settings`, `/project-status`, `/sync-project`, `/mode native`.
 - Topic queues: normal messages wait behind a running turn; `/queue`, `/pause`, `/resume`, `/cancel-queue` and `/steer <text>` handle the cockpit bits.
 - Telegram-menu-safe aliases: `/attach_latest`, `/project_status`, `/sync_project`, `/mode_native`, `/cancel_queue`.
-- App-server send-only by default: Codex accepts the turn through `turn/start`, Telegram gets progress/final from app-server events plus the rollout mirror.
+- App-server send-only by default: Codex accepts the turn through `turn/start`; Telegram gets live progress/final from app-server events, with the rollout mirror kept as reconciliation.
 - In-place progress bubble with live steps, Todo, changed files and final state.
 - Native Telegram typing heartbeat while Codex is working.
 - Reply-chain UX: final answers reply to the triggering user/surrogate message.
@@ -210,7 +210,7 @@ These are local runtime files and should not be committed:
 - [lib/voice-transcription.mjs](lib/voice-transcription.mjs) - Telegram voice/audio STT
 - [lib/health-report.mjs](lib/health-report.mjs) - `/status` and `/health` text shaping
 - [lib/project-sync-runner.mjs](lib/project-sync-runner.mjs) - project topic status/sync orchestration
-- [lib/outbound-mirror-runner.mjs](lib/outbound-mirror-runner.mjs) - Codex rollout mirror delivery loop
+- [lib/outbound-mirror-runner.mjs](lib/outbound-mirror-runner.mjs) - Codex rollout reconciliation/backfill loop
 - [lib/outbound-memory.mjs](lib/outbound-memory.mjs) - remembered Telegram message ids and mirror suppression helpers
 - [lib/outbound-progress.mjs](lib/outbound-progress.mjs) - Telegram progress bubble content
 - [lib/outbound-progress-message.mjs](lib/outbound-progress-message.mjs) - progress bubble send/edit state

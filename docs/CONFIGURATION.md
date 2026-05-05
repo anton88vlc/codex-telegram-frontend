@@ -54,7 +54,7 @@ Use this for things that should survive restarts and should not be changed from 
 | `historyAssistantPhases` | `["final_answer"]` | Assistant phases imported during clean history backfill. Keep commentary out by default. |
 | `historyIncludeHeartbeats` | `false` | Whether heartbeat/system-like user entries are allowed into imported history. Default false keeps setup noise out. |
 | `nativeTimeoutMs` | `120000` | Timeout for one native Codex send. |
-| `nativeWaitForReply` | `false` | Keep this off for the normal happy path. The transport returns as soon as Codex accepts the turn; Telegram gets progress/final through app-server events and the outbound rollout mirror. Waiting inline is a debugging fallback. |
+| `nativeWaitForReply` | `false` | Keep this off for the normal happy path. The transport returns as soon as Codex accepts the turn; Telegram gets progress/final through app-server events, with rollout scanning kept as reconciliation. Waiting inline is a debugging fallback. |
 | `nativePollIntervalMs` | `1000` | Poll interval while waiting for native Codex reply. |
 | `nativeIngressTransport` | `app-server` | Telegram-originated send path: `app-server`, `app-control`, or `auto`. `app-server` is the default because it starts turns through Codex's backend protocol instead of poking the renderer. |
 | `turnQueueEnabled` | `true` | When a topic already has an active Codex turn, new normal messages are queued instead of being shoved into the running turn. Use `/steer` for explicit intervention. |
@@ -67,7 +67,7 @@ Use this for things that should survive restarts and should not be changed from 
 | `nativeDebugBaseUrl` | `http://127.0.0.1:9222` | Optional Codex Desktop app-control endpoint. |
 | `appServerUrl` | `ws://127.0.0.1:27890` | Normal local Codex app-server endpoint for send/control/stream work. |
 | `appServerControlTimeoutMs` | `3000` | Timeout for short app-server control commands like `/model`, `/think`, `/fast` and `/compact`. Keep it short; Telegram should not hang while Codex thinks about life. |
-| `appServerStreamEnabled` | `true` | Listens to app-server events for live progress. If it misbehaves, turn it off; rollout mirror still works. |
+| `appServerStreamEnabled` | `true` | Listens to app-server events for live progress and final answers. If it misbehaves, turn it off; rollout mirror still works as the boring fallback. |
 | `appServerStreamConnectTimeoutMs` | `1200` | Short connect timeout for the optional app-server stream. It should not stall Telegram sends. |
 | `appServerStreamReconnectMs` | `5000` | Cooldown before trying the optional app-server stream again after it disconnects. |
 | `appServerStreamMaxEvents` | `500` | In-memory cap for queued app-server stream events before the bridge coalesces them into progress updates. |

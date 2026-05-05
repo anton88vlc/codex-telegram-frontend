@@ -9,7 +9,7 @@ This spike looked at the next serious path for making Telegram feel less like a 
 Original bridge behavior was good but still indirect:
 
 - Telegram sent a turn through app-control send-only when possible.
-- Telegram progress/final mostly comes from the rollout mirror.
+- Telegram progress/final mostly came from the rollout mirror.
 - The progress bubble is honest, but not raw Codex event streaming.
 
 The local `codex-cli 0.121.0` app-server schema exposes exactly the events we wanted:
@@ -79,8 +79,8 @@ Pinned status bars now send reset times as Telegram `date_time` entities. The vi
 Current implementation direction:
 
 - Keep app-server `turn/start` as the default phone ingress.
-- Feed app-server notifications into the existing `outbound-progress`/`progress-bubble` shapes.
-- Keep rollout mirror as reconciliation, not as the only source of truth.
+- Feed app-server notifications into the existing `outbound-progress`/`progress-bubble` shapes. This is now the live path for progress and final answers.
+- Keep rollout mirror as reconciliation/backfill, not as the source that fights app-server events.
 - Keep app-control send-only as an optional Desktop-aware lane, not the default phone ingress.
 - Tune `sendMessageDraft` only if Telegram exposes a reliable clear/finalize path. Until then, editable progress bubbles are the source of truth.
 - Add a managed-bot onboarding spike soon, because that could remove one of the ugliest install steps.

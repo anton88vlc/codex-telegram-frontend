@@ -387,17 +387,10 @@ async function main() {
       }
     }
 
-    let syncResult = { changed: false };
     try {
-      syncResult = await syncOutboundMirrors({
-        config,
-        state,
-        loadChangedFilesTextForThreadFn: loadChangedFilesTextForThread,
-        captureWorktreeBaselineFn: captureWorktreeBaseline,
-        rememberOutboundFn: rememberOutbound,
-      });
+      await syncAppServerStreamSubscriptions({ config, state, stream: appServerStream });
     } catch (error) {
-      logBridgeEvent("outbound_mirror_error", {
+      logBridgeEvent("app_server_stream_subscribe_error", {
         error: error instanceof Error ? error.message : String(error),
       });
     }
@@ -411,12 +404,23 @@ async function main() {
         loadChangedFilesTextForThreadFn: loadChangedFilesTextForThread,
         rememberOutboundFn: rememberOutbound,
       });
-      // App-server stream is a nice live-progress layer, not the source of truth.
-      // Keep subscription retries after rollout mirroring so flaky thread/resume
-      // calls cannot hold back final answers in Telegram.
-      await syncAppServerStreamSubscriptions({ config, state, stream: appServerStream });
     } catch (error) {
       logBridgeEvent("app_server_stream_error", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    let syncResult = { changed: false };
+    try {
+      syncResult = await syncOutboundMirrors({
+        config,
+        state,
+        loadChangedFilesTextForThreadFn: loadChangedFilesTextForThread,
+        captureWorktreeBaselineFn: captureWorktreeBaseline,
+        rememberOutboundFn: rememberOutbound,
+      });
+    } catch (error) {
+      logBridgeEvent("outbound_mirror_error", {
         error: error instanceof Error ? error.message : String(error),
       });
     }
