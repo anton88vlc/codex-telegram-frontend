@@ -28,12 +28,13 @@ import {
 import { DEFAULT_APP_CONTROL_BASE_URL, DEFAULT_CODEX_APP_BINARY, checkAppControl } from "../lib/app-control-launcher.mjs";
 import {
   DEFAULT_CODEX_GLOBAL_STATE_PATH,
-  listProjectThreads,
-  listQuickstartWorkItems,
-  listRecentProjects,
-  listRecentThreads,
   parsePositiveInt,
 } from "../lib/thread-db.mjs";
+import {
+  listProjectThreadsFromStore,
+  listQuickstartWorkItemsFromStore,
+  listRecentProjectsFromStore,
+} from "../lib/thread-store.mjs";
 import { normalizeVoiceTranscriptionProvider } from "../lib/voice-transcription.mjs";
 
 const PROJECT_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -54,6 +55,7 @@ const DEFAULT_BOT_TOKEN_KEYCHAIN_SERVICE = "codex-telegram-bridge-bot-token";
 const DEFAULT_DEEPGRAM_KEYCHAIN_SERVICE = "codex-telegram-bridge-deepgram-api-key";
 const DEFAULT_OPENAI_KEYCHAIN_SERVICE = "codex-telegram-bridge-openai-api-key";
 const DEFAULT_NATIVE_DEBUG_BASE_URL = DEFAULT_APP_CONTROL_BASE_URL;
+const DEFAULT_APP_SERVER_URL = process.env.CODEX_APP_SERVER_URL || "ws://127.0.0.1:27890";
 const DEFAULT_QUICKSTART_THREAD_LIMIT = 10;
 const DEFAULT_QUICKSTART_HISTORY_MAX_MESSAGES = 10;
 const DEFAULT_CHATS_SURFACE_TITLE = "Codex - Chats";
@@ -448,6 +450,26 @@ async function readJsonIfExists(filePath, fallback = {}) {
   } catch {
     return fallback;
   }
+}
+
+async function loadThreadStoreConfig(args) {
+  const config = await readJsonIfExists(args.configPath, {});
+  return {
+    ...config,
+    threadsDbPath: args.threadsDbPath,
+    appServerUrl: config.appServerUrl || DEFAULT_APP_SERVER_URL,
+    // `--threads-db` is used by tests and repair workflows to point at a
+    // specific snapshot. Respect that snapshot instead of silently reading the
+    // live app-server ThreadStore from this Mac.
+    appServerThreadStoreEnabled:
+      args.threadsDbPath === DEFAULT_THREADS_DB_PATH && config.appServerThreadStoreEnabled !== false,
+    appServerControlTimeoutMs: Number.isFinite(config.appServerControlTimeoutMs)
+      ? config.appServerControlTimeoutMs
+      : 3000,
+    appServerStreamConnectTimeoutMs: Number.isFinite(config.appServerStreamConnectTimeoutMs)
+      ? config.appServerStreamConnectTimeoutMs
+      : 1200,
+  };
 }
 
 async function writeJsonFile(filePath, value) {
@@ -1984,15 +2006,17 @@ async function loadSelectedProjects(args) {
   if (args.projects.length) {
     return args.projects.map((projectRoot) => ({ projectRoot }));
   }
-  return listRecentProjects(args.threadsDbPath, { limit: args.projectLimit });
+  const config = await loadThreadStoreConfig(args);
+  return listRecentProjectsFromStore(config, { limit: args.projectLimit });
 }
 
 async function loadProjectsWithThreads(args) {
+  const config = await loadThreadStoreConfig(args);
   const projects = await loadSelectedProjects(args);
   const withThreads = [];
   for (const project of projects) {
     const projectRoot = project.projectRoot;
-    const threads = await listProjectThreads(args.threadsDbPath, projectRoot, {
+    const threads = await listProjectThreadsFromStore(config, projectRoot, {
       limit: args.threadsPerProject,
     });
     withThreads.push({
@@ -2005,7 +2029,8 @@ async function loadProjectsWithThreads(args) {
 }
 
 async function loadQuickstartProjectsWithThreads(args) {
-  const quickstart = await listQuickstartWorkItems(args.threadsDbPath, {
+  const config = await loadThreadStoreConfig(args);
+  const quickstart = await listQuickstartWorkItemsFromStore(config, {
     limit: args.threadLimit,
     globalStatePath: args.codexGlobalStatePath,
   });
