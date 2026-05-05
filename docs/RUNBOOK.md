@@ -172,6 +172,16 @@ The normal default already keeps Telegram ingress off the renderer while the bri
 
 If Codex Desktop archives a thread while switching worktrees or returning to the main branch, a Telegram topic can briefly point at a dead thread id. The bridge now tries a conservative rescue: same title, same `cwd`, exactly one active successor. If that match exists, it silently rebinds the topic and continues. If there are multiple plausible successors, it refuses to guess. That is annoying for one message, but much better than sending work into the wrong Codex thread.
 
+## Approvals And Input
+
+When app-server streaming is reachable, Codex approval cards are mirrored into the bound Telegram topic.
+
+- Command/file/permission approvals get inline Telegram buttons.
+- Short "Codex needs your input" prompts can be answered by replying to that Telegram request.
+- MCP/tool suggestions get approve/deny buttons when Codex exposes them through the same request lane.
+
+If a request expires before you tap or reply, Telegram says so plainly and you should handle that one in Codex Desktop. No fake success, no silent stuck turn.
+
 ## UX Smoke
 
 This is what good looks like:
@@ -183,6 +193,7 @@ This is what good looks like:
 5. Send a short turn directly from Codex Desktop and confirm Telegram receives the surrogate user message plus assistant updates.
 6. Confirm each active topic has one pinned compact status bar.
 7. If `topicAutoSyncEnabled` is true, create or open a fresh Codex thread in a bootstrapped project and confirm the group gets a sync-managed topic without creating a topic flood.
+8. If Codex asks for approval or user input, confirm the Telegram topic gets buttons or a replyable prompt instead of leaving the phone user stranded.
 
 ## Bootstrap / Telegram Admin
 

@@ -71,6 +71,76 @@ test("normalizeAppServerRequest extracts command approval requests", () => {
   assert.deepEqual(event.proposedExecpolicyAmendment, ["ps"]);
 });
 
+test("normalizeAppServerRequest extracts permissions approval requests", () => {
+  const event = normalizeAppServerRequest({
+    id: 78,
+    method: "item/permissions/requestApproval",
+    params: {
+      threadId: "thread-1",
+      turnId: "turn-1",
+      reason: "Need filesystem access.",
+      permissions: {
+        fileSystem: { enabled: true, access: "read", paths: ["/repo"] },
+      },
+    },
+  });
+
+  assert.equal(event.category, "approval");
+  assert.equal(event.requestKind, "permissions");
+  assert.deepEqual(event.permissions.fileSystem.paths, ["/repo"]);
+});
+
+test("normalizeAppServerRequest extracts user-input requests", () => {
+  const event = normalizeAppServerRequest({
+    id: 79,
+    method: "item/tool/requestUserInput",
+    params: {
+      threadId: "thread-1",
+      turnId: "turn-1",
+      itemId: "tool-1",
+      questions: [
+        {
+          id: "choice",
+          header: "Mode",
+          question: "Which route should I take?",
+          options: [{ label: "Safe", description: "Avoid risky writes." }],
+        },
+      ],
+    },
+  });
+
+  assert.equal(event.category, "user_input");
+  assert.equal(event.requestKind, "user_input");
+  assert.equal(event.questions[0].id, "choice");
+  assert.equal(event.questions[0].options[0].label, "Safe");
+});
+
+test("normalizeAppServerRequest extracts MCP elicitation requests", () => {
+  const event = normalizeAppServerRequest({
+    id: 80,
+    method: "mcpServer/elicitation/request",
+    params: {
+      threadId: "thread-1",
+      turnId: "turn-1",
+      mode: "form",
+      serverName: "Linear",
+      message: "Install Linear?",
+      _meta: {
+        codex_approval_kind: "tool_suggestion",
+        tool_type: "plugin",
+        suggest_type: "install",
+        tool_name: "Linear",
+        suggest_reason: "Track project work.",
+      },
+    },
+  });
+
+  assert.equal(event.category, "elicitation");
+  assert.equal(event.requestKind, "mcp_elicitation");
+  assert.equal(event.kind, "tool_suggestion");
+  assert.equal(event.toolName, "Linear");
+});
+
 test("normalizeAppServerNotification formats plan updates for Telegram progress", () => {
   const event = normalizeAppServerNotification({
     method: "turn/plan/updated",

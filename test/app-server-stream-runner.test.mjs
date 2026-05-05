@@ -297,6 +297,70 @@ test("syncAppServerStreamProgress sends approval requests to Telegram topics", a
   }
 });
 
+test("syncAppServerStreamProgress routes user input and elicitation requests to Telegram", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  let messageId = 400;
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url: String(url), body: JSON.parse(options.body) });
+    messageId += 1;
+    return new Response(JSON.stringify({ ok: true, result: { message_id: messageId } }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  };
+  try {
+    const state = {
+      bindings: {
+        "binding-1": {
+          threadId: "thread-1",
+          chatId: "-1001",
+          messageThreadId: 42,
+          lastInboundMessageId: 7,
+        },
+      },
+    };
+    const result = await syncAppServerStreamProgress({
+      config: { botToken: "token" },
+      state,
+      stream: {
+        drainEvents: () => [
+          {
+            type: "app_server_request",
+            category: "user_input",
+            requestId: "79",
+            requestKind: "user_input",
+            method: "item/tool/requestUserInput",
+            threadId: "thread-1",
+            questions: [{ id: "direction", question: "Which route?" }],
+          },
+          {
+            type: "app_server_request",
+            category: "elicitation",
+            requestId: "80",
+            requestKind: "mcp_elicitation",
+            method: "mcpServer/elicitation/request",
+            threadId: "thread-1",
+            kind: "tool_suggestion",
+            toolName: "Linear",
+          },
+        ],
+      },
+      logEventFn: (type, payload) => calls.push({ type, payload }),
+    });
+
+    assert.deepEqual(result, { changed: true, applied: 2, events: 2 });
+    assert.equal(calls.filter((call) => call.url).length, 2);
+    assert.match(calls.find((call) => call.url)?.body.text, /Codex needs your input/);
+    assert.equal(state.bindings["binding-1"].currentTurn.pendingInputs["79"].telegramMessageId, 401);
+    assert.equal(state.bindings["binding-1"].currentTurn.pendingElicitations["80"].telegramMessageId, 402);
+    assert.equal(calls.find((call) => call.type === "app_server_user_input_request_sent").payload.requestId, "79");
+    assert.equal(calls.find((call) => call.type === "app_server_elicitation_request_sent").payload.requestId, "80");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("syncAppServerStreamProgress ignores empty streams", async () => {
   const result = await syncAppServerStreamProgress({
     config: {},

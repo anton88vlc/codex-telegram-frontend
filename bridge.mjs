@@ -9,7 +9,7 @@ import {
   syncAppServerStreamProgress,
   syncAppServerStreamSubscriptions,
 } from "./lib/app-server-stream-runner.mjs";
-import { handleApprovalCallbackQuery } from "./lib/app-server-approvals.mjs";
+import { handleAppServerRequestCallbackQuery } from "./lib/app-server-approvals.mjs";
 import {
   configureBridgeEventLog,
   logBridgeEvent,
@@ -236,7 +236,7 @@ async function processCallbackQuery({ config, state, callbackQuery, appServerStr
     });
     return true;
   }
-  return handleApprovalCallbackQuery({
+  return handleAppServerRequestCallbackQuery({
     config,
     state,
     callbackQuery,
