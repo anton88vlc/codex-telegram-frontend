@@ -57,7 +57,7 @@ Use this for things that should survive restarts and should not be changed from 
 | `nativeWaitForReply` | `false` | Keep this off for the normal happy path. The transport returns as soon as Codex accepts the turn; Telegram gets progress/final through app-server events, with rollout scanning kept as reconciliation. Waiting inline is a debugging fallback. |
 | `nativePollIntervalMs` | `1000` | Poll interval while waiting for native Codex reply. |
 | `nativeIngressTransport` | `app-server` | Telegram-originated send path: `app-server`, `app-control`, or `auto`. `app-server` is the default because it starts turns through Codex's backend protocol instead of poking the renderer. |
-| `turnQueueEnabled` | `true` | When a topic already has an active Codex turn, new normal messages are queued instead of being shoved into the running turn. Use `/steer` for explicit intervention. |
+| `turnQueueEnabled` | `true` | When a topic already has an active Codex turn, new normal messages are queued instead of being shoved into the running turn. Use `/steer` for explicit intervention, or `/cancel` when the turn is plainly going the wrong way. |
 | `turnQueueMaxItems` | `10` | Max queued prompts per bound Telegram topic. This is a guardrail, not a productivity challenge. |
 | `privateTopicAutoCreateChats` | `false` | Experimental. If enabled, the first message in an unbound private bot topic starts an app-server thread and binds it. Keep this off for normal use: today it is not the same thing as creating a visible `New chat` in Codex Desktop. |
 | `nativeChatStartTimeoutMs` | `45000` | Timeout for the experimental app-server `thread/start` helper used by private-topic auto-create. |
@@ -66,7 +66,7 @@ Use this for things that should survive restarts and should not be changed from 
 | `appControlShowThread` | `false` | Experimental: after app-control accepts a turn, ask Codex Desktop to show the thread. Useful for Desktop-first UX, but keep it off if renderer stability is shaky. |
 | `nativeDebugBaseUrl` | `http://127.0.0.1:9222` | Optional Codex Desktop app-control endpoint. |
 | `appServerUrl` | `ws://127.0.0.1:27890` | Normal local Codex app-server endpoint for send/control/stream work. |
-| `appServerControlTimeoutMs` | `3000` | Timeout for short app-server control commands like `/model`, `/think`, `/fast` and `/compact`. Keep it short; Telegram should not hang while Codex thinks about life. |
+| `appServerControlTimeoutMs` | `3000` | Timeout for short app-server control commands like `/model`, `/think`, `/fast`, `/compact`, `/steer` and `/cancel`. Keep it short; Telegram should not hang while Codex thinks about life. |
 | `appServerStreamEnabled` | `true` | Listens to app-server events for live progress, final answers, approvals and Codex "needs input" requests. If it misbehaves, turn it off; rollout mirror still works as the boring fallback, but approvals fall back to Codex Desktop. |
 | `appServerStreamConnectTimeoutMs` | `1200` | Short connect timeout for the optional app-server stream. It should not stall Telegram sends. |
 | `appServerStreamReconnectMs` | `5000` | Cooldown before trying the optional app-server stream again after it disconnects. |
@@ -141,7 +141,8 @@ Working commands today:
 - `/queue` - shows queued prompts for this topic.
 - `/pause` and `/resume` - pause/resume the topic queue.
 - `/cancel-queue` - clears queued prompts in this topic.
-- `/steer <text>` - explicitly sends guidance into the currently running Codex turn. It needs live `app-control`; normal text queues instead.
+- `/steer <text>` - explicitly sends guidance into the currently running Codex turn through app-server `turn/steer`.
+- `/cancel` or `/interrupt` - interrupts the currently running Codex turn through app-server `turn/interrupt`.
 - `/project-status [count]` - previews desired project thread working set.
 - `/sync-project [count] dry-run` - safe preview for topic rename/reopen/create/park.
 - `/sync-project [count]` - applies that working-set sync.

@@ -76,10 +76,11 @@ Voice notes are optional. The supported STT paths today are Deepgram, OpenAI, or
 - Bindings: `/attach`, `/attach-latest`, `/detach`, `/status`.
 - Codex controls from Telegram: `/model`, `/think` or `/reasoning`, `/fast`, `/compact`.
 - Ops: `/health`, `/settings`, `/project-status`, `/sync-project`, `/mode native`.
-- Topic queues: normal messages wait behind a running turn; `/queue`, `/pause`, `/resume`, `/cancel-queue` and `/steer <text>` handle the cockpit bits.
+- Topic queues: normal messages wait behind a running turn; `/queue`, `/pause`, `/resume`, `/cancel-queue`, `/steer <text>` and `/cancel` handle the cockpit bits.
 - Telegram-menu-safe aliases: `/attach_latest`, `/project_status`, `/sync_project`, `/mode_native`, `/cancel_queue`.
 - App-server send-only by default: Codex accepts the turn through `turn/start`; Telegram gets live progress/final from app-server events, with the rollout mirror kept as reconciliation.
 - Codex approvals and "needs input" prompts bridge into Telegram: command/file/permission approvals get inline buttons, and user-input prompts can be answered by replying to the Telegram request.
+- Live turn controls are app-server-native: `/steer` uses `turn/steer`, `/cancel` and `/interrupt` use `turn/interrupt`, so they do not need the Desktop renderer debug lane.
 - In-place progress bubble with live steps, Todo, changed files and final state.
 - Native Telegram typing heartbeat while Codex is working.
 - Reply-chain UX: final answers reply to the triggering user/surrogate message.

@@ -15,6 +15,8 @@ test("buildBotInstallPolishPlan uses Telegram-menu-safe command names", () => {
   assert(plan.commands.some((command) => command.command === "reasoning"));
   assert(plan.commands.some((command) => command.command === "fast"));
   assert(plan.commands.some((command) => command.command === "compact"));
+  assert(plan.commands.some((command) => command.command === "cancel"));
+  assert(plan.commands.some((command) => command.command === "interrupt"));
   assert(!plan.commands.some((command) => command.command === "project_status"));
   assert(!plan.commands.some((command) => command.command === "sync_project"));
   assert(!plan.commands.some((command) => command.command.includes("-")));

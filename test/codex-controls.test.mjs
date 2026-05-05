@@ -2,8 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  buildInterruptTurnParams,
+  buildSteerTurnParams,
   currentFastMode,
   findModel,
+  getCurrentCodexTurnId,
   normalizeFastMode,
   normalizeReasoningEffort,
   renderFastStatus,
@@ -57,4 +60,25 @@ test("model and reasoning helpers render compact Telegram copy", () => {
     /available: `low`, `medium`, `high`, `xhigh`/,
   );
   assert.match(renderFastStatus({ codexConfig: { service_tier: null } }), /fast: `off`/);
+});
+
+test("builds app-server steer and interrupt params", () => {
+  assert.equal(getCurrentCodexTurnId({ currentTurn: { appServerTurnId: "turn-1" } }), "turn-1");
+
+  assert.deepEqual(buildSteerTurnParams({ threadId: " thread-1 ", turnId: "turn-1", input: " focus tests " }), {
+    threadId: "thread-1",
+    input: [{ type: "text", text: "focus tests", text_elements: [] }],
+    expectedTurnId: "turn-1",
+    responsesapiClientMetadata: null,
+  });
+
+  assert.deepEqual(buildInterruptTurnParams({ threadId: "thread-1", turnId: "turn-1" }), {
+    threadId: "thread-1",
+    turnId: "turn-1",
+  });
+
+  assert.throws(
+    () => buildSteerTurnParams({ threadId: "thread-1", turnId: "", input: "focus" }),
+    /missing active turn id/,
+  );
 });

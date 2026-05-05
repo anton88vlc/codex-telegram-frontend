@@ -32,6 +32,7 @@ test("renderHelp includes the bot mention hint when privacy mode blocks plain te
   assert.match(text, /\/compact/);
   assert.match(text, /\/queue/);
   assert.match(text, /\/steer <text>/);
+  assert.match(text, /\/cancel` or `\/interrupt/);
   assert.match(text, /@codexbot your request/);
 });
 
@@ -223,24 +224,17 @@ test("handleCommand renders and clears the topic queue", async () => {
   assert.match(replies[1], /Canceled 1 queued prompt/);
 });
 
-test("handleCommand steers an active turn through app-control only", async () => {
+test("handleCommand steers an active turn through app-server", async () => {
   const binding = {
     threadId: "thread-1",
-    currentTurn: { source: "telegram" },
+    currentTurn: { source: "telegram", appServerTurnId: "turn-1" },
   };
   const suppressions = [];
   const replies = [];
-  const nativeCalls = [];
+  const steerCalls = [];
 
   await handleCommand({
-    config: {
-      ...config,
-      nativeHelperPath: "/tmp/app-control.js",
-      nativeTimeoutMs: 120000,
-      nativeDebugBaseUrl: "http://127.0.0.1:9222",
-      nativePollIntervalMs: 1000,
-      appControlShowThread: false,
-    },
+    config,
     state: {},
     message: makeMessage(),
     bindingKey: "group:-1001:topic:3",
@@ -251,18 +245,51 @@ test("handleCommand steers an active turn through app-control only", async () =>
       replies.push(text);
       return [{ message_id: 84 }];
     },
-    sendNativeTurnFn: async (...args) => {
-      nativeCalls.push(args);
-      return { transportPath: "app-control" };
+    steerCodexTurnFn: async (...args) => {
+      steerCalls.push(args);
+      return {};
     },
-    shouldPreferAppServerFn: () => false,
   });
 
-  assert.equal(nativeCalls[0][0].fallbackHelperPath, null);
-  assert.equal(nativeCalls[0][0].prompt, "focus tests");
+  assert.equal(steerCalls[0][1].threadId, "thread-1");
+  assert.equal(steerCalls[0][1].turnId, "turn-1");
+  assert.equal(steerCalls[0][1].input, "focus tests");
   assert.equal(binding.currentTurn.steerCount, 1);
+  assert.equal(binding.lastTransportPath, "app-server-turn-steer");
   assert.equal(suppressions[0][2], "focus tests");
   assert.equal(replies[0], "Steered into the current turn.");
+});
+
+test("handleCommand interrupts an active Codex turn through app-server", async () => {
+  const binding = {
+    threadId: "thread-1",
+    currentTurn: { source: "telegram", appServerTurnId: "turn-1" },
+  };
+  const replies = [];
+  const interruptCalls = [];
+
+  await handleCommand({
+    config,
+    state: {},
+    message: makeMessage(),
+    bindingKey: "group:-1001:topic:3",
+    binding,
+    parsed: { command: "/cancel", args: [] },
+    replyFn: async (token, message, text) => {
+      replies.push(text);
+      return [{ message_id: 90 }];
+    },
+    interruptCodexTurnFn: async (...args) => {
+      interruptCalls.push(args);
+      return {};
+    },
+  });
+
+  assert.equal(interruptCalls[0][1].threadId, "thread-1");
+  assert.equal(interruptCalls[0][1].turnId, "turn-1");
+  assert.equal(binding.currentTurn, null);
+  assert.equal(binding.lastTransportPath, "app-server-turn-interrupt");
+  assert.equal(replies[0], "Interrupted the current Codex turn.");
 });
 
 test("handleCommand shows and changes Codex model through app-server controls", async () => {
