@@ -23,7 +23,7 @@ Codex outbound:
 3. `lib/outbound-mirror-messages.mjs` formats mirrored user/assistant messages.
 4. `lib/outbound-progress.mjs` builds progress text, while `lib/outbound-progress-message.mjs` owns send/edit state.
 5. `lib/worktree-summary.mjs` adds changed-file context.
-6. `lib/app-server-stream-runner.mjs` coalesces optional app-server events into the same progress path.
+6. `lib/app-server-stream-runner.mjs` coalesces optional app-server events into the same progress path and sends app-server media events, such as generated images, as Telegram photos.
 7. `lib/status-bar-runner.mjs` and `lib/typing-heartbeat-runner.mjs` keep pinned status and native typing hints current.
 8. `lib/telegram.mjs` sends or edits Telegram messages.
 
@@ -50,7 +50,7 @@ Codex outbound:
 - `lib/outbound-mirror-runner.mjs` - rollout mirror delivery, suppression, pending retry state and progress/final routing.
 - `lib/outbound-progress.mjs` - progress bubble text.
 - `lib/outbound-progress-message.mjs` - progress bubble send/edit/finalization.
-- `lib/app-server-stream-runner.mjs` - optional app-server stream subscription and progress coalescing.
+- `lib/app-server-stream-runner.mjs` - optional app-server stream subscription, progress coalescing, final-answer and generated-image delivery.
 - `lib/worktree-summary.mjs` - git changed-file summaries plus per-turn baseline/delta helpers.
 - `lib/status-bar.mjs` - compact pinned topic status.
 - `lib/status-bar-runner.mjs` - status bar reserve/refresh orchestration.

@@ -137,12 +137,15 @@ If `self-check` says `app-control: fetch failed`, but `app-server: reachable`, t
 
 Photos and documents from a bound topic are downloaded by the bot into `state/attachments/`, then sent to Codex as local file paths inside the prompt. That is intentionally boring and inspectable: no hidden cloud storage, no mystery media relay.
 
+Generated images go the other way. When Codex produces an image and the local app-server stream or rollout mirror exposes the generated file, the bridge sends it to the bound Telegram topic as a real photo. The file stays in Codex's local generated-images storage; Telegram only gets the Bot API upload.
+
 Voice/audio is different on purpose. The bridge downloads the Telegram audio bytes, sends them to STT, posts a short italic quoted transcript in the topic, then sends that transcript to Codex. For built-in Deepgram/OpenAI providers it does not keep the audio file on disk. The optional `command` provider uses a temp file and deletes it after the command returns unless `voiceTranscriptionKeepFiles` is enabled.
 
 Current boundary:
 
 - photos and documents: supported
 - image documents: treated as images
+- generated Codex images: mirrored back as Telegram photos
 - voice/audio: transcribed first, then sent to Codex as text
 - video/stickers: not yet
 - default limit: 10 files per message/media album, 20 MB per file

@@ -245,6 +245,122 @@ test("syncAppServerStreamProgress delivers final answers and suppresses rollout 
   assert.equal(calls.find((call) => call[0] === "event")?.[1], "app_server_stream_final");
 });
 
+test("syncAppServerStreamProgress sends generated images from app-server media events", async () => {
+  const state = {
+    bindings: {
+      "binding-1": {
+        threadId: "thread-1",
+        chatId: "-1001",
+        messageThreadId: 42,
+        currentTurn: {
+          appServerTurnId: "turn-1",
+          codexProgressMessageId: 99,
+          progressItems: [{ text: "Thinking: drawing", timestamp: "2026-04-22T10:00:00.000Z" }],
+        },
+        lastInboundMessageId: 7,
+      },
+    },
+    outboundMirrors: {},
+  };
+  const calls = [];
+  const result = await syncAppServerStreamProgress({
+    config: { botToken: "token", threadsDbPath: "/tmp/threads.sqlite" },
+    state,
+    stream: {
+      drainEvents: () => [
+        {
+          threadId: "thread-1",
+          turnId: "turn-1",
+          category: "media",
+          method: "item/completed",
+          itemId: "ig_1",
+          media: [
+            {
+              type: "photo",
+              source: "codex_image_generation",
+              imageId: "ig_1",
+              path: "/tmp/generated/ig_1.png",
+              mimeType: "image/png",
+            },
+          ],
+          ts: "2026-04-22T10:00:03.000Z",
+        },
+      ],
+    },
+    getThreadsByIdsFn: async () => [{ id: "thread-1", rollout_path: "/tmp/rollout.jsonl" }],
+    upsertOutboundProgressMessageFn: async (...args) => {
+      calls.push(["upsert", ...args]);
+      return [{ message_id: 99 }];
+    },
+    sendPhotoFn: async (...args) => {
+      calls.push(["photo", ...args]);
+      return { message_id: 222 };
+    },
+    completeOutboundProgressMessageFn: async (...args) => {
+      calls.push(["complete", ...args]);
+      return [{ message_id: 99 }];
+    },
+    rememberOutboundFn: (binding, sent) => {
+      calls.push(["remember", sent.map((item) => item.message_id)]);
+    },
+    logEventFn: (type, payload) => calls.push(["event", type, payload]),
+  });
+
+  assert.deepEqual(result, { changed: true, applied: 2, events: 1 });
+  const photo = calls.find((call) => call[0] === "photo");
+  assert.equal(photo[2].chatId, "-1001");
+  assert.equal(photo[2].messageThreadId, 42);
+  assert.equal(photo[2].photoPath, "/tmp/generated/ig_1.png");
+  assert.equal(photo[2].replyToMessageId, 7);
+  assert.equal(state.bindings["binding-1"].currentTurn.appServerMediaDeliveredAt, "2026-04-22T10:00:03.000Z");
+  assert.equal(state.bindings["binding-1"].lastMirroredPhase, "image_generation");
+  assert.equal(state.outboundMirrors["binding-1"].suppressions.length, 1);
+  assert.ok(calls.find((call) => call[0] === "event" && call[1] === "app_server_stream_media"));
+});
+
+test("syncAppServerStreamProgress finishes media-only turns on turn completed", async () => {
+  const state = {
+    bindings: {
+      "binding-1": {
+        threadId: "thread-1",
+        chatId: "-1001",
+        messageThreadId: 42,
+        currentTurn: {
+          appServerTurnId: "turn-1",
+          appServerMediaDeliveredAt: "2026-04-22T10:00:03.000Z",
+        },
+      },
+    },
+  };
+  const calls = [];
+  const result = await syncAppServerStreamProgress({
+    config: { botToken: "token", threadsDbPath: "/tmp/threads.sqlite" },
+    state,
+    stream: {
+      drainEvents: () => [
+        {
+          threadId: "thread-1",
+          turnId: "turn-1",
+          category: "lifecycle",
+          method: "turn/completed",
+          ts: "2026-04-22T10:00:04.000Z",
+        },
+      ],
+    },
+    getThreadsByIdsFn: async () => [{ id: "thread-1", rollout_path: "/tmp/rollout.jsonl" }],
+    completeOutboundProgressMessageFn: async (...args) => {
+      calls.push(["complete", ...args]);
+      return [{ message_id: 99 }];
+    },
+    logEventFn: (type, payload) => calls.push(["event", type, payload]),
+  });
+
+  assert.deepEqual(result, { changed: true, applied: 1, events: 1 });
+  assert.equal(state.bindings["binding-1"].currentTurn, null);
+  assert.equal(calls[0][0], "complete");
+  assert.equal(calls.find((call) => call[0] === "event")?.[1], "app_server_stream_media_completed");
+});
+
 test("syncAppServerStreamProgress sends approval requests to Telegram topics", async () => {
   const originalFetch = globalThis.fetch;
   const calls = [];

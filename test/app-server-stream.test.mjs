@@ -1,9 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import os from "node:os";
+import path from "node:path";
 
 import {
   appendAppServerStreamBuffer,
   categorizeAppServerMethod,
+  extractAppServerMedia,
   formatAppServerStreamProgressLine,
   normalizeAppServerNotification,
   normalizeAppServerRequest,
@@ -43,6 +46,62 @@ test("normalizeAppServerNotification extracts stable event fields", () => {
   assert.equal(event.deltaText, "hello");
   assert.equal(event.deltaChars, 5);
   assert.equal(event.textPreview, "hello");
+});
+
+test("normalizeAppServerNotification extracts generated image media from app-server items", () => {
+  const event = normalizeAppServerNotification({
+    method: "item/completed",
+    params: {
+      threadId: "thread-image",
+      turnId: "turn-1",
+      item: {
+        id: "ig_123",
+        type: "image_generation_call",
+        result: "opaque-result-marker",
+      },
+    },
+  });
+
+  assert.equal(event.category, "media");
+  assert.equal(event.textPreview, "Generated image");
+  assert.deepEqual(event.media, [
+    {
+      type: "photo",
+      source: "codex_image_generation",
+      imageId: "ig_123",
+      path: path.join(os.homedir(), ".codex", "generated_images", "thread-image", "ig_123.png"),
+      mimeType: "image/png",
+    },
+  ]);
+  assert.equal(formatAppServerStreamProgressLine(event), "Media ready: Generated image");
+});
+
+test("extractAppServerMedia keeps explicit local image attachments", () => {
+  const media = extractAppServerMedia({
+    threadId: "thread-1",
+    attachments: [
+      {
+        type: "output_image",
+        path: "/tmp/codex-output.jpg",
+        mimeType: "image/jpeg",
+      },
+      {
+        type: "file",
+        path: "/tmp/not-image.txt",
+        mimeType: "text/plain",
+      },
+    ],
+  });
+
+  assert.deepEqual(media, [
+    {
+      type: "photo",
+      source: "app_server",
+      imageId: null,
+      path: "/tmp/codex-output.jpg",
+      mimeType: "image/jpeg",
+    },
+  ]);
 });
 
 test("normalizeAppServerRequest extracts command approval requests", () => {
