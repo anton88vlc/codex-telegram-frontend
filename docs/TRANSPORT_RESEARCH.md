@@ -63,7 +63,7 @@ Telegram also shipped a few useful things recently:
 - Private chats can now have topics for bots. This no longer fights our product shape: project groups still map to Codex projects, while bot-private topics map to Codex Desktop `Chats`. The live bot has Threaded Mode enabled now; keep the preflight because new installs still need that BotFather switch.
 - Managed Bots in Bot API 9.6 are the big onboarding lead. Telegram now has `request_managed_bot`, `getManagedBotToken`, `replaceManagedBotToken` and `https://t.me/newbot/{manager_bot_username}/...` links. If this is usable enough, the install flow can stop saying "go wrestle BotFather" and instead guide the user through a tighter manager-bot flow.
 - Bot API profile photo support means the avatar path has moved from the MTProto `photos.uploadProfilePhoto(bot=...)` workaround to official `setMyProfilePhoto`.
-- Native Telegram Checklists look tempting for Codex Todo, but sending/editing checklists is currently business-account-shaped. Worth a spike, not a default.
+- Native Telegram Checklists looked tempting for Codex Todo, but the current Bot API methods are business-account-shaped: `sendChecklist` and `editMessageChecklist` both require `business_connection_id`. Do not build this into the normal group/topic UX. Keep Codex Todo as compact text in progress bubbles, and revisit only if Telegram exposes checklist send/edit for ordinary bots in groups and bot-private topics.
 - Sender/member tags may help role clarity later, but they are easy to overuse. Keep the working surface calm.
 - `copyMessages` is worth keeping in the back pocket for richer history/backfill and album preservation.
 - Inline keyboards are still the cleanest way to keep ops actions out of working topics: preview, apply, cleanup, smoke, retry, open runbook.
@@ -103,4 +103,6 @@ The original probe records what Codex app-server actually emits. Keep it around 
 - Telegram Bot API: https://core.telegram.org/bots/api
 - Telegram Bot API changelog: https://core.telegram.org/bots/api-changelog
 - Telegram bot profile photo via Bot API: https://core.telegram.org/bots/api#setmyprofilephoto
+- Telegram Bot API `sendChecklist`: https://core.telegram.org/bots/api#sendchecklist
+- Telegram Bot API `editMessageChecklist`: https://core.telegram.org/bots/api#editmessagechecklist
 - Legacy Telegram bot profile photo via MTProto: https://core.telegram.org/method/photos.uploadProfilePhoto
