@@ -65,11 +65,15 @@ Use this for things that should survive restarts and should not be changed from 
 | `appControlCooldownMs` | `300000` | How long to avoid app-control after an app-control send error before trying it again. |
 | `appControlShowThread` | `false` | Experimental: after app-control accepts a turn, ask Codex Desktop to show the thread. Useful for Desktop-first UX, but keep it off if renderer stability is shaky. |
 | `nativeDebugBaseUrl` | `http://127.0.0.1:9222` | Optional Codex Desktop app-control endpoint. |
-| `appServerUrl` | `ws://127.0.0.1:27890` | Normal local Codex app-server endpoint for send/control/stream work. |
+| `appServerTransport` | `stdio` | Normal local Codex app-server transport. Current Codex Desktop builds are happiest when the bridge starts `codex app-server` over stdio instead of betting on an old long-lived TCP listener. Use `websocket` only if you intentionally run `codex app-server --listen ws://127.0.0.1:27890`. |
+| `appServerCommand` | `/Applications/Codex.app/Contents/Resources/codex` in `config.example.json`, otherwise `codex` | Command used when `appServerTransport` is `stdio`. The full Codex.app path is the least surprising macOS value; plain `codex` is fine if it is on PATH. |
+| `appServerArgs` | `["app-server"]` | Args used with `appServerCommand` for stdio app-server mode. |
+| `appServerUrl` | `ws://127.0.0.1:27890` | Legacy websocket endpoint. Still supported for older local setups, but no longer the default happy path. |
 | `appServerControlTimeoutMs` | `3000` | Timeout for short app-server control commands like `/model`, `/think`, `/fast`, `/compact`, `/steer` and `/cancel`. Keep it short; Telegram should not hang while Codex thinks about life. |
 | `appServerThreadStoreEnabled` | `true` | Prefer app-server `thread/list` / `thread/read` for thread lookup, sync previews and status checks. The old sqlite DB remains the fallback, not the first thing we bet the UX on. |
 | `appServerStreamEnabled` | `true` | Listens to app-server events for live progress, final answers, approvals and Codex "needs input" requests. If it misbehaves, turn it off; rollout mirror still works as the boring fallback, but approvals fall back to Codex Desktop. |
 | `appServerStreamConnectTimeoutMs` | `1200` | Short connect timeout for the optional app-server stream. It should not stall Telegram sends. |
+| `appServerStreamRequestTimeoutMs` | `10000` | Request timeout for the persistent app-server stream. Keep this higher than connect timeout: `thread/resume` can be a little slow, and killing it after 1.2s just creates fake failures. |
 | `appServerStreamReconnectMs` | `5000` | Cooldown before trying the optional app-server stream again after it disconnects. |
 | `appServerStreamMaxEvents` | `500` | In-memory cap for queued app-server stream events before the bridge coalesces them into progress updates. |
 | `appServerStreamSubscribeMaxAttemptsPerPoll` | `3` | Caps `thread/resume` attempts per bridge poll. This keeps a grumpy app-server stream from blocking the normal rollout mirror. |

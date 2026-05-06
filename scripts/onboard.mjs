@@ -56,6 +56,8 @@ const DEFAULT_DEEPGRAM_KEYCHAIN_SERVICE = "codex-telegram-bridge-deepgram-api-ke
 const DEFAULT_OPENAI_KEYCHAIN_SERVICE = "codex-telegram-bridge-openai-api-key";
 const DEFAULT_NATIVE_DEBUG_BASE_URL = DEFAULT_APP_CONTROL_BASE_URL;
 const DEFAULT_APP_SERVER_URL = process.env.CODEX_APP_SERVER_URL || "ws://127.0.0.1:27890";
+const DEFAULT_APP_SERVER_TRANSPORT = process.env.CODEX_APP_SERVER_TRANSPORT || "stdio";
+const DEFAULT_APP_SERVER_COMMAND = process.env.CODEX_APP_SERVER_COMMAND || "/Applications/Codex.app/Contents/Resources/codex";
 const DEFAULT_QUICKSTART_THREAD_LIMIT = 10;
 const DEFAULT_QUICKSTART_HISTORY_MAX_MESSAGES = 10;
 const DEFAULT_CHATS_SURFACE_TITLE = "Codex - Chats";
@@ -458,6 +460,9 @@ async function loadThreadStoreConfig(args) {
     ...config,
     threadsDbPath: args.threadsDbPath,
     appServerUrl: config.appServerUrl || DEFAULT_APP_SERVER_URL,
+    appServerTransport: config.appServerTransport || DEFAULT_APP_SERVER_TRANSPORT,
+    appServerCommand: config.appServerCommand || DEFAULT_APP_SERVER_COMMAND,
+    appServerArgs: Array.isArray(config.appServerArgs) && config.appServerArgs.length ? config.appServerArgs : ["app-server"],
     // `--threads-db` is used by tests and repair workflows to point at a
     // specific snapshot. Respect that snapshot instead of silently reading the
     // live app-server ThreadStore from this Mac.

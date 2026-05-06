@@ -93,7 +93,7 @@ test("buildSettingsReport shows safe runtime settings without secrets", () => {
   assert.match(text, /transport: native; ingress app-server; app-server `ws:\/\/127\.0\.0\.1:27890`; app-control `http:\/\/127\.0\.0\.1:9222`/);
   assert.match(text, /wait reply off; native poll 1s; app-control cooldown 5m/);
   assert.match(text, /app-control: show thread on/);
-  assert.match(text, /app-server stream: on; hot only on; connect 1200ms; reconnect 5s; resume attempts 3\/poll/);
+  assert.match(text, /app-server stream: on; hot only on; connect 1200ms; request n\/a; reconnect 5s; resume attempts 3\/poll/);
   assert.match(text, /mirror: on; phases commentary, final_answer; progress updates; poll 2s; max 25\/poll/);
   assert.match(text, /working set: hot 30m; warm 1d/);
   assert.match(text, /worktree: changed files on; max all/);

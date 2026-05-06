@@ -21,6 +21,7 @@ test("makeAppServerLiveStream builds a stream when enabled", () => {
     {
       appServerUrl: "ws://127.0.0.1:27890",
       appServerStreamConnectTimeoutMs: 100,
+      appServerStreamRequestTimeoutMs: 1000,
       appServerStreamReconnectMs: 200,
       appServerStreamMaxEvents: 10,
     },
@@ -31,6 +32,7 @@ test("makeAppServerLiveStream builds a stream when enabled", () => {
   );
 
   assert.equal(stream.options.url, "ws://127.0.0.1:27890");
+  assert.equal(stream.options.requestTimeoutMs, 1000);
   stream.options.onStatus({ status: "connected" });
   assert.deepEqual(events, [{ type: "app_server_stream_status", payload: { status: "connected" } }]);
   assert.equal(makeAppServerLiveStream({ appServerStreamEnabled: false }), null);
