@@ -28,6 +28,7 @@ import {
 } from "./lib/private-topic-bindings.mjs";
 import { buildSelfCheckReport, formatSelfCheckReport } from "./lib/runtime-health.mjs";
 import { refreshStatusBars } from "./lib/status-bar-runner.mjs";
+import { createTelegramRateLimitGate } from "./lib/telegram-rate-limit.mjs";
 import {
   getBinding,
   hasProcessedMessage,
@@ -282,6 +283,7 @@ async function main() {
   const state = await loadState(config.statePath);
   const appServerStream = makeAppServerLiveStream(config);
   const typingHeartbeats = new Map();
+  const telegramRateLimitGate = createTelegramRateLimitGate();
   const effectivePollTimeoutSeconds =
     config.outboundSyncEnabled === false
       ? config.pollTimeoutSeconds
@@ -396,73 +398,112 @@ async function main() {
     }
 
     let appServerStreamResult = { changed: false };
-    try {
-      appServerStreamResult = await syncAppServerStreamProgress({
-        config,
-        state,
-        stream: appServerStream,
-        loadChangedFilesTextForThreadFn: loadChangedFilesTextForThread,
-        rememberOutboundFn: rememberOutbound,
-      });
-    } catch (error) {
-      logBridgeEvent("app_server_stream_error", {
-        error: error instanceof Error ? error.message : String(error),
-      });
+    if (telegramRateLimitGate.logSkip("app_server_stream")) {
+      appServerStreamResult = { changed: false };
+    } else {
+      try {
+        appServerStreamResult = await syncAppServerStreamProgress({
+          config,
+          state,
+          stream: appServerStream,
+          loadChangedFilesTextForThreadFn: loadChangedFilesTextForThread,
+          rememberOutboundFn: rememberOutbound,
+          onTelegramRateLimitFn: (error, context) => telegramRateLimitGate.mark(error, context),
+        });
+      } catch (error) {
+        logBridgeEvent("app_server_stream_error", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
 
     let syncResult = { changed: false };
-    try {
-      syncResult = await syncOutboundMirrors({
-        config,
-        state,
-        loadChangedFilesTextForThreadFn: loadChangedFilesTextForThread,
-        captureWorktreeBaselineFn: captureWorktreeBaseline,
-        rememberOutboundFn: rememberOutbound,
-      });
-    } catch (error) {
-      logBridgeEvent("outbound_mirror_error", {
-        error: error instanceof Error ? error.message : String(error),
-      });
+    if (telegramRateLimitGate.logSkip("outbound_mirror")) {
+      syncResult = { changed: false };
+    } else {
+      try {
+        syncResult = await syncOutboundMirrors({
+          config,
+          state,
+          loadChangedFilesTextForThreadFn: loadChangedFilesTextForThread,
+          captureWorktreeBaselineFn: captureWorktreeBaseline,
+          rememberOutboundFn: rememberOutbound,
+          onTelegramRateLimitFn: (error, context) => telegramRateLimitGate.mark(error, context),
+        });
+      } catch (error) {
+        logBridgeEvent("outbound_mirror_error", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
 
     let queueResult = { changed: false };
-    try {
-      queueResult = await drainTurnQueues({
-        config,
-        state,
-        appServerStream,
-        typingHeartbeats,
-      });
-    } catch (error) {
-      logBridgeEvent("turn_queue_error", {
-        error: error instanceof Error ? error.message : String(error),
-      });
+    if (telegramRateLimitGate.logSkip("turn_queue")) {
+      queueResult = { changed: false };
+    } else {
+      try {
+        queueResult = await drainTurnQueues({
+          config,
+          state,
+          appServerStream,
+          typingHeartbeats,
+        });
+      } catch (error) {
+        logBridgeEvent("turn_queue_error", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
 
     let statusBarResult = { changed: false };
-    try {
-      statusBarResult = await refreshStatusBars({ config, state });
-    } catch (error) {
-      logBridgeEvent("status_bar_error", {
-        error: error instanceof Error ? error.message : String(error),
-      });
+    if (telegramRateLimitGate.logSkip("status_bar")) {
+      statusBarResult = { changed: false };
+    } else {
+      try {
+        statusBarResult = await refreshStatusBars({
+          config,
+          state,
+          onTelegramRateLimitFn: (error, context) => telegramRateLimitGate.mark(error, context),
+        });
+      } catch (error) {
+        logBridgeEvent("status_bar_error", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
 
     let draftStreamResult = { changed: false };
-    try {
-      draftStreamResult = await syncDraftStreams({ config, state });
-    } catch (error) {
-      logBridgeEvent("draft_stream_sync_error", {
-        error: error instanceof Error ? error.message : String(error),
-      });
+    if (telegramRateLimitGate.logSkip("draft_stream")) {
+      draftStreamResult = { changed: false };
+    } else {
+      try {
+        draftStreamResult = await syncDraftStreams({
+          config,
+          state,
+          onTelegramRateLimitFn: (error, context) => telegramRateLimitGate.mark(error, context),
+        });
+      } catch (error) {
+        logBridgeEvent("draft_stream_sync_error", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
 
-    try {
-      syncTypingHeartbeats({ config, state, heartbeats: typingHeartbeats });
-    } catch (error) {
-      logBridgeEvent("typing_heartbeat_sync_error", {
-        error: error instanceof Error ? error.message : String(error),
-      });
+    if (telegramRateLimitGate.logSkip("typing_heartbeat")) {
+      stopTypingHeartbeats(typingHeartbeats);
+    } else {
+      try {
+        syncTypingHeartbeats({
+          config,
+          state,
+          heartbeats: typingHeartbeats,
+          onTelegramRateLimitFn: (error, context) => telegramRateLimitGate.mark(error, context),
+        });
+      } catch (error) {
+        logBridgeEvent("typing_heartbeat_sync_error", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
 
     if (

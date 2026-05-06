@@ -104,6 +104,55 @@ test("syncOutboundMirrors can target one binding without touching other topics",
   assert.equal(state.outboundMirrors["group:-1001:topic:99"], undefined);
 });
 
+test("syncOutboundMirrors stops after Telegram flood-control and keeps pending messages", async () => {
+  const state = {
+    bindings: {
+      [bindingKey]: makeBinding({ threadId: "thread-1" }),
+      "group:-1001:topic:99": makeBinding({ threadId: "thread-2", messageThreadId: 99 }),
+    },
+    outboundMirrors: {},
+  };
+  const rateLimitEvents = [];
+  const result = await syncOutboundMirrors({
+    config: makeConfig(),
+    state,
+    getThreadsByIdsFn: async () => [
+      makeThread({ id: "thread-1" }),
+      makeThread({ id: "thread-2" }),
+    ],
+    readThreadMirrorDeltaFn: async ({ threadId }) => ({
+      mirror: {
+        rolloutPath: `/tmp/${threadId}.jsonl`,
+        byteOffset: 100,
+        partialLine: "",
+        lastSignature: `${threadId}:a1`,
+      },
+      messages: [
+        {
+          role: "assistant",
+          phase: "final_answer",
+          text: `Final ${threadId}`,
+          signature: `${threadId}:a1`,
+          timestamp: "2026-04-19T10:01:00.000Z",
+        },
+      ],
+    }),
+    sendRichTextChunksFn: async () => {
+      throw new Error("telegram sendMessage failed: Too Many Requests: retry after 36");
+    },
+    onTelegramRateLimitFn: (error, context) => {
+      rateLimitEvents.push({ error: error.message, context });
+      return true;
+    },
+  });
+
+  assert.deepEqual(result, { delivered: 0, suppressed: 0, changed: true });
+  assert.equal(rateLimitEvents.length, 1);
+  assert.equal(rateLimitEvents[0].context.bindingKey, bindingKey);
+  assert.equal(state.outboundMirrors[bindingKey].pendingMessages.length, 1);
+  assert.equal(state.outboundMirrors["group:-1001:topic:99"], undefined);
+});
+
 test("selectOutboundMirrorBindingEntries keeps hot topics and rotates the rest", () => {
   const nowMs = Date.parse("2026-04-21T10:30:00.000Z");
   const state = {};
