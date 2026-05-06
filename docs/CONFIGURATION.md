@@ -80,7 +80,7 @@ Use this for things that should survive restarts and should not be changed from 
 | `statePath` | `state/state.json` | Bridge runtime state file. |
 | `eventLogPath` | `logs/bridge.events.ndjson` | Structured bridge event/audit log used by `/health` for recent failures and delivery counters. |
 | `bridgeLogPath` | `logs/bridge.stderr.log` | launchd stderr log. Useful when the bridge crashes before it can write structured events. |
-| `nativeHelperPath` | `scripts/send_via_app_control.js` | app-control helper path. |
+| `nativeHelperPath` | `scripts/send_via_app_control.js` | Optional app-control helper path. Used only when `nativeIngressTransport` is `app-control` or `auto`. |
 | `nativeFallbackHelperPath` | `scripts/send_via_app_server.js` | Legacy app-server helper path. Normal sends use `lib/app-server-client.mjs` directly; keep this only as an escape hatch for older local setups. |
 | `nativeChatStartHelperPath` | `scripts/start_via_app_server.js` | Experimental app-server `thread/start` helper for private-topic auto-create. Not the normal Desktop `Chats` path. |
 | `projectIndexPath` | `state/bootstrap-result.json` | Project/group/topic index produced by bootstrap. |

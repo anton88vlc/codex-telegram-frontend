@@ -89,7 +89,7 @@ test("buildSettingsReport shows safe runtime settings without secrets", () => {
   assert.match(text, /bot: @cdxbot; token: Keychain codex-telegram-bridge-bot-token/);
   assert.match(text, /ingress: poll 30s; typing on; typing heartbeat on \/ 4s/);
   assert.match(text, /mobile rescue: on; max age 30d/);
-  assert.match(text, /transport: native; ingress app-server; app-control `http:\/\/127\.0\.0\.1:9222`; fallback `ws:\/\/127\.0\.0\.1:27890`/);
+  assert.match(text, /transport: native; ingress app-server; app-server `ws:\/\/127\.0\.0\.1:27890`; app-control `http:\/\/127\.0\.0\.1:9222`/);
   assert.match(text, /wait reply off; native poll 1s; app-control cooldown 5m/);
   assert.match(text, /app-control: show thread on/);
   assert.match(text, /app-server stream: on; hot only on; connect 1200ms; reconnect 5s; resume attempts 3\/poll/);

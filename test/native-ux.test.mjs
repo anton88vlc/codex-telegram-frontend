@@ -21,8 +21,8 @@ test("renderNativeSendError explains failed app-control and failed fallback", ()
 
   assert.match(text, /Codex Desktop is not reachable/);
   assert.match(text, /app-control failed/);
-  assert.match(text, /app-server fallback failed/);
-  assert.match(text, /--remote-debugging-port=9222/);
+  assert.match(text, /app-server failed/);
+  assert.match(text, /optional app-control lane/);
 });
 
 test("renderNativeSendError explains app-server-first failure", () => {
@@ -71,6 +71,6 @@ test("appendTransportNotice only annotates app-server fallback replies", () => {
   assert.equal(appendTransportNotice("Normal answer", { transportPath: "app-control" }), "Normal answer");
   assert.match(
     appendTransportNotice("Fallback answer", { transportPath: "app-server-fallback" }),
-    /Fallback answer\n\nTransport note: delivered through app-server fallback/,
+    /Fallback answer\n\nTransport note: delivered through app-server after app-control failed/,
   );
 });

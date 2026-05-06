@@ -123,13 +123,14 @@ npm run once
 Do this in order. Random poking makes the bridge look haunted when it is usually just missing one boring prerequisite.
 
 1. Make sure `Codex.app` is open.
-2. Prefer launching Codex with `/Applications/Codex.app/Contents/MacOS/Codex --remote-debugging-port=9222`; if you are inside this repo, `npm run codex:launch` is the helper for the same thing.
-3. Run `npm run self-check`.
-4. Run `npm run state:doctor`; if it reports safe repairs, apply them.
-5. Check `/health`; it samples `logs/bridge.events.ndjson`.
-6. If the bridge crashed before structured logging, check `logs/bridge.stderr.log`.
-7. Check whether `state/state.json -> lastUpdateId` moves.
-8. If launchd is alive but stuck, use `launchctl kickstart -k ...`.
+2. If app-server is down, reopen Codex normally with `/Applications/Codex.app/Contents/MacOS/Codex`.
+3. If you are deliberately testing app-control, launch Codex with `/Applications/Codex.app/Contents/MacOS/Codex --remote-debugging-port=9222`; from inside this repo, `npm run codex:launch` is the helper for the same thing.
+4. Run `npm run self-check`.
+5. Run `npm run state:doctor`; if it reports safe repairs, apply them.
+6. Check `/health`; it samples `logs/bridge.events.ndjson`.
+7. If the bridge crashed before structured logging, check `logs/bridge.stderr.log`.
+8. Check whether `state/state.json -> lastUpdateId` moves.
+9. If launchd is alive but stuck, use `launchctl kickstart -k ...`.
 
 If `self-check` says `app-control: fetch failed`, but `app-server: reachable`, that is not fatal.
 
@@ -154,11 +155,13 @@ Current boundary:
 If an attachment fails, check `logs/bridge.events.ndjson` for `telegram_attachment_error`. The file itself is runtime state, so do not commit it.
 If transcription fails, check `telegram_voice_transcription_error` in the same event log. In normal UX the user only sees a short "could not transcribe" note; provider details stay in logs where they belong.
 
-## Transport Fallback
+## Transport Recovery
 
-If a Telegram reply says fallback was used, the bridge tried app-control and then moved the turn through app-server. That is no longer a scary degraded path, but the wording stays honest because app-control-specific UI behavior did not happen.
+Normal Telegram-originated turns use app-server directly. If a Telegram reply says `app-server fallback` was used, that means the topic was on the optional app-control lane, app-control failed, and the bridge still got the turn accepted through app-server. That is not scary; it just means app-control-specific UI behavior did not happen.
 
-If both paths fail, Telegram shows a short recovery hint: open `Codex.app`, then retry. If you are deliberately testing app-control, launch with `--remote-debugging-port=9222`.
+If app-server itself fails, Telegram shows a short recovery hint: open `Codex.app`, then retry. If you are deliberately testing app-control, launch with `--remote-debugging-port=9222`.
+
+The `app-server fallback` label is kept in logs for compatibility with older event counters. Read it as "app-control was attempted first, then app-server rescued the send", not as "app-server is second-class".
 
 For the optional Desktop-first path without the old heavy renderer polling, use:
 

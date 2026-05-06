@@ -129,9 +129,10 @@ Run the bridge:
 
 ```bash
 cd /path/to/codex-telegram-frontend
-npm run codex:launch
 npm start
 ```
+
+`npm run codex:launch` is optional. Use it only when you want the app-control debug lane available too.
 
 Self-check and full check:
 
@@ -205,7 +206,7 @@ These are local runtime files and should not be committed:
 - [bridge.mjs](bridge.mjs) - thin polling bridge and top-level loop
 - [lib/inbound-turn-runner.mjs](lib/inbound-turn-runner.mjs) - Telegram-originated Codex turn orchestration
 - [lib/telegram.mjs](lib/telegram.mjs) - Telegram Bot API helpers
-- [lib/codex-native.mjs](lib/codex-native.mjs) - Codex send wrapper
+- [lib/codex-native.mjs](lib/codex-native.mjs) - Codex send wrapper: app-server first, optional app-control lane
 - [lib/command-handlers.mjs](lib/command-handlers.mjs) - Telegram slash-command routing
 - [lib/binding-send-validation.mjs](lib/binding-send-validation.mjs) - pre-send binding safety checks and archived-thread rescue
 - [lib/unbound-group-rescue.mjs](lib/unbound-group-rescue.mjs) - General/All message rescue into the active topic
@@ -216,7 +217,7 @@ These are local runtime files and should not be committed:
 - [lib/outbound-memory.mjs](lib/outbound-memory.mjs) - remembered Telegram message ids and mirror suppression helpers
 - [lib/outbound-progress.mjs](lib/outbound-progress.mjs) - Telegram progress bubble content
 - [lib/outbound-progress-message.mjs](lib/outbound-progress-message.mjs) - progress bubble send/edit state
-- [lib/app-server-stream-runner.mjs](lib/app-server-stream-runner.mjs) - optional app-server event stream bridge
+- [lib/app-server-stream-runner.mjs](lib/app-server-stream-runner.mjs) - app-server event stream bridge for live progress, final replies, approvals and generated images
 - [lib/worktree-summary.mjs](lib/worktree-summary.mjs) - changed-file summaries and turn baselines
 - [lib/status-bar-runner.mjs](lib/status-bar-runner.mjs) - pinned topic status refresh loop
 - [lib/typing-heartbeat-runner.mjs](lib/typing-heartbeat-runner.mjs) - native Telegram "typing" loop for active turns

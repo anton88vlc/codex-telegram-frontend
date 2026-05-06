@@ -23,7 +23,7 @@ Codex outbound:
 3. `lib/outbound-mirror-messages.mjs` formats mirrored user/assistant messages.
 4. `lib/outbound-progress.mjs` builds progress text, while `lib/outbound-progress-message.mjs` owns send/edit state.
 5. `lib/worktree-summary.mjs` adds changed-file context.
-6. `lib/app-server-stream-runner.mjs` coalesces optional app-server events into the same progress path and sends app-server media events, such as generated images, as Telegram photos.
+6. `lib/app-server-stream-runner.mjs` coalesces app-server events into the same progress path and sends app-server media events, such as generated images, as Telegram photos.
 7. `lib/status-bar-runner.mjs` and `lib/typing-heartbeat-runner.mjs` keep pinned status and native typing hints current.
 8. `lib/telegram.mjs` sends or edits Telegram messages.
 
@@ -37,9 +37,9 @@ Codex outbound:
 - `lib/unbound-group-rescue.mjs` - General/All accidental-message rescue into the most active bound topic.
 - `lib/command-response.mjs` - command replies, including quiet ops-to-DM routing.
 - `lib/command-handlers.mjs` - `/help`, `/attach`, `/status`, `/health`, `/settings`, `/project-status`, `/sync-project` and `/mode` routing.
-- `lib/codex-native.mjs` - `app-control` plus `app-server` transport wrapper.
+- `lib/codex-native.mjs` - app-server-first transport wrapper with optional app-control support.
 - `lib/binding-send-validation.mjs` - pre-send binding safety checks, private Chat DB grace and archived-thread rescue.
-- `lib/native-transport-state.mjs` - app-control cooldown and fallback state.
+- `lib/native-transport-state.mjs` - transport preference, app-control cooldown and legacy fallback state.
 - `lib/health-report.mjs` - `/status` and `/health` text shaping, state-doctor/event-log sampling and binding diagnostics.
 - `lib/private-topic-bindings.mjs` - private bot topics mapped to Codex Desktop `Chats`.
 - `lib/project-sync.mjs` - project topic sync planning.
@@ -50,13 +50,24 @@ Codex outbound:
 - `lib/outbound-mirror-runner.mjs` - rollout mirror delivery, suppression, pending retry state and progress/final routing.
 - `lib/outbound-progress.mjs` - progress bubble text.
 - `lib/outbound-progress-message.mjs` - progress bubble send/edit/finalization.
-- `lib/app-server-stream-runner.mjs` - optional app-server stream subscription, progress coalescing, final-answer and generated-image delivery.
+- `lib/app-server-stream-runner.mjs` - app-server stream subscription, progress coalescing, final-answer and generated-image delivery.
 - `lib/worktree-summary.mjs` - git changed-file summaries plus per-turn baseline/delta helpers.
 - `lib/status-bar.mjs` - compact pinned topic status.
 - `lib/status-bar-runner.mjs` - status bar reserve/refresh orchestration.
 - `lib/typing-heartbeat.mjs` - raw Telegram typing heartbeat timer.
 - `lib/typing-heartbeat-runner.mjs` - binding-aware typing heartbeat orchestration.
 - `lib/runtime-health.mjs` and `lib/state-doctor.mjs` - diagnostics and safe repair planning.
+
+## Legacy Helpers We Keep On Purpose
+
+These scripts are not the main runtime anymore, but they still earn their keep:
+
+- `scripts/send_via_app_control.js` is the optional app-control lane and still backs deliberate renderer/debug experiments.
+- `scripts/send_via_app_server.js` is the legacy app-server helper for older local setups; normal runtime uses `lib/app-server-client.mjs` directly.
+- `scripts/start_via_app_server.js` is an experimental `thread/start` probe for private-topic research, not the public Desktop `New chat` path.
+- `scripts/probe_app_server_stream.mjs` is the protocol smoke tool to rerun when Codex changes app-server events.
+
+If one of these stops having a real job, delete it. Do not leave haunted backup scripts around because they feel comforting.
 
 ## Refactor Direction
 

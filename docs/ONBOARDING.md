@@ -37,13 +37,19 @@ Some things still require a human because Telegram does not expose clean automat
 1. Create or reuse a Telegram bot through [@BotFather](https://t.me/BotFather).
 2. Create or reuse Telegram app credentials at [my.telegram.org/apps](https://my.telegram.org/apps) if the user-side admin helper needs them. Telegram calls them `api_id` and `api_hash`; they are not the bot token.
 3. Authorize one local Telegram user session when prompted. Phone/code login is the happy path.
-4. Keep `Codex.app` available. Best path:
+4. Keep `Codex.app` available. Normal path:
+
+```bash
+/Applications/Codex.app/Contents/MacOS/Codex
+```
+
+If you want the optional app-control lane, launch with the debug port:
 
 ```bash
 /Applications/Codex.app/Contents/MacOS/Codex --remote-debugging-port=9222
 ```
 
-If you are already inside this repo, `npm run codex:launch` does the same thing with a small safety wrapper. From `~/code` or any other directory, npm will not magically find this project's `package.json`; either use the direct command above or `cd` into the repo first.
+If you are already inside this repo, `npm run codex:launch` does that debug launch with a small safety wrapper. From `~/code` or any other directory, npm will not magically find this project's `package.json`; either use the direct command above or `cd` into the repo first.
 
 Codex should handle where token/API values are stored locally. Do not make the user cosplay as a secrets manager unless the automatic path fails.
 
@@ -74,7 +80,7 @@ npm run onboard:prepare -- --login-qr
 At the end of onboarding, leave the user with the tiny runtime map:
 
 ```bash
-/Applications/Codex.app/Contents/MacOS/Codex --remote-debugging-port=9222
+/Applications/Codex.app/Contents/MacOS/Codex
 ```
 
 If the agent is standing inside the repo, this helper is fine too:
@@ -83,7 +89,7 @@ If the agent is standing inside the repo, this helper is fine too:
 npm run codex:launch
 ```
 
-That starts Codex.app with app-control on `http://127.0.0.1:9222`, which is useful when you want the optional Desktop-aware lane. Normal Telegram sends use app-server now, so the phone can start turns without leaning on the renderer for every message.
+The direct command is enough for the normal app-server path. `npm run codex:launch` starts Codex.app with app-control on `http://127.0.0.1:9222`, which is useful when you want the optional Desktop-aware lane. Normal Telegram sends use app-server now, so the phone can start turns without leaning on the renderer for every message.
 
 One optional recommendation: tune Codex Personalization after setup. This project makes Codex feel present on your phone, so the assistant's voice matters more than it does in a random terminal.
 

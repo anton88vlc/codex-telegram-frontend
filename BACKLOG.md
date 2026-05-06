@@ -7,7 +7,7 @@
 3. Do not mirror every possible thread and do not turn Telegram into a dump. Keep a clean working set where topics represent the current project threads, not the infinite historical tail.
 4. Do not turn the working surface into an admin panel. Ops/admin noise must support the chat-like work experience, not dominate it.
 5. Telegram frontend copy should be English-first for open-source readiness. User prompts and final answers should keep the original thread language.
-6. Public-release docs must explain the runtime honestly, in human language: `app-control` is the live near-Mac happy path and may cause a brief Codex Desktop renderer hiccup; `app-server` is calmer but does not give the same real-time Desktop UI sync. Do not bury this in polite fog.
+6. Public-release docs must explain the runtime honestly, in human language: `app-server` is the normal path now; `app-control` is an optional near-Desktop/debug lane and may still cause renderer hiccups. Do not bury this in polite fog.
 
 ## Telegram Platform Radar
 
@@ -28,8 +28,8 @@ These are the useful Telegram platform leads found during the April 2026 API pas
 ## P1 - Bring Telegram UX Closer To Codex
 
 1. ~~In-place commentary/progress bubbles instead of silence followed by one final answer.~~
-2. True streaming from Codex. Current progress is honest rollout/commentary mirroring, not raw app-server event streaming.
-3. ~~Per-topic turn queue and explicit steer command.~~ Normal messages sent while a topic has an active turn are queued; `/queue`, `/pause`, `/resume`, `/cancel-queue` manage the queue; `/steer <text>` is the explicit app-control-only intervention path.
+2. ~~True streaming from Codex.~~ App-server events now feed live progress/final/approval/media UX; raw token-by-token Telegram streaming is intentionally not the default.
+3. ~~Per-topic turn queue and explicit steer command.~~ Normal messages sent while a topic has an active turn are queued; `/queue`, `/pause`, `/resume`, `/cancel-queue` manage the queue; `/steer <text>` sends app-server `turn/steer` into the active turn.
 4. ~~Ops command reply policy corrected: help, health, settings, project-status and sync previews answer where they were asked instead of silently jumping to bot DM.~~
 5. Dedicated ops topic or configurable explicit ops routing, so genuinely noisy admin flows can move away without surprising the user.
 6. ~~Telegram HTML rendering for bold, italic, code, code fences, lists, task lists, links, blockquotes, spoilers and plain fallback.~~
@@ -44,7 +44,7 @@ These are the useful Telegram platform leads found during the April 2026 API pas
 
 ## P2 - Transport And Observability
 
-1. ~~Prototype app-server v2 event streaming as the next transport layer.~~ The bridge now has an optional passive app-server stream feeding coalesced progress from reasoning, Todo, diff, command and tool events while app-control remains send-only.
+1. ~~Prototype app-server v2 event streaming as the next transport layer.~~ The bridge now has an app-server stream feeding coalesced progress from reasoning, Todo, diff, command and tool events while app-control remains an optional send-only lane.
 2. ~~Structured event/audit log at `logs/bridge.events.ndjson`, sampled by `/health`.~~
 3. Event log retention and nicer operator views once the structured log gets real usage.
 4. Codex Hooks spike: evaluate experimental `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse` and `Stop` hooks for lifecycle logging, completion checks and local guardrails. Do not treat hooks as the main streaming transport yet: current tool hooks mostly see Bash and do not cover MCP, WebSearch or other non-shell tools.
@@ -82,9 +82,9 @@ These are the useful Telegram platform leads found during the April 2026 API pas
 3. Explicit offline/degraded UX for closed or crashed `Codex.app`: short Telegram status, retry clues and clear distinction between preferred `app-control` and fallback app-server.
 4. Configurable Telegram ingress transport with local `app-server`-first mode and app-control cooldown, so a flaky renderer debug endpoint does not keep crashing the desktop app during phone-originated prompts.
 5. Codex task plans are mirrored into Telegram progress bubbles as compact `Todo` blocks below live commentary updates.
-6. App-control send-only mode is the default happy path: `threads.send_message` only, no renderer `threads.read` polling, with rollout mirror as the source for Telegram progress/final.
+6. App-control send-only mode exists as the optional UI-aware lane: `threads.send_message` only, no renderer `threads.read` polling. The default happy path has since moved to app-server `turn/start`.
 7. Compact changed-files summary in Telegram progress bubbles, sourced from the thread git worktree instead of renderer state, with turn-baseline commits plus the current dirty worktree.
-8. `npm run codex:launch` starts the Codex Desktop happy path with the app-control debug port, and onboarding doctor now points users there instead of leaving them with a magic manual command.
+8. `npm run codex:launch` starts Codex Desktop with the optional app-control debug port, and onboarding doctor points users there only when they want that lane instead of the normal app-server path.
 9. Structured event/audit log at `logs/bridge.events.ndjson`; `/health` samples that instead of treating launchd stderr as the product observability layer.
 10. Clean history import defaults moved into config/plan: message tail size, optional user prompt cap, assistant phases and heartbeat inclusion.
 11. Telegram HTML rendering layer for common Markdown and safe plain-text fallback.
@@ -100,7 +100,7 @@ These are the useful Telegram platform leads found during the April 2026 API pas
 21. Status bar reset times now use Telegram `date_time` entities while keeping the plain compact text readable.
 22. Telegram command replies now stay in the chat/topic where the command was sent; direct chat is no longer the surprise default for project/status/sync output.
 23. Bootstrap now includes the bot direct chat in the Telegram folder alongside project groups, with `--skip-bot-folder` as the escape hatch.
-24. Optional passive app-server stream in the live bridge: subscribes to active threads, coalesces noisy reasoning/Todo/diff/command/tool events into the existing Telegram progress bubble, and leaves app-control as the send-only happy path.
+24. App-server stream in the live bridge: subscribes to active threads, coalesces noisy reasoning/Todo/diff/command/tool events into the existing Telegram progress bubble, and makes app-server the normal live path instead of a sidecar curiosity.
 25. Telegram typing heartbeat: while a bound topic has an active Codex turn, the bot keeps refreshing the native "typing" action instead of relying on one short-lived `sendChatAction`.
 26. Telegram photos/documents ingress base: bot downloads media into `state/attachments`, builds a prompt with local file paths and image markdown hints, then uses the normal Codex transport/progress/reply flow.
 27. Changed-files UX fix: progress bubbles compare against a turn-start worktree snapshot, so old dirty files are not reported as fresh work; default file list is full instead of `+N more`.
@@ -127,9 +127,9 @@ These are the useful Telegram platform leads found during the April 2026 API pas
 48. Inbound turn runner extracted: Telegram-originated prompts, voice transcript replies, attachment receipts, progress bubbles and native send/error handling now live in `lib/inbound-turn-runner.mjs` with focused tests. `bridge.mjs` is finally boring enough to read without a helmet.
 49. Onboarding doctor now checks bad-present setup, not just missing files: malformed Telegram API credentials are called out, stale Telegram user sessions are verified through `whoami`, bot token format is sanity-checked, and recovery output stays short enough for an agent to act on.
 50. Voice/mobile UX polish: General/All rescue bubbles are quieter, voice transcript progress no longer repeats obvious status text, progress headers now say `Working...`, and pinned status bars use compact `ctx` plus an explicit `fast on/off` flag.
-51. Per-topic queue and steer base: active topics queue normal Telegram prompts while Codex is already working, show queue count in the status bar, drain queued prompts after final mirror completion, and expose `/steer <text>` for explicit app-control-only guidance.
+51. Per-topic queue and steer base: active topics queue normal Telegram prompts while Codex is already working, show queue count in the status bar, drain queued prompts after final mirror completion, and expose `/steer <text>` for app-server-native guidance.
 52. Codex-native STT spike: verified the official-ish realtime path instead of guessing. It is real in app-server, but not ready as a zero-touch onboarding default without an API key.
-53. Public docs truth pass: README/ONBOARDING now say plainly that v1 is a working beta, local macOS bridge, not an official Codex/Telegram product, and that the best UX depends on Codex Desktop app-control. RUNBOOK also calls out the current MTProto bot-avatar helper versus the newer official Bot API path.
+53. Public docs truth pass: README/ONBOARDING say plainly that v1 is a working beta, local macOS bridge, not an official Codex/Telegram product. Older app-control-heavy wording has now been replaced by the current app-server-first story.
 54. Onboarding wrap-up now recommends Codex Personality `Friendly` plus the OpenClaw-style Custom Instructions preset, and tells the installing agent to offer applying it through the UI instead of pretending random app-state surgery is a good idea.
 55. Telegram Codex controls: `/model`, `/think`/`/reasoning`, `/fast` and `/compact` now use local app-server control methods, while the visible bot menu stops advertising noisy ops-first commands.
 56. Codex Desktop `Chats` live sync: after onboarding, the bridge can auto-create or rename bot-private topics for fresh existing Codex Chats, without using the fake app-server `thread/start` creation path.
