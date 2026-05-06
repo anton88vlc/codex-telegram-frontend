@@ -23,6 +23,7 @@
     "check:launchd": "sh -n ops/install-launchd.sh && ./ops/install-launchd.sh --dry-run > /tmp/codex-telegram-bridge.plist && plutil -lint /tmp/codex-telegram-bridge.plist",
     "state:doctor": "node scripts/state_doctor.mjs",
     "events": "node scripts/event_log_report.mjs",
+    "sync:binding": "node scripts/sync_binding_once.mjs",
     "onboard:prepare": "node scripts/onboard.mjs prepare",
     "onboard:doctor": "node scripts/onboard.mjs doctor",
     "onboard:scan": "node scripts/onboard.mjs scan",

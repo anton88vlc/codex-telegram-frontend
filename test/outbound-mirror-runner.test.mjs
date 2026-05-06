@@ -60,6 +60,50 @@ test("syncOutboundMirrors is a no-op when outbound sync is disabled", async () =
   assert.equal(touched, false);
 });
 
+test("syncOutboundMirrors can target one binding without touching other topics", async () => {
+  const state = {
+    bindings: {
+      [bindingKey]: makeBinding({ threadId: "thread-1" }),
+      "group:-1001:topic:99": makeBinding({ threadId: "thread-2", messageThreadId: 99 }),
+    },
+    outboundMirrors: {},
+  };
+  const requestedThreadIds = [];
+  const result = await syncOutboundMirrors({
+    config: makeConfig(),
+    state,
+    onlyBindingKey: bindingKey,
+    getThreadsByIdsFn: async (_dbPath, threadIds) => {
+      requestedThreadIds.push(...threadIds);
+      return [makeThread({ id: "thread-1" })];
+    },
+    readThreadMirrorDeltaFn: async () => ({
+      mirror: {
+        rolloutPath: "/tmp/thread.jsonl",
+        byteOffset: 100,
+        partialLine: "",
+        lastSignature: "a1",
+      },
+      messages: [
+        {
+          role: "assistant",
+          phase: "final_answer",
+          text: "Only this topic.",
+          signature: "a1",
+          timestamp: "2026-04-19T10:01:00.000Z",
+        },
+      ],
+    }),
+    sendRichTextChunksFn: async () => [{ message_id: 11 }],
+    completeOutboundProgressMessageFn: async () => [],
+  });
+
+  assert.deepEqual(result, { delivered: 1, suppressed: 0, changed: true });
+  assert.deepEqual(requestedThreadIds, ["thread-1"]);
+  assert.equal(state.outboundMirrors[bindingKey].lastSignature, "a1");
+  assert.equal(state.outboundMirrors["group:-1001:topic:99"], undefined);
+});
+
 test("selectOutboundMirrorBindingEntries keeps hot topics and rotates the rest", () => {
   const nowMs = Date.parse("2026-04-21T10:30:00.000Z");
   const state = {};

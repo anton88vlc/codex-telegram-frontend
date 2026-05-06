@@ -281,6 +281,34 @@ test("readThreadMirrorDelta bootstraps to tail and then emits only appended fina
   assert.equal(second.mirror.byteOffset > first.mirror.byteOffset, true);
 });
 
+test("readThreadMirrorDelta recovers from a large offline gap using the last mirrored signature", async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-telegram-rollout-"));
+  const rolloutPath = path.join(tempDir, "rollout.jsonl");
+  const lastSeen = makeAssistantLine({ text: "last delivered", timestamp: "2026-04-18T20:00:00.000Z" });
+  const latest = makeAssistantLine({ text: "latest after long downtime", timestamp: "2026-04-18T20:10:00.000Z" });
+  const lastSignature = makeOutboundMirrorSignature({ phase: "final_answer", text: "last delivered" });
+
+  await fs.writeFile(rolloutPath, `${lastSeen}\n${"x".repeat(6 * 1024 * 1024)}\n${latest}\n`, "utf8");
+  const stats = await fs.stat(rolloutPath);
+
+  const delta = await readThreadMirrorDelta({
+    rolloutPath,
+    mirrorState: {
+      initialized: true,
+      rolloutPath,
+      byteOffset: 0,
+      partialLine: "",
+      lastSignature,
+    },
+    threadId: "thread-1",
+  });
+
+  assert.equal(delta.messages.length, 1);
+  assert.equal(delta.messages[0].text, "latest after long downtime");
+  assert.equal(delta.mirror.byteOffset, stats.size);
+  assert.equal(delta.mirror.lastSignature, lastSignature);
+});
+
 test("readThreadMirrorDelta can recover after rollout path changes", async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-telegram-rollout-"));
   const rolloutPathA = path.join(tempDir, "rollout-a.jsonl");
