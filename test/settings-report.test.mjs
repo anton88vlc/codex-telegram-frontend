@@ -69,6 +69,7 @@ test("buildSettingsReport shows safe runtime settings without secrets", () => {
       projectIndexPath: "state/bootstrap-result.json",
       statePath: "state/state.json",
       eventLogPath: "logs/bridge.events.ndjson",
+      eventLogMaxBytes: 5242880,
       bridgeLogPath: "logs/bridge.stderr.log",
       threadsDbPath: "/Users/test/.codex/state_5.sqlite",
     },
@@ -101,7 +102,7 @@ test("buildSettingsReport shows safe runtime settings without secrets", () => {
   assert.match(text, /history import: max messages 12; max user prompts 4; phases final_answer, commentary; heartbeats on/);
   assert.match(text, /status bar: on; pin on; tail 512kb; Codex config poll 5s/);
   assert.match(text, /topic auto-sync: on; limit 5; poll 1m; max age 7d; max actions 8/);
-  assert.match(text, /event log `logs\/bridge\.events\.ndjson`; stderr `logs\/bridge\.stderr\.log`/);
+  assert.match(text, /event log `logs\/bridge\.events\.ndjson` max 5mb; stderr `logs\/bridge\.stderr\.log`/);
   assert.match(text, /current binding: `group:-100:topic:3`; thread `thread-1`; status bar `5`/);
   assert.doesNotMatch(text, /123456:secret-token/);
 });

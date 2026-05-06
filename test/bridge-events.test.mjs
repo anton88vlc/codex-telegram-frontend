@@ -4,7 +4,15 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { parseBridgeEventLogText, readRecentBridgeEvents, summarizeBridgeEvents } from "../lib/bridge-events.mjs";
+import {
+  configureBridgeEventLog,
+  formatBridgeEventReport,
+  logBridgeEvent,
+  maybeRotateEventLogSync,
+  parseBridgeEventLogText,
+  readRecentBridgeEvents,
+  summarizeBridgeEvents,
+} from "../lib/bridge-events.mjs";
 
 test("parseBridgeEventLogText reads old pretty events and new ndjson events", () => {
   const text = [
@@ -58,4 +66,52 @@ test("readRecentBridgeEvents reads structured ndjson event log tail", async () =
 
   assert.equal(events.length, 1);
   assert.equal(events[0].type, "native_send_error");
+});
+
+test("maybeRotateEventLogSync rotates oversized event logs", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "bridge-events-rotate-"));
+  const logPath = path.join(dir, "bridge.events.ndjson");
+  await fs.writeFile(logPath, `${"x".repeat(128)}\n`, "utf8");
+
+  const rotated = maybeRotateEventLogSync(logPath, { maxBytes: 64 });
+
+  assert.equal(rotated, true);
+  assert.equal(await fs.readFile(`${logPath}.1`, "utf8"), `${"x".repeat(128)}\n`);
+  await assert.rejects(fs.stat(logPath), /ENOENT/);
+});
+
+test("logBridgeEvent honors configured retention", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "bridge-events-retention-"));
+  const logPath = path.join(dir, "bridge.events.ndjson");
+  await fs.writeFile(logPath, `${"x".repeat(70 * 1024)}\n`, "utf8");
+  configureBridgeEventLog({ eventLogPath: logPath, eventLogMaxBytes: 64 * 1024 });
+
+  const originalStderrWrite = process.stderr.write;
+  process.stderr.write = () => true;
+  try {
+    logBridgeEvent("retention_smoke", { ok: true });
+  } finally {
+    process.stderr.write = originalStderrWrite;
+    configureBridgeEventLog({ eventLogPath: null });
+  }
+
+  const events = await readRecentBridgeEvents(logPath);
+  assert.equal(events.length, 1);
+  assert.equal(events[0].type, "retention_smoke");
+  assert.match(await fs.readFile(`${logPath}.1`, "utf8"), /^x+/);
+});
+
+test("formatBridgeEventReport renders an operator-friendly summary", () => {
+  const text = formatBridgeEventReport(
+    [
+      { ts: "2026-05-01T10:00:00.000Z", type: "native_send_success", transportPath: "app-server" },
+      { ts: "2026-05-01T10:01:00.000Z", type: "app_server_stream_subscribe_error", error: "timeout" },
+    ],
+    { logPath: "/repo/logs/bridge.events.ndjson" },
+  );
+
+  assert.match(text, /Bridge events/);
+  assert.match(text, /path: \/repo\/logs\/bridge\.events\.ndjson/);
+  assert.match(text, /native sends: 1 ok, 0 error/);
+  assert.match(text, /app_server_stream_subscribe_error/);
 });

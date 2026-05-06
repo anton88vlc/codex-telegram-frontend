@@ -66,6 +66,7 @@
   "draftStreamingMaxChars": 1200,
   "draftStreamingErrorCooldownMs": 600000,
   "eventLogPath": "logs/bridge.events.ndjson",
+  "eventLogMaxBytes": 5242880,
   "bridgeLogPath": "logs/bridge.stderr.log",
   "syncDefaultLimit": 3,
   "topicAutoSyncEnabled": false,

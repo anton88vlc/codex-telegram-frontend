@@ -46,7 +46,7 @@ These are the useful Telegram platform leads found during the April 2026 API pas
 
 1. ~~Prototype app-server v2 event streaming as the next transport layer.~~ The bridge now has an app-server stream feeding coalesced progress from reasoning, Todo, diff, command and tool events while app-control remains an optional send-only lane.
 2. ~~Structured event/audit log at `logs/bridge.events.ndjson`, sampled by `/health`.~~
-3. Event log retention and nicer operator views once the structured log gets real usage.
+3. ~~Event log retention and nicer operator views.~~ `eventLogMaxBytes` bounds the structured log, `.1` keeps the previous file, and `npm run events` gives a compact local operator report.
 4. Codex Hooks spike: evaluate experimental `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse` and `Stop` hooks for lifecycle logging, completion checks and local guardrails. Do not treat hooks as the main streaming transport yet: current tool hooks mostly see Bash and do not cover MCP, WebSearch or other non-shell tools.
 5. ~~Telegram native streaming/draft spike: wire `sendMessageDraft` into private bot topics first.~~ Keep it experimental/off by default after live smokes showed sticky drafts; do not touch project groups until Telegram supports the same UX cleanly.
 6. ~~Telegram cleanup helper base: Bot API `deleteMessages` batching for bot-deletable cleanup where possible.~~ Keep Telethon/user-session cleanup for older or non-bot-owned history.

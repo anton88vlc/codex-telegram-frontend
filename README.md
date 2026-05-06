@@ -142,6 +142,13 @@ npm run state:doctor
 npm run check
 ```
 
+Recent bridge events:
+
+```bash
+npm run events
+npm run events -- --json
+```
+
 Bot polish:
 
 ```bash

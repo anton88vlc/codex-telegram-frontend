@@ -128,6 +128,7 @@ Do this in order. Random poking makes the bridge look haunted when it is usually
 4. Run `npm run self-check`.
 5. Run `npm run state:doctor`; if it reports safe repairs, apply them.
 6. Check `/health`; it samples `logs/bridge.events.ndjson`.
+7. For a local operator view, run `npm run events`. It prints recent event types, transport counts and the last failures without spelunking through raw log lines.
 7. If the bridge crashed before structured logging, check `logs/bridge.stderr.log`.
 8. Check whether `state/state.json -> lastUpdateId` moves.
 9. If launchd is alive but stuck, use `launchctl kickstart -k ...`.
@@ -154,6 +155,8 @@ Current boundary:
 
 If an attachment fails, check `logs/bridge.events.ndjson` for `telegram_attachment_error`. The file itself is runtime state, so do not commit it.
 If transcription fails, check `telegram_voice_transcription_error` in the same event log. In normal UX the user only sees a short "could not transcribe" note; provider details stay in logs where they belong.
+
+The structured event log rotates when it reaches `eventLogMaxBytes` and keeps the previous file as `.1`. That is enough for local operator forensics without quietly growing forever.
 
 ## Transport Recovery
 
