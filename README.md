@@ -96,7 +96,7 @@ Voice notes are optional. The supported STT paths today are Deepgram, OpenAI, or
 - Private bot topic preflight for Codex Desktop `Chats`: `npm run bot:topics`.
 - Bootstrap can create/reuse Telegram folder, project groups, topics, bot folder entry, themed generated project group avatars and status bars.
 - Optional curated topic auto-sync for fresh Codex threads in already bootstrapped project groups.
-- Bot polish: generated group avatars, command menu, profile text, suggested admin rights and bundled bot avatar. Quickstart applies the bot avatar best-effort through the current MTProto helper; `npm run bot:avatar` is the manual retry.
+- Bot polish: generated group avatars, command menu, profile text, suggested admin rights and bundled bot avatar. Quickstart applies the bot avatar best-effort through the official Bot API; `npm run bot:avatar` is the manual retry.
 - Structured event log at `logs/bridge.events.ndjson`; `/health` samples it.
 - Local state doctor for stale topic bindings, orphan mirror state and bootstrap-index drift.
 

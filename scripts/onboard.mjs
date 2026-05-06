@@ -1824,14 +1824,25 @@ async function runBootstrap(args, python) {
   ]);
 }
 
-async function runBotAvatarPolish(args, python) {
+async function runBotAvatarPolish(args, _python) {
   if (args.skipBotAvatar) {
     process.stdout.write("Skipping bot avatar polish because --skip-bot-avatar was passed.\n");
     return null;
   }
   try {
-    process.stdout.write("Applying bundled bot avatar if this Telegram user owns the bot.\n");
-    return await runJsonCommand(python, [...adminBaseArgs(args), "set-bot-avatar"], { timeoutMs: 120_000 });
+    process.stdout.write("Applying bundled bot avatar through the official Telegram Bot API.\n");
+    return await runJsonCommand(
+      process.execPath,
+      [
+        path.join(PROJECT_ROOT, "scripts", "configure_bot_profile.mjs"),
+        "--config",
+        args.configPath,
+        "--apply",
+        "--json",
+        "--avatar-only",
+      ],
+      { timeoutMs: 120_000 },
+    );
   } catch (error) {
     process.stdout.write(
       `Skipping bot avatar polish: ${compactErrorMessage(error)}. The bridge still works; run \`npm run bot:avatar\` later if you care about the icon.\n`,

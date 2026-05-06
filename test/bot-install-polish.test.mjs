@@ -42,6 +42,25 @@ test("buildBotInstallPolishOperations creates a compact Bot API operation list",
   );
 });
 
+test("buildBotInstallPolishOperations can target only the bot avatar", () => {
+  const operations = buildBotInstallPolishOperations(
+    buildBotInstallPolishPlan({
+      includeCommands: false,
+      includeProfile: false,
+      includeMenuButton: false,
+      includeDefaultAdminRights: false,
+      includeAvatar: true,
+      avatarPath: "/tmp/bot-avatar.jpg",
+    }),
+  );
+
+  assert.deepEqual(
+    operations.map((operation) => operation.name),
+    ["setMyProfilePhoto"],
+  );
+  assert.equal(operations[0].args.photoPath, "/tmp/bot-avatar.jpg");
+});
+
 test("applyBotInstallPolish dry-run does not call Telegram", async () => {
   const result = await applyBotInstallPolish("token", buildBotInstallPolishPlan(), {
     dryRun: true,
@@ -90,6 +109,33 @@ test("applyBotInstallPolish applies through injected Telegram helpers", async ()
   );
 });
 
+test("applyBotInstallPolish applies avatar through the official Bot API helper", async () => {
+  const calls = [];
+  const result = await applyBotInstallPolish(
+    "token",
+    buildBotInstallPolishPlan({
+      includeCommands: false,
+      includeProfile: false,
+      includeMenuButton: false,
+      includeDefaultAdminRights: false,
+      includeAvatar: true,
+      avatarPath: "/tmp/bot-avatar.jpg",
+    }),
+    {
+      dryRun: false,
+      telegram: {
+        async setMyProfilePhoto(_token, args) {
+          calls.push(args);
+          return true;
+        },
+      },
+    },
+  );
+
+  assert.equal(result.applied, true);
+  assert.deepEqual(calls, [{ photoPath: "/tmp/bot-avatar.jpg" }]);
+});
+
 test("formatBotInstallPolishPlan makes dry-run output readable", () => {
   const text = formatBotInstallPolishPlan(buildBotInstallPolishPlan({ includeProfile: false }));
   assert.match(text, /commands \(group chats\): .*\/model/);
@@ -97,4 +143,19 @@ test("formatBotInstallPolishPlan makes dry-run output readable", () => {
   assert.match(text, /commands \(group chats\): .*\/fast/);
   assert.match(text, /commands \(group chats\): .*\/compact/);
   assert.match(text, /default admin rights:/);
+});
+
+test("formatBotInstallPolishPlan shows avatar-only dry runs", () => {
+  const text = formatBotInstallPolishPlan(
+    buildBotInstallPolishPlan({
+      includeCommands: false,
+      includeProfile: false,
+      includeMenuButton: false,
+      includeDefaultAdminRights: false,
+      includeAvatar: true,
+      avatarPath: "/tmp/bot-avatar.jpg",
+    }),
+  );
+
+  assert.match(text, /profile photo: \/tmp\/bot-avatar\.jpg/);
 });

@@ -115,7 +115,7 @@ Be the assistant you'd actually want to talk to at 2am. Not a corporate drone. N
 
 The installing agent should include this in the final install summary, not leave it buried in terminal output: "I can set Personality to Friendly and paste this into Custom Instructions if you want." If it cannot safely automate the UI, it should leave the exact block above and not silently edit random app state. Pocket agent manager, yes. Haunted preferences folder, no.
 
-Quickstart applies the bundled project avatar as a best-effort polish step after Telegram bootstrap. If Telegram refuses it, onboarding keeps going and tells you why. Manual retry:
+Quickstart applies the bundled bot avatar as a best-effort Bot API polish step after Telegram bootstrap. It only needs the bot token; it no longer depends on the user-side Telegram session owning the bot. If Telegram refuses it, onboarding keeps going and tells you why. Manual retry:
 
 ```bash
 npm run bot:avatar
@@ -139,7 +139,7 @@ Quickstart is the product path:
 npm run onboard:quickstart
 ```
 
-By default it reads Codex Desktop's pinned thread list from `~/.codex/.codex-global-state.json`, includes those threads first, then fills the rest of the 10-item working set from latest active Codex work items in the local Codex DB. Project threads become topics inside project groups. Codex Chats become private topics inside the bot direct chat when the bot has Threaded Mode enabled. Then it writes the bootstrap plan, applies Telegram surfaces, gives project groups themed generated avatars when they do not already have one, tries the bundled bot avatar, imports 10 clean messages per topic and runs a smoke. That is the "make my phone usable" button.
+By default it reads Codex Desktop's pinned thread list from `~/.codex/.codex-global-state.json`, includes those threads first, then fills the rest of the 10-item working set from latest active Codex work items in the local Codex DB. Project threads become topics inside project groups. Codex Chats become private topics inside the bot direct chat when the bot has Threaded Mode enabled. Then it writes the bootstrap plan, applies Telegram surfaces, gives project groups themed generated avatars when they do not already have one, tries the bundled bot avatar through Bot API, imports 10 clean messages per topic and runs a smoke. That is the "make my phone usable" button.
 
 If Codex Desktop gets a new `Chats` item after onboarding, do not rerun a broad quickstart just to catch it. Use the narrow repair path:
 

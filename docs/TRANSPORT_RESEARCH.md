@@ -62,7 +62,7 @@ Telegram also shipped a few useful things recently:
 - `sendMessageDraft` streams a partial message while it is being generated. The useful product target is Codex Desktop `Chats`, because drafts target private chats/private topics; it is not a replacement for progress bubbles in project supergroups. Keep it opt-in for now: live smokes showed Telegram can leave a stale draft bubble after the final answer, and the Bot API rejects an empty clear attempt.
 - Private chats can now have topics for bots. This no longer fights our product shape: project groups still map to Codex projects, while bot-private topics map to Codex Desktop `Chats`. The live bot has Threaded Mode enabled now; keep the preflight because new installs still need that BotFather switch.
 - Managed Bots in Bot API 9.6 are the big onboarding lead. Telegram now has `request_managed_bot`, `getManagedBotToken`, `replaceManagedBotToken` and `https://t.me/newbot/{manager_bot_username}/...` links. If this is usable enough, the install flow can stop saying "go wrestle BotFather" and instead guide the user through a tighter manager-bot flow.
-- Bot API profile photo support means the avatar path can move from the MTProto `photos.uploadProfilePhoto(bot=...)` workaround to official `setMyProfilePhoto`.
+- Bot API profile photo support means the avatar path has moved from the MTProto `photos.uploadProfilePhoto(bot=...)` workaround to official `setMyProfilePhoto`.
 - Native Telegram Checklists look tempting for Codex Todo, but sending/editing checklists is currently business-account-shaped. Worth a spike, not a default.
 - Sender/member tags may help role clarity later, but they are easy to overuse. Keep the working surface calm.
 - `copyMessages` is worth keeping in the back pocket for richer history/backfill and album preservation.
@@ -84,7 +84,7 @@ Current implementation direction:
 - Keep app-control send-only as an optional Desktop-aware lane, not the default phone ingress.
 - Tune `sendMessageDraft` only if Telegram exposes a reliable clear/finalize path. Until then, editable progress bubbles are the source of truth.
 - Add a managed-bot onboarding spike soon, because that could remove one of the ugliest install steps.
-- Move avatar polish to official Bot API `setMyProfilePhoto`.
+- Keep avatar polish on official Bot API `setMyProfilePhoto`; leave the MTProto helper as a fallback probe only.
 - Validate private bot topics end-to-end before making Codex Desktop `Chats` part of the public install promise.
 
 The first probe now lives in:
@@ -102,4 +102,5 @@ The original probe records what Codex app-server actually emits. Keep it around 
 - Codex feature maturity docs: https://developers.openai.com/codex/feature-maturity
 - Telegram Bot API: https://core.telegram.org/bots/api
 - Telegram Bot API changelog: https://core.telegram.org/bots/api-changelog
-- Telegram bot profile photo via MTProto: https://core.telegram.org/method/photos.uploadProfilePhoto
+- Telegram bot profile photo via Bot API: https://core.telegram.org/bots/api#setmyprofilephoto
+- Legacy Telegram bot profile photo via MTProto: https://core.telegram.org/method/photos.uploadProfilePhoto

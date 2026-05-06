@@ -17,7 +17,7 @@ These are the useful Telegram platform leads found during the April 2026 API pas
 2. True Telegram -> Codex Desktop `New chat` creation for the `Chats` surface. Do not fake this with app-server `thread/start`: it creates a backend thread, but not reliably the same visible Desktop Chat item. Find a renderer/debug action or a safe UI-control path, then re-enable auto-create.
 3. ~~`sendMessageDraft` for native "assistant is writing" UX in private Codex `Chats`.~~ Base runtime support exists for bot-private topics only, but it is opt-in because Telegram can leave stale draft bubbles after final answers. Project groups still use progress bubbles unless Telegram opens a reliable draft/finalize path.
 4. Managed bots and `t.me/newbot/...` links. This is the big onboarding simplifier: fewer BotFather gymnastics, cleaner token handoff, maybe a future manager-bot flow. Keep it local/user-owned; do not turn the project into a weird SaaS control plane.
-5. Official bot avatar API. Bot API now has `setMyProfilePhoto`, so replace the MTProto avatar workaround with the official path when practical.
+5. ~~Official bot avatar API.~~ `npm run bot:avatar` now uses Bot API `setMyProfilePhoto`; the MTProto helper stays only as a manual fallback.
 6. Native Telegram checklists for Codex Todo. Tempting, but `sendChecklist`/`editMessageChecklist` are business-account-shaped right now. Spike before committing; text Todo is still the sane default.
 7. Member/sender tags. Potentially useful for visual role clarity (`codex`, `owner`, `operator`) in groups, but low priority and easy to overdo.
 8. Reply/quote/entity polish. Keep using compact `date_time` status entities; validate whether `ReplyParameters` quotes can make imported history and surrogate user prompts cleaner.
@@ -63,7 +63,7 @@ These are the useful Telegram platform leads found during the April 2026 API pas
 7. ~~Telegram `date_time` entity base for compact rate-limit resets in the pinned status bar.~~ Live visual polish can still tune the exact format after mobile review.
 8. ~~Bot profile/install polish base: default administrator rights, command menu, menu button and profile descriptions.~~ Cleaner topic/project icons still need a visual pass.
 9. ~~Add the bot direct chat to the `codex` Telegram folder during bootstrap when possible.~~
-10. ~~Bot avatar polish: bundled default avatar plus `bot:avatar` command using Telegram MTProto `photos.uploadProfilePhoto(bot=...)`.~~ Replace with official Bot API `setMyProfilePhoto` once the helper is wired.
+10. ~~Bot avatar polish: bundled default avatar plus `bot:avatar` command.~~ Bot API `setMyProfilePhoto` is now the normal path; MTProto is fallback only.
 11. ~~Private-topic enablement guide/check: detect `has_topics_enabled` from `getMe`, explain the BotFather Mini App switch plainly and retry Codex `Chats` topic bootstrap after it is enabled.~~ Live bot enablement and create/delete smoke are green.
 12. ~~Generated project group avatars.~~ Bootstrap now gives project groups a compact themed photo when they do not already have one, with `--refresh-group-avatars` for forced refresh and `--skip-group-avatars` for plain Telegram initials. Existing groups can be repainted from the bootstrap index with `npm run group:avatars`.
 13. Backfill/media polish: evaluate `copyMessages` for preserving Telegram albums/history shape where it beats rebuilding messages from scratch.

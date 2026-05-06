@@ -16,6 +16,7 @@ import {
   sendPhoto,
   setChatMenuButton,
   setMyDefaultAdministratorRights,
+  setMyProfilePhoto,
   setMyShortDescription,
   splitTelegramText,
 } from "../lib/telegram.mjs";
@@ -128,6 +129,36 @@ test("sendPhoto uploads a local generated image with reply metadata", async () =
     assert.equal(fields.reply_to_message_id, "42");
     assert.equal(JSON.parse(fields.reply_parameters).message_id, 42);
     assert.equal(fields.photo.name, "generated.png");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("setMyProfilePhoto uploads the official Bot API static profile photo shape", async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-telegram-avatar-"));
+  const photoPath = path.join(tempDir, "avatar.jpg");
+  await fs.writeFile(photoPath, Buffer.from("jpg-bytes"));
+
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url: String(url), body: options.body });
+    return new Response(JSON.stringify({ ok: true, result: true }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  };
+  try {
+    await setMyProfilePhoto("token", { photoPath });
+
+    assert.equal(calls[0].url, "https://api.telegram.org/bottoken/setMyProfilePhoto");
+    assert.equal(calls[0].body instanceof FormData, true);
+    const fields = Object.fromEntries(calls[0].body.entries());
+    assert.deepEqual(JSON.parse(fields.photo), {
+      type: "static",
+      photo: "attach://profile_photo",
+    });
+    assert.equal(fields.profile_photo.name, "avatar.jpg");
   } finally {
     globalThis.fetch = originalFetch;
   }

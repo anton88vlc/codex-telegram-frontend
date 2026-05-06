@@ -15,6 +15,7 @@ import {
 
 const PROJECT_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DEFAULT_CONFIG_PATH = path.join(PROJECT_ROOT, "config.local.json");
+const DEFAULT_BOT_AVATAR_PATH = path.join(PROJECT_ROOT, "assets", "bot-avatar.jpg");
 const DEFAULT_BOT_TOKEN_KEYCHAIN_SERVICE = "codex-telegram-bridge-bot-token";
 const execFileAsync = promisify(execFile);
 
@@ -32,6 +33,8 @@ function parseArgs(argv) {
     includeProfile: true,
     includeMenuButton: true,
     includeDefaultAdminRights: true,
+    includeAvatar: false,
+    avatarPath: DEFAULT_BOT_AVATAR_PATH,
     help: false,
   };
 
@@ -59,6 +62,25 @@ function parseArgs(argv) {
       case "--skip-default-admin-rights":
         args.includeDefaultAdminRights = false;
         break;
+      case "--include-avatar":
+        args.includeAvatar = true;
+        break;
+      case "--skip-avatar":
+        args.includeAvatar = false;
+        break;
+      case "--avatar-only":
+        args.includeCommands = false;
+        args.includeProfile = false;
+        args.includeMenuButton = false;
+        args.includeDefaultAdminRights = false;
+        args.includeAvatar = true;
+        break;
+      case "--avatar-path":
+        if (!argv[index + 1]) {
+          fail("--avatar-path requires a file path");
+        }
+        args.avatarPath = path.resolve(argv[++index]);
+        break;
       case "--help":
       case "-h":
         args.help = true;
@@ -77,7 +99,7 @@ function printHelp() {
       "  node scripts/configure_bot_profile.mjs [--config config.local.json] [--apply] [--json]",
       "",
       "Without --apply this only prints the Bot API changes it would make.",
-      "Useful skip flags: --skip-commands, --skip-profile, --skip-menu-button, --skip-default-admin-rights.",
+      "Useful flags: --skip-commands, --skip-profile, --skip-menu-button, --skip-default-admin-rights, --include-avatar, --avatar-only, --avatar-path <jpg>.",
     ].join("\n") + "\n",
   );
 }

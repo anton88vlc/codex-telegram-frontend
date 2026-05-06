@@ -316,13 +316,19 @@ npm run onboard:quickstart -- --chats-only
 
 This is the safe repair path if the automatic watcher was off, stale, or blocked by Telegram. It creates or reuses bot-private topics, merges them into the existing bootstrap index, backfills newly created topics, and skips replaying old private topics so Telegram does not get duplicate transcripts.
 
-Apply the bundled bot avatar after the user-side Telegram session is authorized:
+Apply the bundled bot avatar through the official Bot API:
 
 ```bash
 npm run bot:avatar
 ```
 
-This currently calls `photos.uploadProfilePhoto(bot=...)` through MTProto, so the logged-in Telegram user must own the bot. Telegram now has official Bot API profile-photo support, but this repo has not wired that path yet. Until then, the MTProto helper is the practical route and `bot:avatar` stays best-effort polish, not a setup blocker.
+This uses the bot token and `assets/bot-avatar.jpg`. It does not need the user-side Telegram session or bot ownership through MTProto. If the official Bot API path ever refuses the photo, keep onboarding moving and use the old user-side helper only as a manual fallback:
+
+```bash
+admin/.venv/bin/python admin/telegram_user_admin.py set-bot-avatar
+```
+
+Avatar polish is nice, not a setup blocker.
 
 ## Telegram Commands
 
