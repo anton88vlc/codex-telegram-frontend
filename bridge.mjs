@@ -283,6 +283,7 @@ async function main() {
   const state = await loadState(config.statePath);
   const appServerStream = makeAppServerLiveStream(config);
   const typingHeartbeats = new Map();
+  const typingHeartbeatErrorCooldowns = new Map();
   const telegramRateLimitGate = createTelegramRateLimitGate();
   const effectivePollTimeoutSeconds =
     config.outboundSyncEnabled === false
@@ -497,6 +498,7 @@ async function main() {
           config,
           state,
           heartbeats: typingHeartbeats,
+          errorCooldowns: typingHeartbeatErrorCooldowns,
           onTelegramRateLimitFn: (error, context) => telegramRateLimitGate.mark(error, context),
         });
       } catch (error) {

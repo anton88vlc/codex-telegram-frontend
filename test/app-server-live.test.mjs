@@ -134,6 +134,32 @@ test("AppServerLiveStream retries failed thread resume instead of poisoning the 
   await stream.close();
 });
 
+test("AppServerLiveStream caps repeated resume retry delay with configurable ceiling", async () => {
+  const statuses = [];
+  const stream = new AppServerLiveStream({
+    url: "ws://127.0.0.1:9222",
+    WebSocketImpl: FailFirstResumeWebSocket,
+    connectTimeoutMs: 100,
+    reconnectMs: 5,
+    subscribeFailureMaxDelayMs: 12,
+    onStatus(status) {
+      statuses.push(status);
+    },
+  });
+
+  await assert.rejects(stream.subscribe("thread-1"), /temporary resume failure/);
+  stream.subscriptionRetryAfter.set("thread-1", 0);
+  FailFirstResumeWebSocket.last.resumeAttempts = 0;
+  await assert.rejects(stream.subscribe("thread-1"), /temporary resume failure/);
+  stream.subscriptionRetryAfter.set("thread-1", 0);
+  FailFirstResumeWebSocket.last.resumeAttempts = 0;
+  await assert.rejects(stream.subscribe("thread-1"), /temporary resume failure/);
+
+  assert.equal(statuses.filter((status) => status.status === "subscribe_failed").at(-1).retryDelayMs, 12);
+
+  await stream.close();
+});
+
 test("AppServerLiveStream holds approval requests and sends Telegram decisions back", async () => {
   const stream = new AppServerLiveStream({
     url: "ws://127.0.0.1:9222",

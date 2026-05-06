@@ -172,3 +172,47 @@ test("syncTypingHeartbeats reports send errors through bridge events", () => {
     ],
   ]);
 });
+
+test("syncTypingHeartbeats cools down a binding after non-rate-limit send errors", () => {
+  const events = [];
+  const heartbeats = new Map();
+  const errorCooldowns = new Map();
+  let stopped = 0;
+
+  const result = syncTypingHeartbeats({
+    config: { typingHeartbeatErrorCooldownMs: 60_000 },
+    state: makeState({ active: makeBinding() }),
+    heartbeats,
+    errorCooldowns,
+    nowMs: NOW_MS,
+    startTypingHeartbeatFn: ({ onError }) => {
+      onError(new Error("fetch failed"));
+      return {
+        active: true,
+        stop() {
+          stopped += 1;
+        },
+      };
+    },
+    logEventFn: (...args) => events.push(args),
+  });
+
+  assert.deepEqual(result, { started: 0, stopped: 0, running: 0 });
+  assert.equal(stopped, 1);
+  assert.equal(errorCooldowns.has("active"), true);
+  assert.equal(events.at(-1)[0], "typing_heartbeat_error");
+  assert.match(events.at(-1)[1].cooldownUntil, /2026-/);
+
+  const second = syncTypingHeartbeats({
+    config: { typingHeartbeatErrorCooldownMs: 60_000 },
+    state: makeState({ active: makeBinding() }),
+    heartbeats,
+    errorCooldowns,
+    nowMs: NOW_MS + 30_000,
+    startTypingHeartbeatFn: () => {
+      throw new Error("should not restart during cooldown");
+    },
+  });
+
+  assert.deepEqual(second, { started: 0, stopped: 0, running: 0 });
+});

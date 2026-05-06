@@ -58,6 +58,24 @@ test("subscribeAppServerStream reports subscribe failures without throwing", asy
   assert.equal(events[0].payload.threadId, "thread-1");
 });
 
+test("subscribeAppServerStream can keep duplicate subscribe errors quiet", async () => {
+  const events = [];
+  const ok = await subscribeAppServerStream({
+    config: { appServerStreamLogSubscribeErrors: false },
+    stream: {
+      subscribe: async () => {
+        throw new Error("offline");
+      },
+    },
+    bindingKey: "binding-1",
+    binding: { threadId: "thread-1" },
+    logEventFn: (type, payload) => events.push({ type, payload }),
+  });
+
+  assert.equal(ok, false);
+  assert.deepEqual(events, []);
+});
+
 test("syncAppServerStreamSubscriptions subscribes hot eligible bindings", async () => {
   const subscribed = [];
   const result = await syncAppServerStreamSubscriptions({

@@ -20,6 +20,7 @@ Use this for things that should survive restarts and should not be changed from 
 | `sendTyping` | `true` | Sends Telegram typing action while Codex is working. |
 | `typingHeartbeatEnabled` | `true` | Keeps Telegram's ephemeral "bot is typing" indicator alive while a bound topic has an active Codex turn. |
 | `typingHeartbeatIntervalMs` | `4000` | How often to refresh the typing indicator. Telegram clients expire chat actions quickly, so keep this near 4s. |
+| `typingHeartbeatErrorCooldownMs` | `120000` | Per-topic cooldown after Telegram rejects a typing heartbeat. This keeps a flaky network from turning the event log into soup. |
 | `unboundGroupFallbackEnabled` | `true` | Rescues plain messages accidentally sent to General/All in a project group by moving them into the last active bound topic. Commands are not rescued; sharp tools stay where you put them. |
 | `unboundGroupFallbackMaxAgeMs` | `2592000000` | Max age for the "last active topic" rescue target. Default is 30 days; `0` disables the age cutoff. |
 | `outboundSyncEnabled` | `true` | Mirrors Codex Desktop-originated turns back into Telegram. |
@@ -77,7 +78,9 @@ Use this for things that should survive restarts and should not be changed from 
 | `appServerStreamReconnectMs` | `5000` | Cooldown before trying the optional app-server stream again after it disconnects. |
 | `appServerStreamMaxEvents` | `500` | In-memory cap for queued app-server stream events before the bridge coalesces them into progress updates. |
 | `appServerStreamSubscribeMaxAttemptsPerPoll` | `3` | Caps `thread/resume` attempts per bridge poll. This keeps a grumpy app-server stream from blocking the normal rollout mirror. |
+| `appServerStreamSubscribeFailureMaxDelayMs` | `600000` | Max per-thread cooldown after repeated `thread/resume` failures. Stuck subscriptions should get quiet, not hammer Codex once a minute forever. |
 | `appServerStreamSubscribeHotOnly` | `true` | Subscribe the optional app-server stream only for hot topics. Keep this on unless you are debugging stream behavior across the whole Telegram surface. |
+| `appServerStreamLogSubscribeErrors` | `false` | Emit the older duplicate `app_server_stream_subscribe_error` event. Leave it off; `app_server_stream_status` already carries the useful failure details. |
 | `draftStreamingEnabled` | `false` | Experimental Telegram-native draft updates for private Codex Chat topics. Keep this off by default: Telegram currently has no clean Bot API clear call, so drafts can linger after the final answer. |
 | `draftStreamingMaxChars` | `1200` | Max text length for one draft update. Keep it short; the final answer still comes as the normal Telegram message. |
 | `draftStreamingErrorCooldownMs` | `600000` | Quiet cooldown after Telegram rejects a draft update. Drafts are nice-to-have, so failures go to the event log instead of bothering the user. |
